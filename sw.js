@@ -5,7 +5,6 @@ self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE).then(c => {
       return c.addAll([
-        APP_PATH,
         APP_PATH + 'index.html',
         APP_PATH + 'manifest.json',
         APP_PATH + 'icon-192.png',
@@ -26,12 +25,29 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  const url = new URL(e.request.url);
   // Only handle requests for our app
-  if (!url.pathname.startsWith(APP_PATH) && url.pathname !== '/gforce-flight-log') {
+  const url = new URL(e.request.url);
+  if (!url.pathname.startsWith(APP_PATH)) {
     return;
   }
+
   e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request).catch(() => caches.match(APP_PATH + 'index.html')))
+    caches.match(e.request).then(cached => {
+      if (cached) return cached;
+      return fetch(e.request).then(response => {
+        // Cache successful responses
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+        }
+        return response;
+      }).catch(() => {
+        // For navigation requests, fallback to index.html
+        if (e.request.mode === 'navigate') {
+          return caches.match(APP_PATH + 'index.html');
+        }
+        return new Response('Offline', { status: 503 });
+      });
+    })
   );
 });

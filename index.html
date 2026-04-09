@@ -328,13 +328,6 @@
     </div>
 
     <div class="field">
-      <label>Flight #</label>
-      <div class="btn-group" id="fg-flight">
-        <!-- filled by JS -->
-      </div>
-    </div>
-
-    <div class="field">
       <label>Client Weight (kg)</label>
       <input type="number" id="f-weight" min="20" max="150" placeholder="e.g. 72" inputmode="numeric" />
     </div>
@@ -485,20 +478,8 @@ function formatWeekLabel(ws) {
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('f-date').value = todayStr();
   document.getElementById('header-date').textContent = fmtDate(todayStr());
-  buildFlightNumButtons();
   setupBtnGroups();
-  autoSelectFlightNum();
 });
-
-function buildFlightNumButtons() {
-  const el = document.getElementById('fg-flight');
-  for (let i = 1; i <= 12; i++) {
-    const b = document.createElement('button');
-    b.dataset.val = i;
-    b.textContent = i;
-    el.appendChild(b);
-  }
-}
 
 function setupBtnGroups() {
   document.querySelectorAll('.btn-group').forEach(group => {
@@ -516,22 +497,10 @@ function getGroupVal(id) {
   return sel ? sel.dataset.val : null;
 }
 
-function autoSelectFlightNum() {
-  const date = document.getElementById('f-date').value;
-  const flights = getFlights().filter(f => f.date === date);
-  const next = flights.length + 1;
-  document.querySelectorAll('#fg-flight button').forEach(b => {
-    b.classList.remove('selected');
-    if (parseInt(b.dataset.val) === next) b.classList.add('selected');
-  });
-}
-
-document.getElementById('f-date').addEventListener('change', autoSelectFlightNum);
-
 // ---- SAVE FLIGHT ----
 function saveFlight() {
   const date = document.getElementById('f-date').value;
-  const flightNum = getGroupVal('fg-flight');
+  const flightNum = getFlights().filter(f => f.date === date).length + 1;
   const weight = document.getElementById('f-weight').value;
   const takeoff = getGroupVal('fg-takeoff');
   const landing = getGroupVal('fg-landing');
@@ -558,7 +527,6 @@ function saveFlight() {
   document.querySelector('#fg-time button.selected')?.classList.remove('selected');
   document.querySelector('#fg-time button[data-val="10"]').classList.add('selected');
 
-  autoSelectFlightNum();
   toast(`Flight ${flightNum} saved!`);
 }
 

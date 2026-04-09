@@ -6,8 +6,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Flight Log" />
-  <link rel="apple-touch-icon" href="icon-192.png" />
-  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="/gforce-flight-log/icon-192.png" />
+  <link rel="manifest" href="/gforce-flight-log/manifest.json" />
   <title>Gforce Flight Log</title>
   <style>
     :root {
@@ -773,7 +773,7 @@ function toast(msg) {
 }
   // Register service worker for offline use
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    navigator.serviceWorker.register('/gforce-flight-log/sw.js').catch(() => {});
   }
 </script>
 </body>

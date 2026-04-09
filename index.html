@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Flight Log" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <link rel="manifest" href="manifest.json" />
+  <title>Gforce Flight Log</title>
+  <style>
+    :root {
+      --bg: #0f0f0f;
+      --surface: #1a1a1a;
+      --card: #222;
+      --border: #333;
+      --accent: #4fc3f7;
+      --accent2: #81c784;
+      --danger: #ef5350;
+      --text: #f0f0f0;
+      --muted: #888;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding-bottom: 80px;
+    }
+
+    /* NAV */
+    nav {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      z-index: 100;
+    }
+    nav button {
+      flex: 1;
+      padding: 12px 0 16px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 11px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      transition: color 0.15s;
+    }
+    nav button.active { color: var(--accent); }
+    nav button svg { width: 22px; height: 22px; }
+
+    /* PAGES */
+    .page { display: none; padding: 16px; max-width: 500px; margin: 0 auto; }
+    .page.active { display: block; }
+
+    /* HEADER */
+    .page-header {
+      padding: 16px 16px 0;
+      max-width: 500px;
+      margin: 0 auto;
+    }
+    .page-header h1 { font-size: 28px; font-weight: 700; padding-top: env(safe-area-inset-top, 16px); }
+    .page-header p { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+    /* CARDS */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: var(--accent); }
+
+    /* FORM */
+    .field { margin-bottom: 14px; }
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .field input, .field select, .field textarea {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 10px 12px;
+      font-size: 16px;
+      outline: none;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus {
+      border-color: var(--accent);
+    }
+    .field textarea { resize: vertical; min-height: 70px; font-size: 14px; }
+
+    /* BUTTON GROUPS */
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn-group button {
+      flex: 1;
+      min-width: 48px;
+      padding: 10px 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-group button.selected {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #000;
+      font-weight: 700;
+    }
+    .btn-group.site button { font-size: 13px; }
+
+    /* PRIMARY BUTTON */
+    .btn-primary {
+      width: 100%;
+      padding: 14px;
+      background: var(--accent);
+      border: none;
+      border-radius: var(--radius);
+      color: #000;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    .btn-primary:active { opacity: 0.8; }
+    .btn-secondary {
+      width: 100%;
+      padding: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    .btn-danger {
+      background: var(--surface);
+      border: 1px solid var(--danger);
+      border-radius: 8px;
+      color: var(--danger);
+      font-size: 13px;
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+
+    /* FLIGHT LIST */
+    .flight-item {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .flight-meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .flight-badge {
+      background: var(--accent);
+      color: #000;
+      border-radius: 20px;
+      padding: 2px 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .flight-badge.green { background: var(--accent2); }
+
+    /* DATE GROUP */
+    .date-group-header {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 12px 0 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .duty-badge {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 11px;
+      color: var(--accent2);
+      padding: 2px 8px;
+    }
+
+    /* TOAST */
+    #toast {
+      position: fixed;
+      bottom: 90px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #333;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-size: 14px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+      z-index: 999;
+      white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
+
+    /* STATS */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      text-align: center;
+    }
+    .stat-number { font-size: 28px; font-weight: 700; color: var(--accent); }
+    .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+
+    /* EXPORT */
+    .export-section { margin-bottom: 12px; }
+    .week-row {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .week-label { font-size: 14px; font-weight: 600; }
+    .week-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    /* DUTY ROW */
+    .duty-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      margin-bottom: 6px;
+    }
+    .duty-date { font-size: 13px; flex: 1; }
+    .duty-input {
+      width: 70px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 6px 8px;
+      font-size: 15px;
+      text-align: center;
+    }
+    .duty-label { font-size: 11px; color: var(--muted); }
+    hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+    .empty-state {
+      text-align: center;
+      color: var(--muted);
+      padding: 40px 20px;
+      font-size: 15px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="page-header" id="header-log">
+  <h1>Log Flight</h1>
+  <p id="header-date"></p>
+</div>
+<div class="page-header" id="header-flights" style="display:none">
+  <h1>Flights</h1>
+  <p id="header-flights-sub"></p>
+</div>
+<div class="page-header" id="header-export" style="display:none">
+  <h1>Export</h1>
+  <p>Weekly CSV for Excel</p>
+</div>
+<div class="page-header" id="header-stats" style="display:none">
+  <h1>Stats</h1>
+  <p>Season overview</p>
+</div>
+
+<!-- LOG PAGE -->
+<div class="page active" id="page-log">
+  <div class="card">
+    <h2>New Flight</h2>
+
+    <div class="field">
+      <label>Date</label>
+      <input type="date" id="f-date" />
+    </div>
+
+    <div class="field">
+      <label>Flight #</label>
+      <div class="btn-group" id="fg-flight">
+        <!-- filled by JS -->
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Client Weight (kg)</label>
+      <input type="number" id="f-weight" min="20" max="150" placeholder="e.g. 72" inputmode="numeric" />
+    </div>
+
+    <div class="field">
+      <label>Takeoff</label>
+      <div class="btn-group site" id="fg-takeoff">
+        <button data-val="E">E</button>
+        <button data-val="W">W</button>
+        <button data-val="G">G</button>
+        <button data-val="CP">CP</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Landing</label>
+      <div class="btn-group site" id="fg-landing">
+        <button data-val="S">S</button>
+        <button data-val="R">R</button>
+        <button data-val="FP">FP</button>
+        <button data-val="WP">WP</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Flight Time (min)</label>
+      <div class="btn-group" id="fg-time">
+        <button data-val="5">5</button>
+        <button data-val="8">8</button>
+        <button data-val="10" class="selected">10</button>
+        <button data-val="12">12</button>
+        <button data-val="15">15</button>
+        <button data-val="20">20</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Photo Payment ($)</label>
+      <input type="number" id="f-photos" min="0" step="5" placeholder="0" inputmode="numeric" />
+    </div>
+
+    <div class="field">
+      <label>Notes</label>
+      <textarea id="f-notes" placeholder="Optional..."></textarea>
+    </div>
+
+    <button class="btn-primary" onclick="saveFlight()">Save Flight</button>
+  </div>
+</div>
+
+<!-- FLIGHTS PAGE -->
+<div class="page" id="page-flights">
+  <div id="flights-list"></div>
+</div>
+
+<!-- EXPORT PAGE -->
+<div class="page" id="page-export">
+  <div class="card">
+    <h2>Duty Hours</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Enter duty time for each day before exporting.</p>
+    <div id="duty-list"></div>
+  </div>
+
+  <div class="card export-section">
+    <h2>Export by Week</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Pick a week (Mon–Sun) to export as CSV.</p>
+    <div id="week-list"></div>
+  </div>
+
+  <div class="card">
+    <h2>Export All</h2>
+    <button class="btn-secondary" onclick="exportAll()">Download All Flights (CSV)</button>
+  </div>
+</div>
+
+<!-- STATS PAGE -->
+<div class="page" id="page-stats">
+  <div class="stats-grid" id="stats-grid"></div>
+  <div class="card" id="stats-breakdown"></div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav>
+  <button class="active" onclick="showPage('log')" id="nav-log">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
+    Log
+  </button>
+  <button onclick="showPage('flights')" id="nav-flights">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+    Flights
+  </button>
+  <button onclick="showPage('export')" id="nav-export">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+    Export
+  </button>
+  <button onclick="showPage('stats')" id="nav-stats">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    Stats
+  </button>
+</nav>
+
+<div id="toast"></div>
+
+<script>
+// ---- DATA ----
+function getFlights() {
+  return JSON.parse(localStorage.getItem('gforce_flights') || '[]');
+}
+function saveFlights(f) {
+  localStorage.setItem('gforce_flights', JSON.stringify(f));
+}
+function getDuty() {
+  return JSON.parse(localStorage.getItem('gforce_duty') || '{}');
+}
+function saveDutyData(d) {
+  localStorage.setItem('gforce_duty', JSON.stringify(d));
+}
+
+// ---- DATE UTILS ----
+function todayStr() {
+  const d = new Date();
+  return d.toISOString().split('T')[0];
+}
+function fmtDate(s) {
+  const d = new Date(s + 'T00:00:00');
+  return d.toLocaleDateString('en-NZ', { weekday:'short', day:'numeric', month:'short' });
+}
+function getWeekStart(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay(); // 0=Sun
+  const diff = (day === 0) ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().split('T')[0];
+}
+function getWeekEnd(weekStart) {
+  const d = new Date(weekStart + 'T00:00:00');
+  d.setDate(d.getDate() + 6);
+  return d.toISOString().split('T')[0];
+}
+function formatWeekLabel(ws) {
+  const we = getWeekEnd(ws);
+  const a = new Date(ws + 'T00:00:00');
+  const b = new Date(we + 'T00:00:00');
+  return `${a.toLocaleDateString('en-NZ',{day:'numeric',month:'short'})} – ${b.toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'})}`;
+}
+
+// ---- INIT ----
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('f-date').value = todayStr();
+  document.getElementById('header-date').textContent = fmtDate(todayStr());
+  buildFlightNumButtons();
+  setupBtnGroups();
+  autoSelectFlightNum();
+});
+
+function buildFlightNumButtons() {
+  const el = document.getElementById('fg-flight');
+  for (let i = 1; i <= 12; i++) {
+    const b = document.createElement('button');
+    b.dataset.val = i;
+    b.textContent = i;
+    el.appendChild(b);
+  }
+}
+
+function setupBtnGroups() {
+  document.querySelectorAll('.btn-group').forEach(group => {
+    group.addEventListener('click', e => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      group.querySelectorAll('button').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+    });
+  });
+}
+
+function getGroupVal(id) {
+  const sel = document.querySelector(`#${id} button.selected`);
+  return sel ? sel.dataset.val : null;
+}
+
+function autoSelectFlightNum() {
+  const date = document.getElementById('f-date').value;
+  const flights = getFlights().filter(f => f.date === date);
+  const next = flights.length + 1;
+  document.querySelectorAll('#fg-flight button').forEach(b => {
+    b.classList.remove('selected');
+    if (parseInt(b.dataset.val) === next) b.classList.add('selected');
+  });
+}
+
+document.getElementById('f-date').addEventListener('change', autoSelectFlightNum);
+
+// ---- SAVE FLIGHT ----
+function saveFlight() {
+  const date = document.getElementById('f-date').value;
+  const flightNum = getGroupVal('fg-flight');
+  const weight = document.getElementById('f-weight').value;
+  const takeoff = getGroupVal('fg-takeoff');
+  const landing = getGroupVal('fg-landing');
+  const time = getGroupVal('fg-time');
+  const photos = document.getElementById('f-photos').value || '0';
+  const notes = document.getElementById('f-notes').value;
+
+  if (!date || !flightNum || !weight || !takeoff || !landing || !time) {
+    toast('Fill in all required fields');
+    return;
+  }
+
+  const flights = getFlights();
+  flights.push({ date, flightNum: parseInt(flightNum), weight: parseFloat(weight),
+    takeoff, landing, time: parseInt(time), photos: parseFloat(photos), notes,
+    id: Date.now() });
+  saveFlights(flights);
+
+  // Reset for next flight
+  document.getElementById('f-weight').value = '';
+  document.getElementById('f-photos').value = '';
+  document.getElementById('f-notes').value = '';
+  // Keep date, reselect time=10, deselect takeoff/landing
+  document.querySelector('#fg-time button.selected')?.classList.remove('selected');
+  document.querySelector('#fg-time button[data-val="10"]').classList.add('selected');
+
+  autoSelectFlightNum();
+  toast(`Flight ${flightNum} saved!`);
+}
+
+// ---- FLIGHTS PAGE ----
+function renderFlights() {
+  const flights = getFlights().slice().reverse();
+  const duty = getDuty();
+  const el = document.getElementById('flights-list');
+
+  if (flights.length === 0) {
+    el.innerHTML = '<div class="empty-state">No flights logged yet</div>';
+    return;
+  }
+
+  // Group by date
+  const byDate = {};
+  flights.forEach(f => {
+    if (!byDate[f.date]) byDate[f.date] = [];
+    byDate[f.date].push(f);
+  });
+
+  let html = '';
+  Object.keys(byDate).sort().reverse().forEach(date => {
+    const dayFlights = byDate[date];
+    const dutyHrs = duty[date] ? `${duty[date]}h duty` : 'no duty set';
+    html += `<div class="date-group-header">
+      ${fmtDate(date)}
+      <span class="duty-badge">${dutyHrs} · ${dayFlights.length} flights</span>
+    </div>`;
+    dayFlights.sort((a,b) => a.flightNum - b.flightNum).forEach(f => {
+      html += `<div class="flight-item">
+        <div>
+          <div style="font-size:14px;font-weight:600">Flight ${f.flightNum} · ${f.weight}kg · ${f.time}min</div>
+          <div class="flight-meta">${f.takeoff} → ${f.landing}${f.photos > 0 ? ' · $'+f.photos+' photos' : ''}${f.notes ? ' · '+f.notes : ''}</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          ${f.photos > 0 ? `<span class="flight-badge green">$${f.photos}</span>` : ''}
+          <button class="btn-danger" onclick="deleteFlight(${f.id})">✕</button>
+        </div>
+      </div>`;
+    });
+  });
+
+  el.innerHTML = html;
+
+  // Update subtitle
+  const today = getFlights().filter(f => f.date === todayStr());
+  document.getElementById('header-flights-sub').textContent =
+    `${getFlights().length} total · ${today.length} today`;
+}
+
+function deleteFlight(id) {
+  if (!confirm('Delete this flight?')) return;
+  const flights = getFlights().filter(f => f.id !== id);
+  saveFlights(flights);
+  renderFlights();
+  toast('Deleted');
+}
+
+// ---- EXPORT PAGE ----
+function renderExport() {
+  const flights = getFlights();
+  const duty = getDuty();
+
+  // Duty section: unique dates
+  const dates = [...new Set(flights.map(f => f.date))].sort().reverse();
+  let dutyHtml = '';
+  if (dates.length === 0) {
+    dutyHtml = '<div style="color:var(--muted);font-size:13px">No flights logged yet</div>';
+  } else {
+    dates.forEach(date => {
+      dutyHtml += `<div class="duty-row">
+        <div class="duty-date">${fmtDate(date)}</div>
+        <input class="duty-input" type="number" min="0" max="24" step="0.5"
+          inputmode="decimal" placeholder="hrs"
+          value="${duty[date] || ''}"
+          onchange="saveDuty('${date}', this.value)" />
+        <div class="duty-label">hrs</div>
+      </div>`;
+    });
+  }
+  document.getElementById('duty-list').innerHTML = dutyHtml;
+
+  // Weeks
+  const weeks = {};
+  flights.forEach(f => {
+    const ws = getWeekStart(f.date);
+    if (!weeks[ws]) weeks[ws] = [];
+    weeks[ws].push(f);
+  });
+  let weekHtml = '';
+  if (Object.keys(weeks).length === 0) {
+    weekHtml = '<div style="color:var(--muted);font-size:13px">No flights to export</div>';
+  } else {
+    Object.keys(weeks).sort().reverse().forEach(ws => {
+      const we = getWeekEnd(ws);
+      const wf = weeks[ws];
+      const photos = wf.reduce((s,f) => s+f.photos, 0);
+      weekHtml += `<div class="week-row">
+        <div>
+          <div class="week-label">${formatWeekLabel(ws)}</div>
+          <div class="week-meta">${wf.length} flights · $${photos} photos</div>
+        </div>
+        <button class="btn-secondary" style="width:auto;padding:8px 14px;margin:0"
+          onclick="exportWeek('${ws}','${we}')">CSV</button>
+      </div>`;
+    });
+  }
+  document.getElementById('week-list').innerHTML = weekHtml;
+}
+
+function saveDuty(date, val) {
+  const d = getDuty();
+  if (val === '' || val === null) delete d[date];
+  else d[date] = parseFloat(val);
+  saveDutyData(d);
+  toast('Duty saved');
+}
+
+function flightsToCSV(flights) {
+  const duty = getDuty();
+  const rows = [['Date','Flights','Weight','Takeoff','Landing','Flight Time','Duty','Photos','Notes']];
+  flights.sort((a,b) => a.date.localeCompare(b.date) || a.flightNum - b.flightNum).forEach(f => {
+    const isLastOfDay = flights.filter(x => x.date === f.date).sort((a,b)=>b.flightNum-a.flightNum)[0].id === f.id;
+    rows.push([
+      f.date, f.flightNum, f.weight, f.takeoff, f.landing, f.time,
+      isLastOfDay ? (duty[f.date] || '') : '',
+      f.photos > 0 ? f.photos : '',
+      f.notes || ''
+    ]);
+  });
+  return rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+}
+
+function downloadCSV(csv, filename) {
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('Downloading...');
+}
+
+function exportWeek(start, end) {
+  const flights = getFlights().filter(f => f.date >= start && f.date <= end);
+  if (flights.length === 0) { toast('No flights in this week'); return; }
+  const label = start.replace(/-/g,'');
+  downloadCSV(flightsToCSV(flights), `gforce_flights_${label}.csv`);
+}
+
+function exportAll() {
+  const flights = getFlights();
+  if (flights.length === 0) { toast('No flights to export'); return; }
+  downloadCSV(flightsToCSV(flights), 'gforce_flights_all.csv');
+}
+
+// ---- STATS PAGE ----
+function renderStats() {
+  const flights = getFlights();
+  if (flights.length === 0) {
+    document.getElementById('stats-grid').innerHTML = '<div class="empty-state" style="grid-column:1/-1">No flights yet</div>';
+    document.getElementById('stats-breakdown').innerHTML = '';
+    return;
+  }
+  const totalPhotos = flights.reduce((s,f) => s + f.photos, 0);
+  const today = flights.filter(f => f.date === todayStr());
+
+  // Week flights
+  const ws = getWeekStart(todayStr());
+  const we = getWeekEnd(ws);
+  const weekFlights = flights.filter(f => f.date >= ws && f.date <= we);
+
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card"><div class="stat-number">${flights.length}</div><div class="stat-label">Total Flights</div></div>
+    <div class="stat-card"><div class="stat-number">${today.length}</div><div class="stat-label">Today</div></div>
+    <div class="stat-card"><div class="stat-number">${weekFlights.length}</div><div class="stat-label">This Week</div></div>
+    <div class="stat-card"><div class="stat-number">$${totalPhotos}</div><div class="stat-label">Photo Revenue</div></div>
+  `;
+
+  // Breakdown by takeoff
+  const sites = {};
+  flights.forEach(f => { sites[f.takeoff] = (sites[f.takeoff]||0)+1; });
+  const siteRows = Object.entries(sites).sort((a,b)=>b[1]-a[1])
+    .map(([k,v]) => `<div class="flight-item"><div>${k}</div><span class="flight-badge">${v} flights</span></div>`).join('');
+
+  document.getElementById('stats-breakdown').innerHTML = `<h2>By Takeoff Site</h2>${siteRows}`;
+}
+
+// ---- NAVIGATION ----
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.page-header').forEach(h => h.style.display = 'none');
+
+  document.getElementById('page-'+name).classList.add('active');
+  document.getElementById('nav-'+name).classList.add('active');
+  document.getElementById('header-'+name).style.display = 'block';
+
+  if (name === 'flights') renderFlights();
+  if (name === 'export') renderExport();
+  if (name === 'stats') renderStats();
+}
+
+// ---- TOAST ----
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2200);
+}
+  // Register service worker for offline use
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
+</script>
+</body>
+</html>

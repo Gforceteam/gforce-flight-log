@@ -1,52 +1,45 @@
 const CACHE = 'gforce-v1';
-const APP_PATH = '/gforce-flight-log/';
+const APP = '/gforce-flight-log/';
 
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(c => {
-      return c.addAll([
-        APP_PATH + 'index.html',
-        APP_PATH + 'manifest.json',
-        APP_PATH + 'icon-192.png',
-        APP_PATH + 'icon-512.png',
-      ]);
-    })
+    caches.open(CACHE).then(c => c.addAll([
+      APP,
+      APP + 'index.html',
+      APP + 'manifest.json',
+      APP + 'icon-192.png',
+      APP + 'icon-512.png',
+    ]))
   );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    )
+    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(caches.delete, caches)))
   );
   self.clients.claim();
 });
 
 self.addEventListener('fetch', e => {
-  // Only handle requests for our app
   const url = new URL(e.request.url);
-  if (!url.pathname.startsWith(APP_PATH)) {
-    return;
-  }
+  // Only handle app requests
+  if (!url.pathname.startsWith(APP) && url.pathname !== APP.slice(0,-1)) return;
 
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
-      return fetch(e.request).then(response => {
-        // Cache successful responses
-        if (response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
+      return fetch(e.request).then(resp => {
+        if (resp.ok) {
+          const cl = resp.clone();
+          caches.open(CACHE).then(c => c.put(e.request, cl));
         }
-        return response;
+        return resp;
       }).catch(() => {
-        // For navigation requests, fallback to index.html
         if (e.request.mode === 'navigate') {
-          return caches.match(APP_PATH + 'index.html');
+          return caches.match(APP + 'index.html');
         }
-        return new Response('Offline', { status: 503 });
+        return new Response('', { status: 503 });
       });
     })
   );

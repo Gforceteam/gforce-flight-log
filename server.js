@@ -112,6 +112,12 @@ function broadcast(data) {
   });
 }
 
+// ─── Public Routes ───────────────────────────────────────────────────────────
+app.get('/api/public/pilots', (req, res) => {
+  const pilots = db.prepare('SELECT id, name FROM pilots ORDER BY name').all();
+  res.json(pilots);
+});
+
 // ─── Auth Routes ─────────────────────────────────────────────────────────────
 app.post('/api/auth/pilot', (req, res) => {
   const { name, pin } = req.body;

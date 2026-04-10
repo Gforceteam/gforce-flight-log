@@ -448,7 +448,20 @@
       border-radius: 10px; padding: 2px 8px; font-size: 11px; color: var(--text);
     }
 
-    .export-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .export-bar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+    .flights-search-bar { margin-bottom: 14px; position: relative; }
+    .flights-search-bar input {
+      width: 100%; padding: 10px 14px 10px 36px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 10px;
+      color: var(--text); font-size: 14px; box-sizing: border-box;
+    }
+    .flights-search-bar input::placeholder { color: var(--muted); }
+    .flights-search-bar input:focus { outline: none; border-color: var(--accent); }
+    .flights-search-bar .search-icon {
+      position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+      color: var(--muted); font-size: 15px; pointer-events: none;
+    }
+    .flights-result-count { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
     .btn-export-all {
       padding: 8px 16px; background: var(--accent); border: none;
       border-radius: 8px; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer;
@@ -458,6 +471,7 @@
       border-radius: 8px; color: var(--text); font-size: 13px; cursor: pointer;
     }
     .btn-export-pilot:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-export-pilot.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
 
     /* ── TODAY TAB ─────────────────────────────────────────────────────── */
     .today-summary {
@@ -721,6 +735,11 @@
         <button class="btn-export-all" onclick="exportAllCSV()">Export All CSV</button>
         <div id="pilot-export-btns"></div>
       </div>
+      <div class="flights-search-bar">
+        <span class="search-icon">🔍</span>
+        <input type="search" id="flights-search" placeholder="Search pilot, client or date…" oninput="searchFlights(this.value)" />
+      </div>
+      <div class="flights-result-count" id="flights-result-count"></div>
       <div id="flights-table-container"></div>
     </div>
   </div>
@@ -748,6 +767,7 @@ let allFlights = [];
 let alertDismissed = new Set();
 let timerInterval;
 let todaySort = { col: 'time', dir: 'asc' }; // col: 'time'|'pilot'|'client', dir: 'asc'|'desc'
+let flightsSearch = '';
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -1541,9 +1561,12 @@ function sortToday(col) {
 
 // ─── Flights Tab ──────────────────────────────────────────────────────────────
 function renderFlightsTab() {
-  document.getElementById('pilot-export-btns').innerHTML = officePilots.map(p =>
-    `<button class="btn-export-pilot" onclick="exportPilotCSV('${p.id}')">${p.name}</button>`
-  ).join('');
+  const term = flightsSearch.trim().toLowerCase();
+
+  document.getElementById('pilot-export-btns').innerHTML = officePilots.map(p => {
+    const isActive = term === p.name.toLowerCase();
+    return `<button class="btn-export-pilot${isActive ? ' active' : ''}" onclick="filterByPilot('${p.name}')">${p.name}</button>`;
+  }).join('');
 
   const el = document.getElementById('flights-table-container');
   if (allFlights.length === 0) {
@@ -1551,8 +1574,25 @@ function renderFlightsTab() {
     return;
   }
 
+  const filtered = term
+    ? allFlights.filter(f =>
+        (f.pilot_name || '').toLowerCase().includes(term) ||
+        (f.client_name || '').toLowerCase().includes(term) ||
+        f.date.includes(term) ||
+        officeFmtDate(f.date).toLowerCase().includes(term)
+      )
+    : allFlights;
+
+  const countEl = document.getElementById('flights-result-count');
+  countEl.textContent = term ? `${filtered.length} of ${allFlights.length} flights` : '';
+
+  if (filtered.length === 0) {
+    el.innerHTML = '<div class="empty-state">No flights match your search</div>';
+    return;
+  }
+
   const byDate = {};
-  allFlights.forEach(f => {
+  filtered.forEach(f => {
     if (!byDate[f.date]) byDate[f.date] = [];
     byDate[f.date].push(f);
   });
@@ -1560,7 +1600,7 @@ function renderFlightsTab() {
   let html = `<table class="flight-table">
     <thead><tr>
       <th>Date</th><th>Pilot</th><th>Client</th><th>#</th>
-      <th>Weight</th><th>Site</th><th>Time</th><th>Photos</th><th>Notes</th>
+      <th>Weight</th><th>Site</th><th>Time</th><th>Notes</th>
     </tr></thead><tbody>`;
 
   Object.keys(byDate).sort().reverse().forEach(date => {
@@ -1573,7 +1613,6 @@ function renderFlightsTab() {
         <td>${f.weight}kg</td>
         <td>${f.takeoff} → ${f.landing}</td>
         <td>${f.time}min</td>
-        <td>${f.photos > 0 ? '$' + f.photos : '—'}</td>
         <td class="time-col">${f.notes || ''}</td>
       </tr>`;
     });
@@ -1581,6 +1620,18 @@ function renderFlightsTab() {
 
   html += '</tbody></table>';
   el.innerHTML = html;
+}
+
+function searchFlights(val) {
+  flightsSearch = val;
+  renderFlightsTab();
+}
+
+function filterByPilot(name) {
+  flightsSearch = flightsSearch.toLowerCase() === name.toLowerCase() ? '' : name;
+  const inp = document.getElementById('flights-search');
+  if (inp) inp.value = flightsSearch;
+  renderFlightsTab();
 }
 
 function officeFmtDate(s) {

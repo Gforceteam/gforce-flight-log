@@ -482,6 +482,27 @@
     .today-table .col-pilot { font-weight: 600; color: var(--accent); }
     .today-table .col-time { color: var(--muted); font-size: 12px; white-space: nowrap; }
 
+    /* ── FLIGHT FOLLOWING ──────────────────────────────────────────────── */
+    .ff-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .ff-table { border-collapse: collapse; font-size: 12px; min-width: 600px; }
+    .ff-table th, .ff-table td {
+      padding: 5px 8px; border: 1px solid var(--border); text-align: center; white-space: nowrap;
+    }
+    .ff-table th {
+      background: var(--surface); color: var(--muted); font-size: 11px;
+      font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;
+    }
+    .ff-table th.ff-today-col { color: var(--accent); }
+    .ff-table td.ff-today-col { background: rgba(243,115,41,0.08); }
+    .ff-pilot-name { text-align: left !important; font-weight: 600; min-width: 70px; }
+    .ff-day-val { font-weight: 600; color: var(--text); }
+    .ff-total { font-weight: 700; color: #fff; min-width: 52px; }
+    .ff-ok   { background: #4a8f1e; }
+    .ff-warn { background: #c07000; }
+    .ff-limit{ background: #c0392b; }
+    #page-ff { padding: 0; }
+    #ff-content { padding: 12px 16px; }
+
     /* ── SHARED ────────────────────────────────────────────────────────── */
     #toast {
       position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
@@ -628,6 +649,10 @@
     <div class="stats-grid" id="stats-grid"></div>
     <div class="card" id="stats-breakdown"></div>
   </div>
+
+  <div class="page" id="page-ff">
+    <div id="ff-content"><div class="empty-state">Loading…</div></div>
+  </div>
 </div>
 
 <!-- ── BOTTOM NAV (pilot only) ────────────────────────────────────────────── -->
@@ -647,6 +672,10 @@
   <button onclick="showPage('stats')" id="nav-stats">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
     Stats
+  </button>
+  <button onclick="showPage('ff')" id="nav-ff">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="14" x2="21" y2="14"/><line x1="8" y1="4" x2="8" y2="20"/></svg>
+    Follow
   </button>
 </nav>
 
@@ -668,6 +697,7 @@
     <button class="office-tab-btn active" onclick="showOfficeTab('pilots')" id="office-tab-pilots-btn">Office</button>
     <button class="office-tab-btn" onclick="showOfficeTab('today')" id="office-tab-today-btn">Today</button>
     <button class="office-tab-btn" onclick="showOfficeTab('flights')" id="office-tab-flights-btn">Flights</button>
+    <button class="office-tab-btn" onclick="showOfficeTab('ff')" id="office-tab-ff-btn">Following</button>
   </div>
 
   <div class="office-content">
@@ -679,6 +709,10 @@
     <div class="office-tab-content" id="office-tab-today">
       <div class="today-summary" id="today-summary"></div>
       <div id="office-today-list"></div>
+    </div>
+
+    <div class="office-tab-content" id="office-tab-ff">
+      <div class="ff-wrap" id="office-ff-content"><div class="empty-state">Loading…</div></div>
     </div>
 
     <div class="office-tab-content" id="office-tab-flights">
@@ -1236,8 +1270,70 @@ function showPage(name) {
   document.querySelectorAll('.page-header').forEach(h => h.style.display = 'none');
   document.getElementById('page-'+name).classList.add('active');
   document.getElementById('nav-'+name).classList.add('active');
-  document.getElementById('header-'+name).style.display = 'block';
-  if (name === 'stats') { renderStats(); }
+  const hdr = document.getElementById('header-'+name);
+  if (hdr) hdr.style.display = 'block';
+  if (name === 'stats') renderStats();
+  if (name === 'ff') renderPilotFF();
+}
+
+// ─── Flight Following ─────────────────────────────────────────────────────────
+function ffFmtDate(d) {
+  return new Date(d + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
+}
+
+function buildFFTable(dates, pilots) {
+  const today = todayStr();
+  let html = `<table class="ff-table"><thead><tr>
+    <th class="ff-pilot-name">Pilot</th>
+    ${dates.map(d => `<th class="${d === today ? 'ff-today-col' : ''}">${ffFmtDate(d)}</th>`).join('')}
+    <th>Last 14 days</th>
+  </tr></thead><tbody>`;
+
+  pilots.forEach(p => {
+    const cls = p.daysWorked >= 12 ? 'ff-limit' : p.daysWorked >= 10 ? 'ff-warn' : 'ff-ok';
+    html += `<tr>
+      <td class="ff-pilot-name">${p.name}</td>
+      ${dates.map(d => {
+        const cnt = p.dayCounts[d];
+        return `<td class="${d === today ? 'ff-today-col' : ''}">${cnt ? `<span class="ff-day-val">${cnt}</span>` : ''}</td>`;
+      }).join('')}
+      <td class="ff-total ${cls}">${p.daysWorked}</td>
+    </tr>`;
+  });
+  html += `</tbody></table>`;
+  return html;
+}
+
+async function renderPilotFF() {
+  const el = document.getElementById('ff-content');
+  el.innerHTML = '<div class="empty-state">Loading…</div>';
+  try {
+    const res = await api('/api/flight-following');
+    if (!res.ok) throw new Error('Failed');
+    const data = await res.json();
+    el.innerHTML = `<div class="ff-wrap">${buildFFTable(data.dates, data.pilots)}</div>`;
+  } catch {
+    el.innerHTML = '<div class="empty-state">Could not load flight following data</div>';
+  }
+}
+
+function renderOfficeFF() {
+  const dates = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    dates.push(d.toISOString().slice(0, 10));
+  }
+  const ffPilots = [...officePilots].sort((a, b) => a.name.localeCompare(b.name)).map(p => {
+    const dayCounts = {};
+    let daysWorked = 0;
+    dates.forEach(d => {
+      const cnt = allFlights.filter(f => f.pilot_id === p.id && f.date === d).length;
+      if (cnt > 0) { dayCounts[d] = cnt; daysWorked++; }
+    });
+    return { id: p.id, name: p.name, dayCounts, daysWorked };
+  });
+  document.getElementById('office-ff-content').innerHTML = buildFFTable(dates, ffPilots);
 }
 
 // ─── Office API ───────────────────────────────────────────────────────────────
@@ -1563,6 +1659,7 @@ function showOfficeTab(name) {
   document.querySelectorAll('.office-tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById(`office-tab-${name}`).classList.add('active');
   document.getElementById(`office-tab-${name}-btn`).classList.add('active');
+  if (name === 'ff') renderOfficeFF();
 }
 
 // ─── WebSocket ────────────────────────────────────────────────────────────────

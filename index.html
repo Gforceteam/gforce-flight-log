@@ -718,16 +718,15 @@ async function saveFlight() {
 
   try {
     if (editingId !== null) {
-      // For now, editing just removes and re-adds (PUT not implemented)
-      const res = await api('/api/flights', {
-        method: 'POST',
+      // PUT to update existing flight
+      const res = await api(`/api/flights/${editingId}`, {
+        method: 'PUT',
         body: JSON.stringify({ date, flight_num: flightNum, weight, takeoff, landing, time, photos, notes })
       });
       if (!res.ok) throw new Error(await res.text());
-      // Remove old flight with same approximate data, reload
-      cancelEdit();
       toast('Flight updated!');
     } else {
+      // POST new flight
       const res = await api('/api/flights', {
         method: 'POST',
         body: JSON.stringify({ date, flight_num: flightNum, weight, takeoff, landing, time, photos, notes })
@@ -736,23 +735,18 @@ async function saveFlight() {
       toast('Flight logged! Office notified.');
     }
 
-    // Reset form
-    document.getElementById('f-weight').value = 72;
-    document.getElementById('f-photos').value = '';
-    document.getElementById('f-notes').value = '';
-    updateWeightDisplay();
-    document.querySelector('#fg-time button.selected')?.classList.remove('selected');
-    document.querySelector('#fg-time button[data-val="10"]').classList.add('selected');
-    updateFlightNumForDate(date);
-
+    // Reset form first (optimistic)
+    resetForm();
+    // Then reload flights and update counter
     await loadMyFlights();
+    updateFlightNumForDate(document.getElementById('f-date').value);
   } catch (e) {
     toast('Save failed: ' + e.message);
     setServerStatus('offline');
   }
 }
 
-function cancelEdit() {
+function resetForm() {
   editingId = null;
   document.getElementById('card-title').textContent = 'New Flight';
   document.getElementById('save-btn').textContent = 'Save Flight';
@@ -761,15 +755,17 @@ function cancelEdit() {
   document.getElementById('f-weight').value = 72;
   document.getElementById('f-photos').value = '';
   document.getElementById('f-notes').value = '';
-  document.querySelector('#fg-takeoff button.selected')?.classList.remove('selected');
-  document.querySelector('#fg-landing button.selected')?.classList.remove('selected');
+  updateWeightDisplay();
   document.querySelector('#fg-time button.selected')?.classList.remove('selected');
   document.querySelector('#fg-time button[data-val="10"]').classList.add('selected');
-  updateWeightDisplay();
   const dateEl = document.getElementById('f-date');
   dateEl.value = todayStr();
   document.getElementById('header-date').textContent = fmtDate(todayStr());
-  updateFlightNumForDate(dateEl.value);
+}
+
+function cancelEdit() {
+  resetForm();
+  updateFlightNumForDate(document.getElementById('f-date').value);
 }
 
 function setServerStatus(status) {
@@ -867,8 +863,15 @@ function renderFlights() {
 
 async function deleteFlight(id) {
   if (!confirm('Delete this flight? This cannot be undone.')) return;
-  // For now, we don't have a delete endpoint — notify office manually
-  toast('Contact office to delete flight');
+  try {
+    const res = await api(`/api/flights/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(await res.text());
+    toast('Flight deleted');
+    await loadMyFlights();
+    updateFlightNumForDate(document.getElementById('f-date').value);
+  } catch (e) {
+    toast('Delete failed: ' + e.message);
+  }
 }
 
 // ─── Stats Page ───────────────────────────────────────────────────────────────

@@ -89,21 +89,27 @@
     .header h1 { font-size: 22px; font-weight: 700; }
     .header-right { display: flex; align-items: center; gap: 12px; }
     .ws-indicator {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--danger);
+      width: 10px; height: 10px; border-radius: 50%; background: var(--danger);
     }
     .ws-indicator.connected { background: var(--accent2); }
     .logout-btn {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--muted);
-      font-size: 13px;
-      padding: 6px 12px;
-      cursor: pointer;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      color: var(--muted); font-size: 13px; padding: 6px 12px; cursor: pointer;
     }
+
+    /* TABS */
+    .tab-bar {
+      display: flex;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .tab-btn {
+      flex: 1; padding: 12px; background: none; border: none;
+      color: var(--muted); font-size: 14px; font-weight: 600;
+      cursor: pointer; border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
 
     /* ALERT BANNER */
     #alert-banner {
@@ -119,134 +125,122 @@
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
     #alert-banner.show { display: block; }
 
-    /* PILOT GRID */
+    /* CONTENT */
     .content { padding: 20px; max-width: 900px; margin: 0 auto; }
-    .section-title { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; margin-top: 24px; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* PILOT GRID (Office Tab) */
+    .section-title { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; margin-top: 20px; }
     .section-title:first-child { margin-top: 0; }
 
     .pilot-card {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 16px 18px;
+      padding: 14px 16px;
       margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      gap: 14px;
     }
     .pilot-card.airborne { border-color: var(--warning); }
     .pilot-card.alert { border-color: var(--danger); }
 
-    .pilot-avatar {
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
-      background: var(--surface);
+    .pilot-card-top {
       display: flex;
       align-items: center;
-      justify-content: center;
-      font-size: 20px;
-      font-weight: 700;
-      color: var(--accent);
-      flex-shrink: 0;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .pilot-avatar {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: var(--surface);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 700; color: var(--accent); flex-shrink: 0;
     }
     .pilot-info { flex: 1; min-width: 0; }
-    .pilot-name { font-size: 17px; font-weight: 600; }
+    .pilot-name { font-size: 16px; font-weight: 600; }
     .pilot-status { font-size: 13px; margin-top: 2px; }
     .pilot-status.in-office { color: var(--accent2); }
     .pilot-status.airborne { color: var(--warning); }
-    .pilot-status.expired { color: var(--danger); font-weight: 700; }
+    .pilot-client { font-size: 13px; color: var(--accent); margin-top: 2px; font-weight: 600; }
 
     .timer-display {
-      font-size: 15px;
-      font-weight: 700;
-      font-variant-numeric: tabular-nums;
-      color: var(--warning);
-      white-space: nowrap;
+      font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums;
+      color: var(--warning); margin-bottom: 10px;
     }
     .timer-display.urgent { color: var(--danger); }
 
-    .pilot-actions { display: flex; gap: 8px; flex-shrink: 0; }
-    .btn-leave {
-      padding: 8px 14px;
-      background: var(--warning);
-      border: none;
-      border-radius: 8px;
-      color: #000;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    .btn-landed {
-      padding: 8px 14px;
-      background: var(--accent2);
-      border: none;
-      border-radius: 8px;
-      color: #000;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    .btn-disabled {
-      padding: 8px 14px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--muted);
-      font-size: 13px;
-      cursor: default;
-    }
-
-    /* EXPORT SECTION */
-    .export-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 16px 18px;
+    .pilot-client-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
       margin-bottom: 10px;
     }
-    .export-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px 0;
-      border-bottom: 1px solid var(--border);
+    .pilot-client-row label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .pilot-client-row input {
+      flex: 1; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); padding: 7px 10px;
+      font-size: 14px; outline: none;
     }
-    .export-row:last-child { border-bottom: none; }
-    .export-name { font-size: 14px; font-weight: 600; }
-    .btn-export {
-      padding: 6px 12px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: var(--text);
-      font-size: 12px;
-      cursor: pointer;
+    .pilot-client-row input:focus { border-color: var(--accent); }
+
+    .pilot-actions { display: flex; gap: 8px; }
+    .btn-leave {
+      padding: 8px 14px; background: var(--warning); border: none;
+      border-radius: 8px; color: #000; font-size: 13px; font-weight: 700; cursor: pointer;
     }
-    .btn-export:hover { border-color: var(--accent); color: var(--accent); }
-    .btn-export.all { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 700; }
-    .btn-export.all:hover { opacity: 0.85; }
+    .btn-landed {
+      padding: 8px 14px; background: var(--accent2); border: none;
+      border-radius: 8px; color: #000; font-size: 13px; font-weight: 700; cursor: pointer;
+    }
+
+    /* FLIGHTS TAB */
+    .flight-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .flight-table th {
+      text-align: left; padding: 8px 10px; background: var(--surface);
+      color: var(--muted); font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.5px; border-bottom: 1px solid var(--border);
+    }
+    .flight-table td {
+      padding: 10px 10px; border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .flight-table tr:last-child td { border-bottom: none; }
+    .flight-table .pilot-col { font-weight: 600; color: var(--accent); }
+    .flight-table .client-col { color: var(--accent2); font-size: 12px; }
+    .flight-table .time-col { color: var(--muted); font-size: 12px; }
+    .flight-table .badge {
+      display: inline-block; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 2px 8px; font-size: 11px; color: var(--text);
+    }
+
+    .export-bar {
+      display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .btn-export-all {
+      padding: 8px 16px; background: var(--accent); border: none;
+      border-radius: 8px; color: #000; font-size: 13px; font-weight: 700; cursor: pointer;
+    }
+    .btn-export-pilot {
+      padding: 8px 14px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 13px; cursor: pointer;
+    }
+    .btn-export-pilot:hover { border-color: var(--accent); color: var(--accent); }
 
     /* TOAST */
     #toast {
-      position: fixed;
-      bottom: 30px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #333;
-      color: #fff;
-      padding: 10px 20px;
-      border-radius: 20px;
-      font-size: 14px;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.3s;
-      z-index: 999;
-      white-space: nowrap;
+      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+      background: #333; color: #fff; padding: 10px 20px;
+      border-radius: 20px; font-size: 14px; opacity: 0;
+      pointer-events: none; transition: opacity 0.3s; z-index: 999; white-space: nowrap;
     }
     #toast.show { opacity: 1; }
 
     .hidden { display: none !important; }
+    .empty-state { text-align: center; color: var(--muted); padding: 40px 20px; font-size: 15px; }
   </style>
 </head>
 <body>
@@ -276,17 +270,26 @@
     ⚠️ PILOT TIMER EXPIRED — <span id="alert-pilot-name"></span> has not reported landing!
   </div>
 
-  <div class="content">
-    <div class="section-title">Pilots</div>
-    <div id="pilots-list"></div>
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="showTab('office')" id="tab-office-btn">Office</button>
+    <button class="tab-btn" onclick="showTab('flights')" id="tab-flights-btn">Flights</button>
+  </div>
 
-    <div class="section-title">Export Data</div>
-    <div class="export-card">
-      <div class="export-row">
-        <span class="export-name">All Pilots (Combined)</span>
-        <button class="btn-export all" onclick="exportCSV(null)">CSV</button>
+  <div class="content">
+    <!-- OFFICE TAB -->
+    <div class="tab-content active" id="tab-office">
+      <div class="section-title">Pilots</div>
+      <div id="pilots-list"></div>
+    </div>
+
+    <!-- FLIGHTS TAB -->
+    <div class="tab-content" id="tab-flights">
+      <div class="section-title" style="margin-top:0">All Flights</div>
+      <div class="export-bar">
+        <button class="btn-export-all" onclick="exportAllCSV()">Export All CSV</button>
+        <div id="pilot-export-btns"></div>
       </div>
-      <div id="export-list"></div>
+      <div id="flights-table-container"></div>
     </div>
   </div>
 </div>
@@ -295,18 +298,19 @@
 
 <script>
 // ─── Config ──────────────────────────────────────────────────────────────────
-// For local development use localhost:3000, for production use your deployed URL
 const API_BASE = 'https://gforce-api-6jpm.onrender.com';
 
 let token = localStorage.getItem('gforce_office_token');
 let ws = null;
 let pilots = [];
-let timers = {}; // pilot_id -> { started_at, expires_at }
+let allFlights = [];
+let timers = {}; // pilot_id -> { client_name, started_at, expires_at }
 let alertDismissed = new Set();
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 function doLogin() {
   const pw = document.getElementById('office-password').value;
+  document.getElementById('login-error').style.display = 'none';
   fetch(`${API_BASE}/api/auth/office`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -333,17 +337,14 @@ function doLogout() {
   document.getElementById('login-screen').style.display = 'flex';
 }
 
-// ─── Dashboard Init ───────────────────────────────────────────────────────────
 function showDashboard() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
-  loadPilots();
+  loadData();
   connectWS();
 }
 
-if (token) {
-  showDashboard();
-}
+if (token) showDashboard();
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 function api(path, opts = {}) {
@@ -357,27 +358,72 @@ function api(path, opts = {}) {
   });
 }
 
-async function loadPilots() {
+async function loadData() {
   try {
-    const res = await api('/api/pilots');
-    if (res.status === 401) { doLogout(); return; }
-    pilots = await res.json();
-    renderPilots();
-    renderExportList();
+    const [pilotsRes, flightsRes] = await Promise.all([
+      api('/api/pilots'),
+      api('/api/office/flights')
+    ]);
+    if (pilotsRes.status === 401) { doLogout(); return; }
+    pilots = await pilotsRes.json();
+    allFlights = flightsRes.ok ? await flightsRes.json() : [];
+    renderOfficeTab();
+    renderFlightsTab();
   } catch (e) {
     toast('Cannot connect to server');
   }
 }
 
+// ─── Office Tab ────────────────────────────────────────────────────────────────
+function renderOfficeTab() {
+  const el = document.getElementById('pilots-list');
+
+  el.innerHTML = pilots.map(p => {
+    const isAirborne = p.status === 'airborne';
+    const timerExpiry = p.timer_expires_at;
+    const clientName = p.client_name || '';
+    const initial = p.name.charAt(0).toUpperCase();
+
+    return `<div class="pilot-card ${isAirborne ? 'airborne' : ''}" id="pilot-card-${p.id}">
+      <div class="pilot-card-top">
+        <div class="pilot-avatar">${initial}</div>
+        <div class="pilot-info">
+          <div class="pilot-name">${p.name}</div>
+          <div class="pilot-status ${isAirborne ? 'airborne' : 'in-office'}">
+            ${isAirborne ? '🚐 Left office' : '🏢 In office'}
+            ${p.last_landed_at ? ' · Last landed ' + fmtRelative(p.last_landed_at) : ''}
+          </div>
+          ${isAirborne && clientName ? `<div class="pilot-client">👤 ${clientName}</div>` : ''}
+        </div>
+        <div class="pilot-actions">
+          ${isAirborne
+            ? `<button class="btn-landed" onclick="doLandedEarly('${p.id}')">Landed</button>`
+            : `<button class="btn-leave" onclick="doLeaveOffice('${p.id}')">Left Office</button>`
+          }
+        </div>
+      </div>
+      ${isAirborne && timerExpiry ? `<div class="timer-display" id="timer-${p.id}" data-expires="${timerExpiry}">Timer: --:--</div>` : ''}
+      ${isAirborne ? `<div class="pilot-client-row">
+        <label>Client / Booking:</label>
+        <input type="text" id="client-${p.id}" value="${clientName}" placeholder="e.g. Jan Kowalski or BKG-1234"
+          onchange="updateClientName('${p.id}', this.value)" />
+      </div>` : ''}
+    </div>`;
+  }).join('');
+
+  updateTimers();
+}
+
 async function doLeaveOffice(pilotId) {
+  const clientName = document.getElementById(`client-${pilotId}`)?.value || '';
   const res = await api('/api/office/leave', {
     method: 'POST',
-    body: JSON.stringify({ pilot_id: pilotId })
+    body: JSON.stringify({ pilot_id: pilotId, client_name: clientName })
   });
   const data = await res.json();
   if (res.ok) {
     toast(data.message);
-    await loadPilots();
+    await loadData();
   } else {
     toast(data.error || 'Error');
   }
@@ -391,83 +437,108 @@ async function doLandedEarly(pilotId) {
   const data = await res.json();
   if (res.ok) {
     toast(data.message);
-    await loadPilots();
+    await loadData();
   } else {
     toast(data.error || 'Error');
   }
 }
 
-async function exportCSV(pilotId) {
-  const url = `${API_BASE}/api/export/flights${pilotId ? `?pilot_id=${pilotId}` : ''}`;
-  const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-  if (!res.ok) { toast('Export failed'); return; }
-  const blob = await res.blob();
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `gforce_flights${pilotId ? '_' + pilotId : '_all'}.csv`;
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a);
-  toast('Downloading...');
-}
-
-function loadPilotsNoAwait() {
-  api('/api/pilots').then(res => {
-    if (res.status === 401) { doLogout(); return; }
-    return res.json();
-  }).then(data => {
-    if (!data) return;
-    pilots = data;
-    renderPilots();
-    renderExportList();
-  }).catch(() => {
-    // silent fail for background refresh
+async function updateClientName(pilotId, clientName) {
+  // Update via leave again with same pilot to update client_name
+  await api('/api/office/leave', {
+    method: 'POST',
+    body: JSON.stringify({ pilot_id: pilotId, client_name: clientName })
   });
 }
 
-// ─── Render ───────────────────────────────────────────────────────────────────
-function renderPilots() {
-  const el = document.getElementById('pilots-list');
-  if (pilots.length === 0) {
-    el.innerHTML = '<div style="color:var(--muted);font-size:14px;padding:20px 0">No pilots configured</div>';
+// ─── Flights Tab ──────────────────────────────────────────────────────────────
+function renderFlightsTab() {
+  // Export buttons
+  document.getElementById('pilot-export-btns').innerHTML = pilots.map(p =>
+    `<button class="btn-export-pilot" onclick="exportPilotCSV('${p.id}')">${p.name}</button>`
+  ).join('');
+
+  const el = document.getElementById('flights-table-container');
+  if (allFlights.length === 0) {
+    el.innerHTML = '<div class="empty-state">No flights logged yet</div>';
     return;
   }
 
-  el.innerHTML = pilots.map(p => {
-    const isAirborne = p.status === 'airborne';
-    const timerExpiry = p.timer_expires_at;
-    const initial = p.name.charAt(0).toUpperCase();
+  // Group by date
+  const byDate = {};
+  allFlights.forEach(f => {
+    if (!byDate[f.date]) byDate[f.date] = [];
+    byDate[f.date].push(f);
+  });
 
-    return `<div class="pilot-card ${isAirborne ? 'airborne' : ''}" id="pilot-${p.id}">
-      <div class="pilot-avatar">${initial}</div>
-      <div class="pilot-info">
-        <div class="pilot-name">${p.name}</div>
-        <div class="pilot-status ${isAirborne ? 'airborne' : 'in-office'}">
-          ${isAirborne ? '🚐 Left office' : '🏢 In office'}
-          ${p.last_landed_at ? ' · Last landed ' + fmtRelative(p.last_landed_at) : ''}
-        </div>
-        ${isAirborne && timerExpiry ? `<div class="timer-display" id="timer-${p.id}" data-expires="${timerExpiry}">Timer: --:--</div>` : ''}
-      </div>
-      <div class="pilot-actions">
-        ${isAirborne
-          ? `<button class="btn-landed" onclick="doLandedEarly('${p.id}')">Landed</button>`
-          : `<button class="btn-leave" onclick="doLeaveOffice('${p.id}')">Left Office</button>`
-        }
-      </div>
-    </div>`;
-  }).join('');
+  let html = `<table class="flight-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Pilot</th>
+        <th>Client</th>
+        <th>#</th>
+        <th>Weight</th>
+        <th>Site</th>
+        <th>Time</th>
+        <th>Photos</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>`;
 
-  // Always refresh timers after rendering
-  updateTimers();
+  Object.keys(byDate).sort().reverse().forEach(date => {
+    byDate[date].forEach(f => {
+      html += `<tr>
+        <td>${fmtDate(date)}</td>
+        <td class="pilot-col">${f.pilot_name}</td>
+        <td class="client-col">${f.client_name || '—'}</td>
+        <td>${f.flight_num}</td>
+        <td>${f.weight}kg</td>
+        <td>${f.takeoff} → ${f.landing}</td>
+        <td>${f.time}min</td>
+        <td>${f.photos > 0 ? '$' + f.photos : '—'}</td>
+        <td class="time-col">${f.notes || ''}</td>
+      </tr>`;
+    });
+  });
+
+  html += '</tbody></table>';
+  el.innerHTML = html;
 }
 
-function renderExportList() {
-  const el = document.getElementById('export-list');
-  el.innerHTML = pilots.map(p =>
-    `<div class="export-row">
-      <span class="export-name">${p.name}</span>
-      <button class="btn-export" onclick="exportCSV('${p.id}')">CSV</button>
-    </div>`
-  ).join('');
+function fmtDate(s) {
+  const d = new Date(s + 'T00:00:00');
+  return d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
+}
+
+async function exportAllCSV() {
+  downloadCSV(buildCSV(allFlights), 'gforce_flights_all.csv');
+}
+
+async function exportPilotCSV(pilotId) {
+  const pilot = pilots.find(p => p.id === pilotId);
+  const pilotFlights = allFlights.filter(f => f.pilot_id === pilotId);
+  downloadCSV(buildCSV(pilotFlights), `gforce_flights_${pilot?.name || pilotId}.csv`);
+}
+
+function buildCSV(flights) {
+  const header = ['Date', 'Pilot', 'Client Name', 'Flight #', 'Weight (kg)', 'Takeoff', 'Landing', 'Time (min)', 'Photos ($)', 'Notes'];
+  const rows = flights.map(f => [
+    f.date, f.pilot_name || '', f.client_name || '', f.flight_num, f.weight,
+    f.takeoff, f.landing, f.time, f.photos || 0, f.notes || ''
+  ]);
+  return [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+}
+
+function downloadCSV(csv, filename) {
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  toast('Downloading...');
 }
 
 // ─── Timers ───────────────────────────────────────────────────────────────────
@@ -476,7 +547,6 @@ function updateTimers() {
   clearInterval(timerInterval);
   function tick() {
     const now = Date.now();
-    let hasUrgent = false;
     pilots.forEach(p => {
       if (p.status !== 'airborne' || !p.timer_expires_at) return;
       const expires = new Date(p.timer_expires_at).getTime();
@@ -487,15 +557,14 @@ function updateTimers() {
       if (remaining <= 0) {
         el.textContent = 'EXPIRED';
         el.classList.add('urgent');
-        const card = document.getElementById(`pilot-${p.id}`);
-        if (card) card.classList.add('alert');
+        const card = document.getElementById(`pilot-card-${p.id}`);
+        if (card) { card.classList.add('alert'); card.classList.remove('airborne'); }
         showAlert(p.name);
-        hasUrgent = true;
       } else {
         const mins = Math.floor(remaining / 60000);
         const secs = Math.floor((remaining % 60000) / 1000);
-        el.textContent = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
-        if (remaining < 600000) el.classList.add('urgent'); // 10 min warning
+        el.textContent = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')} remaining`;
+        el.classList.toggle('urgent', remaining < 600000);
       }
     });
   }
@@ -507,7 +576,6 @@ function showAlert(pilotName) {
   if (alertDismissed.has(pilotName)) return;
   document.getElementById('alert-pilot-name').textContent = pilotName;
   document.getElementById('alert-banner').classList.add('show');
-  // Auto-dismiss after 30s
   setTimeout(() => dismissAlert(pilotName), 30000);
 }
 
@@ -516,9 +584,17 @@ function dismissAlert(pilotName) {
   document.getElementById('alert-banner').classList.remove('show');
 }
 
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  document.getElementById(`tab-${name}-btn`).classList.add('active');
+}
+
 // ─── WebSocket ────────────────────────────────────────────────────────────────
 function connectWS() {
-  const wsUrl = (API_BASE.startsWith('https') ? 'wss://' : 'ws://') + API_BASE.replace(/^https?:\/\//, '');
+  const wsUrl = `wss://gforce-api-6jpm.onrender.com`;
   ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
@@ -528,34 +604,29 @@ function connectWS() {
   ws.onclose = () => {
     document.getElementById('ws-indicator').classList.remove('connected');
     document.getElementById('ws-indicator').title = 'Disconnected';
-    // Reconnect after 5s
     setTimeout(connectWS, 5000);
   };
   ws.onerror = () => ws.close();
 
   ws.onmessage = (event) => {
     const data = JSON.parse(event.data);
-    handleWS(data);
+    switch (data.type) {
+      case 'LEFT_OFFICE':
+        toast(`${data.pilot_name} left office`);
+        loadData();
+        break;
+      case 'LANDED':
+      case 'LANDED_EARLY':
+        toast(`${data.pilot_name} landed!`);
+        dismissAlert(data.pilot_name);
+        loadData();
+        break;
+      case 'TIMER_EXPIRED':
+        toast(`⚠️ Timer expired for ${data.pilot_name}!`);
+        loadData();
+        break;
+    }
   };
-}
-
-function handleWS(data) {
-  switch (data.type) {
-    case 'LEFT_OFFICE':
-      toast(`${data.pilot_name} left office`);
-      loadPilots();
-      break;
-    case 'LANDED':
-    case 'LANDED_EARLY':
-      toast(`${data.pilot_name} landed!`);
-      dismissAlert(data.pilot_name);
-      loadPilots();
-      break;
-    case 'TIMER_EXPIRED':
-      toast(`⚠️ Timer expired for ${data.pilot_name}!`);
-      loadPilots();
-      break;
-  }
 }
 
 // ─── Utils ───────────────────────────────────────────────────────────────────

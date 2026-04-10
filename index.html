@@ -296,9 +296,7 @@
 <script>
 // ─── Config ──────────────────────────────────────────────────────────────────
 // For local development use localhost:3000, for production use your deployed URL
-const API_BASE = window.location.hostname === 'localhost'
-  ? 'http://localhost:3000'
-  : 'https://gforce-api-6jpm.onrender.com';
+const API_BASE = 'https://gforce-api-6jpm.onrender.com';
 
 let token = localStorage.getItem('gforce_office_token');
 let ws = null;

@@ -202,6 +202,19 @@
     .btn-log-flight:hover { background: #e5681f; }
     .btn-log-flight:active { opacity: 0.9; }
 
+    .btn-extend {
+      width: 100%; padding: 12px; background: transparent;
+      border: 1px solid var(--accent); border-radius: 9999px; color: var(--accent);
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      margin-top: 8px;
+      font-family: 'Montserrat', sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .btn-extend:hover { background: var(--accent); color: #fff; }
+    .btn-extend:active { opacity: 0.8; }
+    .btn-extend:disabled { opacity: 0.4; cursor: not-allowed; }
+
     /* CARDS */
     .card {
       background: var(--card);
@@ -480,11 +493,6 @@
       </div>
 
       <div class="field">
-        <label>Photo Payment ($)</label>
-        <input type="number" id="f-photos" min="0" step="5" value="0" inputmode="numeric" />
-      </div>
-
-      <div class="field">
         <label>Notes</label>
         <textarea id="f-notes" placeholder="Optional..."></textarea>
       </div>
@@ -696,25 +704,11 @@ function renderDashboard() {
       ${myStatus.client_name ? `<div class="dashboard-client">👤 ${myStatus.client_name}</div>` : ''}
       <div class="dashboard-timer" id="dashboard-timer">--:--</div>
       <button class="btn-log-flight" onclick="goToLogFlight()">Log Flight</button>
+      <button class="btn-extend" id="btn-extend" onclick="extendMyTimer()">+ 30 Minutes</button>
     `;
 
     // Start countdown
-    clearInterval(window._dashboardTimer);
-    window._dashboardTimer = setInterval(() => {
-      const now = Date.now();
-      const remaining = expires - now;
-      const timerEl = document.getElementById('dashboard-timer');
-      if (!timerEl) { clearInterval(window._dashboardTimer); return; }
-      if (remaining <= 0) {
-        timerEl.textContent = 'EXPIRED';
-        timerEl.classList.add('urgent');
-      } else {
-        const mins = Math.floor(remaining / 60000);
-        const secs = Math.floor((remaining % 60000) / 1000);
-        timerEl.textContent = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
-        timerEl.classList.toggle('urgent', remaining < 600000);
-      }
-    }, 1000);
+    startDashboardCountdown(myStatus.timer_expires_at);
   } else {
     clearInterval(window._dashboardTimer);
     el.innerHTML = `
@@ -728,6 +722,48 @@ function renderDashboard() {
 
 function goToLogFlight() {
   showPage('log');
+}
+
+async function extendMyTimer() {
+  const btn = document.getElementById('btn-extend');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = 'Extending...';
+  try {
+    const res = await api('/api/pilot/extend-timer', { method: 'POST' });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    // Update local timer state immediately
+    myStatus.timer_expires_at = data.expires_at;
+    // Restart countdown with new expiry
+    startDashboardCountdown(data.expires_at);
+    toast('Timer extended by 30 minutes');
+  } catch (e) {
+    toast('Could not extend timer: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '+ 30 Minutes';
+  }
+}
+
+function startDashboardCountdown(expires_at) {
+  clearInterval(window._dashboardTimer);
+  const expires = new Date(expires_at).getTime();
+  window._dashboardTimer = setInterval(() => {
+    const now = Date.now();
+    const remaining = expires - now;
+    const timerEl = document.getElementById('dashboard-timer');
+    if (!timerEl) { clearInterval(window._dashboardTimer); return; }
+    if (remaining <= 0) {
+      timerEl.textContent = 'EXPIRED';
+      timerEl.classList.add('urgent');
+    } else {
+      const mins = Math.floor(remaining / 60000);
+      const secs = Math.floor((remaining % 60000) / 1000);
+      timerEl.textContent = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+      timerEl.classList.toggle('urgent', remaining < 600000);
+    }
+  }, 1000);
 }
 
 // ─── Date Utils ───────────────────────────────────────────────────────────────
@@ -804,7 +840,6 @@ async function saveFlight() {
   const takeoff = getGroupVal('fg-takeoff');
   const landing = getGroupVal('fg-landing');
   const time = getGroupVal('fg-time');
-  const photos = document.getElementById('f-photos').value || '0';
   const notes = document.getElementById('f-notes').value;
 
   if (!date || !flightNum || !weight || !takeoff || !landing || !time) {
@@ -818,14 +853,14 @@ async function saveFlight() {
     if (editingId !== null) {
       const res = await api(`/api/flights/${editingId}`, {
         method: 'PUT',
-        body: JSON.stringify({ date, flight_num: flightNum, weight, takeoff, landing, time, photos, notes })
+        body: JSON.stringify({ date, flight_num: flightNum, weight, takeoff, landing, time, notes })
       });
       if (!res.ok) throw new Error(await res.text());
       toast('Flight updated!');
     } else {
       const res = await api('/api/flights', {
         method: 'POST',
-        body: JSON.stringify({ date, flight_num: flightNum, weight, takeoff, landing, time, photos, notes })
+        body: JSON.stringify({ date, flight_num: flightNum, weight, takeoff, landing, time, notes })
       });
       if (!res.ok) throw new Error(await res.text());
       toast('Flight logged! Office notified.');
@@ -847,7 +882,6 @@ function resetForm() {
   document.getElementById('cancel-btn').style.display = 'none';
   document.getElementById('flight-card').classList.remove('editing');
   document.getElementById('f-weight').value = 72;
-  document.getElementById('f-photos').value = '0';
   document.getElementById('f-notes').value = '';
   updateWeightDisplay();
   document.querySelector('#fg-time button.selected')?.classList.remove('selected');
@@ -888,7 +922,6 @@ function editFlight(id) {
   setGroupVal('fg-takeoff', f.takeoff);
   setGroupVal('fg-landing', f.landing);
   setGroupVal('fg-time', String(f.time));
-  document.getElementById('f-photos').value = f.photos > 0 ? f.photos : '0';
   document.getElementById('f-notes').value = f.notes || '';
 
   showPage('log');
@@ -925,11 +958,10 @@ function renderFlights() {
       html += `<div class="flight-item">
         <div>
           <div style="font-size:14px;font-weight:600">Flight ${f.flight_num} · ${f.weight}kg · ${f.time}min</div>
-          <div class="flight-meta">${f.takeoff} → ${f.landing}${f.photos > 0 ? ' · $'+f.photos+' photos' : ''}${f.notes ? ' · '+f.notes : ''}</div>
+          <div class="flight-meta">${f.takeoff} → ${f.landing}${f.notes ? ' · '+f.notes : ''}</div>
           ${f.client_name ? `<div class="flight-meta" style="color:var(--accent2)">👤 ${f.client_name}</div>` : ''}
         </div>
         <div style="display:flex;gap:6px;align-items:center">
-          ${f.photos > 0 ? `<span class="flight-badge green">$${f.photos}</span>` : ''}
           <button class="btn-edit" onclick="editFlight('${f.id}')">&#9998;</button>
           <button class="btn-danger" onclick="deleteFlight('${f.id}')">✕</button>
         </div>
@@ -965,7 +997,6 @@ function renderStats() {
     document.getElementById('stats-breakdown').innerHTML = '';
     return;
   }
-  const totalPhotos = flights.reduce((s,f) => s + (f.photos || 0), 0);
   const today = flights.filter(f => f.date === todayStr());
 
   const ws = getWeekStart(todayStr());
@@ -976,7 +1007,6 @@ function renderStats() {
     <div class="stat-card"><div class="stat-number">${flights.length}</div><div class="stat-label">Total Flights</div></div>
     <div class="stat-card"><div class="stat-number">${today.length}</div><div class="stat-label">Today</div></div>
     <div class="stat-card"><div class="stat-number">${weekFlights.length}</div><div class="stat-label">This Week</div></div>
-    <div class="stat-card"><div class="stat-number">$${totalPhotos}</div><div class="stat-label">Photo Revenue</div></div>
   `;
 
   const sites = {};

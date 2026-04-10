@@ -22,12 +22,10 @@ const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'gforce.db');
 
 // ─── Database ─────────────────────────────────────────────────────────────────
 let db;
-const SQL = {};
 
 async function initDb() {
   const SQL = await initSqlJs();
 
-  // Load existing DB or create new one
   if (fs.existsSync(DB_PATH)) {
     const buf = fs.readFileSync(DB_PATH);
     db = new SQL.Database(buf);
@@ -48,6 +46,7 @@ async function initDb() {
     CREATE TABLE IF NOT EXISTS flights (
       id TEXT PRIMARY KEY,
       pilot_id TEXT NOT NULL,
+      client_name TEXT,
       date TEXT NOT NULL,
       flight_num INTEGER NOT NULL,
       weight REAL NOT NULL,
@@ -73,17 +72,25 @@ async function initDb() {
   db.run(`
     CREATE TABLE IF NOT EXISTS active_timers (
       pilot_id TEXT PRIMARY KEY,
+      client_name TEXT,
       started_at TEXT NOT NULL,
       expires_at TEXT NOT NULL
     )
   `);
 
-  // Seed demo pilot
+  // Seed pilots only if table is empty
   const existing = db.exec("SELECT COUNT(*) as c FROM pilots");
   if (!existing.length || existing[0].values[0][0] === 0) {
     const pinHash = bcrypt.hashSync('1234', 10);
-    db.run('INSERT INTO pilots (id, name, pin_hash) VALUES (?, ?, ?)', [uuidv4(), 'Brooke', pinHash]);
-    console.log('✅ Demo pilot seeded: Brooke, PIN 1234');
+    const pilots = [
+      'Brooke', 'Balda', 'Bellett', 'Ben F', 'Blake', 'Casey', 'Cathal',
+      'Cima', 'Clem', 'Dom', 'Eddy', 'Gavin', 'Georges', 'Janik', 'Leo',
+      'Marika', 'Mike', 'Pete', 'Thomas', 'Todd'
+    ];
+    pilots.forEach(name => {
+      db.run('INSERT INTO pilots (id, name, pin_hash) VALUES (?, ?, ?)', [uuidv4(), name, pinHash]);
+    });
+    console.log(`✅ ${pilots.length} pilots seeded with PIN 1234`);
   }
 
   saveDb();
@@ -212,6 +219,7 @@ app.get('/api/pilots', verifyToken, (req, res) => {
       return {
         ...p,
         status: timer ? 'airborne' : 'in_office',
+        client_name: timer ? timer.client_name : null,
         timer_started_at: timer ? timer.started_at : null,
         timer_expires_at: timer ? timer.expires_at : null,
         last_landed_at: lastL ? lastL.last_landed : null
@@ -225,26 +233,46 @@ app.get('/api/pilots', verifyToken, (req, res) => {
   }
 });
 
+// My status (pilot checking own status)
+app.get('/api/my-status', verifyToken, (req, res) => {
+  try {
+    const timer = queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
+    res.json({
+      status: timer ? 'airborne' : 'in_office',
+      client_name: timer ? timer.client_name : null,
+      timer_started_at: timer ? timer.started_at : null,
+      timer_expires_at: timer ? timer.expires_at : null
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/flights', verifyToken, (req, res) => {
   try {
-    const { date, flight_num, weight, takeoff, landing, time, photos, notes } = req.body;
+    const { date, flight_num, weight, takeoff, landing, time, photos, notes, client_name } = req.body;
     const pilotId = req.pilot.id;
 
     if (!date || !flight_num || !weight || !takeoff || !landing || !time) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    // Get client_name from active timer if not provided
+    const timer = queryOne('SELECT client_name FROM active_timers WHERE pilot_id = ?', [pilotId]);
+    const resolvedClientName = client_name || (timer ? timer.client_name : null);
+
     const id = uuidv4();
     const now = new Date().toISOString();
 
     run(`
-      INSERT INTO flights (id, pilot_id, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [id, pilotId, date, flight_num, weight, takeoff, landing, time, photos || 0, notes || '', now]);
+      INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [id, pilotId, resolvedClientName, date, flight_num, weight, takeoff, landing, time, photos || 0, notes || '', now]);
 
     // Stop any active timer
-    const timer = queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [pilotId]);
-    if (timer) {
+    const activeTimer = queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [pilotId]);
+    if (activeTimer) {
       run('DELETE FROM active_timers WHERE pilot_id = ?', [pilotId]);
       run('INSERT INTO office_logs (id, pilot_id, event) VALUES (?, ?, ?)', [uuidv4(), pilotId, 'landed']);
 
@@ -289,7 +317,6 @@ app.put('/api/flights/:id', verifyToken, (req, res) => {
     const { id } = req.params;
     const pilotId = req.pilot.id;
 
-    // Verify flight belongs to this pilot
     const existing = queryOne('SELECT * FROM flights WHERE id = ? AND pilot_id = ?', [id, pilotId]);
     if (!existing) return res.status(404).json({ error: 'Flight not found' });
 
@@ -322,7 +349,7 @@ app.delete('/api/flights/:id', verifyToken, (req, res) => {
 // ─── Office Routes ────────────────────────────────────────────────────────────
 app.post('/api/office/leave', verifyOffice, (req, res) => {
   try {
-    const { pilot_id } = req.body;
+    const { pilot_id, client_name } = req.body;
     if (!pilot_id) return res.status(400).json({ error: 'pilot_id required' });
 
     const pilot = queryOne('SELECT * FROM pilots WHERE id = ?', [pilot_id]);
@@ -331,8 +358,8 @@ app.post('/api/office/leave', verifyOffice, (req, res) => {
     const now = new Date();
     const expires = new Date(now.getTime() + 90 * 60 * 1000);
 
-    run('INSERT OR REPLACE INTO active_timers (pilot_id, started_at, expires_at) VALUES (?, ?, ?)',
-      [pilot_id, now.toISOString(), expires.toISOString()]);
+    run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at) VALUES (?, ?, ?, ?)',
+      [pilot_id, client_name || null, now.toISOString(), expires.toISOString()]);
 
     run('INSERT INTO office_logs (id, pilot_id, event) VALUES (?, ?, ?)',
       [uuidv4(), pilot_id, 'left_office']);
@@ -341,6 +368,7 @@ app.post('/api/office/leave', verifyOffice, (req, res) => {
       type: 'LEFT_OFFICE',
       pilot_id,
       pilot_name: pilot.name,
+      client_name: client_name || null,
       started_at: now.toISOString(),
       expires_at: expires.toISOString()
     });
@@ -373,6 +401,21 @@ app.post('/api/office/landed-early', verifyOffice, (req, res) => {
   }
 });
 
+app.get('/api/office/flights', verifyOffice, (req, res) => {
+  try {
+    const flights = queryAll(`
+      SELECT f.*, p.name as pilot_name
+      FROM flights f
+      JOIN pilots p ON f.pilot_id = p.id
+      ORDER BY f.date DESC, f.flight_num ASC
+    `);
+    res.json(flights);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── CSV Export ──────────────────────────────────────────────────────────────
 app.get('/api/export/flights', verifyOffice, (req, res) => {
   try {
@@ -380,16 +423,27 @@ app.get('/api/export/flights', verifyOffice, (req, res) => {
 
     let flights;
     if (pilot_id) {
-      flights = queryAll('SELECT f.*, p.name as pilot_name FROM flights f JOIN pilots p ON f.pilot_id = p.id WHERE f.pilot_id = ? ORDER BY f.date, f.flight_num', [pilot_id]);
+      flights = queryAll(`
+        SELECT f.*, p.name as pilot_name
+        FROM flights f
+        JOIN pilots p ON f.pilot_id = p.id
+        WHERE f.pilot_id = ?
+        ORDER BY f.date, f.flight_num
+      `, [pilot_id]);
     } else {
-      flights = queryAll('SELECT f.*, p.name as pilot_name FROM flights f JOIN pilots p ON f.pilot_id = p.id ORDER BY p.name, f.date, f.flight_num');
+      flights = queryAll(`
+        SELECT f.*, p.name as pilot_name
+        FROM flights f
+        JOIN pilots p ON f.pilot_id = p.id
+        ORDER BY p.name, f.date, f.flight_num
+      `);
     }
 
     if (!flights.length) return res.status(404).json({ error: 'No flights found' });
 
-    const header = ['Date', 'Pilot', 'Flight #', 'Weight (kg)', 'Takeoff', 'Landing', 'Time (min)', 'Photos ($)', 'Notes'];
+    const header = ['Date', 'Pilot', 'Client Name', 'Flight #', 'Weight (kg)', 'Takeoff', 'Landing', 'Time (min)', 'Photos ($)', 'Notes'];
     const rows = flights.map(f => [
-      f.date, f.pilot_name || '', f.flight_num, f.weight, f.takeoff, f.landing, f.time, f.photos || 0, f.notes || ''
+      f.date, f.pilot_name || '', f.client_name || '', f.flight_num, f.weight, f.takeoff, f.landing, f.time, f.photos || 0, f.notes || ''
     ]);
 
     const csv = [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');

@@ -416,7 +416,7 @@ app.get('/api/flight-following', verifyToken, (req, res) => {
     for (let i = 13; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      dates.push(d.toISOString().slice(0, 10));
+      dates.push(d.toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' }));
     }
     const from = dates[0];
 

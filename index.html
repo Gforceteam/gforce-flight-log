@@ -488,7 +488,7 @@
       <option value="">Select...</option>
       <option value="__office__" class="office-option">— Office —</option>
     </select>
-    <input type="password" id="pilot-pin" placeholder="Enter PIN" maxlength="8" inputmode="numeric" onkeydown="if(event.key==='Enter')doLogin()" />
+    <input type="password" id="pilot-pin" placeholder="Enter PIN" maxlength="32" inputmode="numeric" onkeydown="if(event.key==='Enter')doLogin()" />
     <button onclick="doLogin()">Sign In</button>
     <div id="login-error" class="login-error">Invalid PIN. Try again.</div>
     <div id="login-error2" class="login-error">Cannot reach server. Check your connection.</div>

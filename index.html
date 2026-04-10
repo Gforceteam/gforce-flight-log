@@ -35,7 +35,7 @@
       padding-bottom: 80px;
     }
 
-    /* LOGIN */
+    /* ── LOGIN ─────────────────────────────────────────────────────────── */
     #login-page {
       display: flex;
       flex-direction: column;
@@ -56,7 +56,7 @@
       margin-bottom: 16px;
       font-size: 32px;
     }
-    #login-page h1 { font-size: 28px; font-weight: 700; margin-bottom: 4px; color: var(--accent); letter-spacing: 2px; }
+    #login-page h1 { font-size: 28px; font-weight: 700; margin-bottom: 4px; color: var(--accent); letter-spacing: 2px; font-family: 'Montserrat', sans-serif; }
     #login-page .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
     .login-card {
       width: 100%;
@@ -77,6 +77,7 @@
       outline: none;
       margin-bottom: 12px;
       appearance: none;
+      -webkit-appearance: none;
     }
     .login-card select:focus, .login-card input:focus { border-color: var(--accent); }
     .login-card button {
@@ -97,11 +98,11 @@
     .login-card button:hover { background: #e5681f; }
     .login-card button:active { opacity: 0.9; }
     .login-error { color: var(--danger); font-size: 13px; margin-top: 10px; text-align: center; display: none; }
+    .login-card select option.office-option { color: var(--accent); font-weight: 600; }
 
-    /* APP */
+    /* ── PILOT APP ─────────────────────────────────────────────────────── */
     #app-page { display: none; }
 
-    /* STATUS BAR */
     .status-bar {
       background: var(--surface);
       border-bottom: 3px solid var(--accent);
@@ -135,7 +136,6 @@
     .server-badge.synced { background: var(--accent); color: #fff; }
     .server-badge.offline { background: var(--danger); color: #fff; }
 
-    /* NAV */
     nav {
       position: fixed;
       bottom: 0; left: 0; right: 0;
@@ -153,11 +153,9 @@
     nav button.active { color: var(--accent); }
     nav button svg { width: 22px; height: 22px; }
 
-    /* PAGES */
     .page { display: none; padding: 16px; max-width: 500px; margin: 0 auto; }
     .page.active { display: block; }
 
-    /* PAGE HEADER */
     .page-header {
       padding: 16px 16px 0;
       max-width: 500px;
@@ -166,25 +164,11 @@
     .page-header h1 { font-size: 28px; font-weight: 700; padding-top: env(safe-area-inset-top, 16px); color: var(--accent); font-family: 'Montserrat', sans-serif; letter-spacing: 1px; }
     .page-header p { color: var(--muted); font-size: 13px; margin-top: 2px; }
 
-    /* DASHBOARD */
-    .dashboard-status {
-      text-align: center;
-      padding: 30px 20px;
-    }
-    .dashboard-status-icon {
-      font-size: 64px;
-      margin-bottom: 12px;
-    }
-    .dashboard-status-label {
-      font-size: 13px; color: var(--muted); text-transform: uppercase;
-      letter-spacing: 1px; margin-bottom: 4px;
-    }
-    .dashboard-status-value {
-      font-size: 24px; font-weight: 700;
-    }
-    .dashboard-client {
-      font-size: 18px; color: var(--accent); margin-top: 6px;
-    }
+    .dashboard-status { text-align: center; padding: 30px 20px; }
+    .dashboard-status-icon { font-size: 64px; margin-bottom: 12px; }
+    .dashboard-status-label { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+    .dashboard-status-value { font-size: 24px; font-weight: 700; }
+    .dashboard-client { font-size: 18px; color: var(--accent); margin-top: 6px; }
     .dashboard-timer {
       font-size: 48px; font-weight: 700; color: var(--warning);
       font-variant-numeric: tabular-nums; margin: 20px 0;
@@ -215,7 +199,6 @@
     .btn-extend:active { opacity: 0.8; }
     .btn-extend:disabled { opacity: 0.4; cursor: not-allowed; }
 
-    /* CARDS */
     .card {
       background: var(--card);
       border: 1px solid var(--border);
@@ -226,7 +209,6 @@
     .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: var(--accent); font-family: 'Montserrat', sans-serif; text-transform: uppercase; letter-spacing: 0.5px; }
     .card.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 
-    /* FORM */
     .field { margin-bottom: 14px; }
     .field label {
       display: block; font-size: 12px; font-weight: 600; color: var(--muted);
@@ -240,14 +222,8 @@
     .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); }
     .field textarea { resize: vertical; min-height: 70px; font-size: 14px; }
 
-    /* FLIGHT NUMBER STEPPER */
-    .flight-num-row {
-      display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
-    }
-    .flight-num-row label {
-      font-size: 12px; font-weight: 600; color: var(--muted);
-      text-transform: uppercase; letter-spacing: 0.5px; min-width: 90px;
-    }
+    .flight-num-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+    .flight-num-row label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; min-width: 90px; }
     .flight-num-controls { display: flex; align-items: center; flex: 1; gap: 6px; }
     .flight-num-btn {
       width: 40px; height: 40px; background: var(--surface);
@@ -263,7 +239,6 @@
       padding: 8px; min-width: 48px;
     }
 
-    /* WEIGHT SLIDER */
     .weight-slider-row { display: flex; align-items: center; gap: 12px; }
     .weight-slider {
       flex: 1; -webkit-appearance: none; appearance: none;
@@ -284,7 +259,6 @@
       padding: 8px 10px; text-align: center;
     }
 
-    /* BUTTON GROUPS */
     .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
     .btn-group button {
       flex: 1; min-width: 48px; padding: 10px 8px;
@@ -295,7 +269,6 @@
     .btn-group button.selected { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 700; }
     .btn-group.site button { font-size: 13px; }
 
-    /* BUTTONS */
     .btn-primary {
       width: 100%; padding: 14px; background: var(--accent); border: none;
       border-radius: var(--radius); color: #000; font-size: 16px;
@@ -323,7 +296,6 @@
       font-size: 13px; padding: 6px 10px; cursor: pointer;
     }
 
-    /* FLIGHT LIST */
     .flight-item {
       background: var(--card); border: 1px solid var(--border);
       border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px;
@@ -347,16 +319,6 @@
       border-radius: 6px; font-size: 11px; color: var(--accent2); padding: 2px 8px;
     }
 
-    /* TOAST */
-    #toast {
-      position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
-      background: #333; color: #fff; padding: 10px 20px;
-      border-radius: 20px; font-size: 14px; opacity: 0;
-      pointer-events: none; transition: opacity 0.3s; z-index: 999; white-space: nowrap;
-    }
-    #toast.show { opacity: 1; }
-
-    /* STATS */
     .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
     .stat-card {
       background: var(--card); border: 1px solid var(--border);
@@ -364,12 +326,154 @@
     }
     .stat-number { font-size: 28px; font-weight: 700; color: var(--accent); }
     .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+
+    /* ── OFFICE DASHBOARD ──────────────────────────────────────────────── */
+    #office-dashboard { display: none; padding-bottom: 0; }
+
+    .office-header {
+      background: #292f36;
+      border-bottom: 3px solid var(--accent);
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .office-header h1 { font-size: 22px; font-weight: 700; color: var(--accent); font-family: 'Montserrat', sans-serif; letter-spacing: 1px; }
+    .office-header-right { display: flex; align-items: center; gap: 12px; }
+    .ws-indicator { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); }
+    .ws-indicator.connected { background: var(--accent); }
+    .office-logout-btn {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      color: var(--muted); font-size: 13px; padding: 6px 12px; cursor: pointer;
+    }
+
+    .office-tab-bar {
+      display: flex;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .office-tab-btn {
+      flex: 1; padding: 12px; background: none; border: none;
+      color: var(--muted); font-size: 14px; font-weight: 600;
+      cursor: pointer; border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .office-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    #office-alert-banner {
+      display: none;
+      background: var(--danger);
+      color: #fff;
+      padding: 14px 20px;
+      font-size: 15px;
+      font-weight: 700;
+      text-align: center;
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
+    #office-alert-banner.show { display: block; }
+
+    .office-content { padding: 20px; max-width: 900px; margin: 0 auto; }
+    .office-tab-content { display: none; }
+    .office-tab-content.active { display: block; }
+
+    .section-title { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; margin-top: 20px; }
+    .section-title:first-child { margin-top: 0; }
+
+    .pilot-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 10px;
+    }
+    .pilot-card.airborne { border-color: var(--warning); }
+    .pilot-card.alert { border-color: var(--danger); }
+
+    .pilot-card-top { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+    .pilot-avatar {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: var(--surface);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 700; color: var(--accent); flex-shrink: 0;
+    }
+    .pilot-info { flex: 1; min-width: 0; }
+    .pilot-name { font-size: 16px; font-weight: 600; }
+    .pilot-status { font-size: 13px; margin-top: 2px; }
+    .pilot-status.in-office { color: var(--accent); font-weight: 600; }
+    .pilot-status.airborne { color: var(--warning); }
+    .pilot-client { font-size: 13px; color: var(--accent); margin-top: 2px; font-weight: 600; }
+
+    .timer-display {
+      font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums;
+      color: var(--warning); margin-bottom: 10px;
+    }
+    .timer-display.urgent { color: var(--danger); }
+
+    .pilot-client-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .pilot-client-row label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .pilot-client-row input {
+      flex: 1; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); padding: 7px 10px;
+      font-size: 14px; outline: none;
+    }
+    .pilot-client-row input:focus { border-color: var(--accent); }
+
+    .pilot-actions { display: flex; gap: 8px; }
+    .btn-leave {
+      padding: 8px 14px; background: var(--warning); border: none;
+      border-radius: 8px; color: #000; font-size: 13px; font-weight: 700; cursor: pointer;
+    }
+    .btn-landed {
+      padding: 8px 14px; background: var(--accent); border: none;
+      border-radius: 8px; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer;
+    }
+
+    .flight-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .flight-table th {
+      text-align: left; padding: 8px 10px; background: var(--surface);
+      color: var(--muted); font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.5px; border-bottom: 1px solid var(--border);
+    }
+    .flight-table td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .flight-table tr:last-child td { border-bottom: none; }
+    .flight-table .pilot-col { font-weight: 600; color: var(--accent); }
+    .flight-table .client-col { color: var(--muted); font-size: 12px; }
+    .flight-table .time-col { color: var(--muted); font-size: 12px; }
+    .flight-table .badge {
+      display: inline-block; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 2px 8px; font-size: 11px; color: var(--text);
+    }
+
+    .export-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .btn-export-all {
+      padding: 8px 16px; background: var(--accent); border: none;
+      border-radius: 8px; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer;
+    }
+    .btn-export-pilot {
+      padding: 8px 14px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 13px; cursor: pointer;
+    }
+    .btn-export-pilot:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── SHARED ────────────────────────────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+      background: #333; color: #fff; padding: 10px 20px;
+      border-radius: 20px; font-size: 14px; opacity: 0;
+      pointer-events: none; transition: opacity 0.3s; z-index: 999; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
+    .hidden { display: none !important; }
     .empty-state { text-align: center; color: var(--muted); padding: 40px 20px; font-size: 15px; }
   </style>
 </head>
 <body>
 
-<!-- LOGIN PAGE -->
+<!-- ── LOGIN PAGE ──────────────────────────────────────────────────────────── -->
 <div id="login-page">
   <div class="login-logo">
     <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -378,21 +482,21 @@
     </svg>
   </div>
   <h1>GFORCE</h1>
-  <p class="subtitle">Pilot Flight Log</p>
+  <p class="subtitle">Flight Log</p>
   <div class="login-card">
     <select id="pilot-select">
-      <option value="">Select pilot...</option>
+      <option value="">Select...</option>
+      <option value="__office__" class="office-option">— Office —</option>
     </select>
     <input type="password" id="pilot-pin" placeholder="Enter PIN" maxlength="8" inputmode="numeric" onkeydown="if(event.key==='Enter')doLogin()" />
-    <button class="btn-signin" onclick="doLogin()">Sign In</button>
+    <button onclick="doLogin()">Sign In</button>
     <div id="login-error" class="login-error">Invalid PIN. Try again.</div>
-    <div id="login-error2" class="login-error" style="display:none">Cannot reach server. Check your connection.</div>
+    <div id="login-error2" class="login-error">Cannot reach server. Check your connection.</div>
   </div>
 </div>
 
-<!-- APP PAGE -->
+<!-- ── PILOT APP PAGE ──────────────────────────────────────────────────────── -->
 <div id="app-page">
-  <!-- STATUS BAR -->
   <div class="status-bar">
     <div class="pilot-left">
       <div class="pilot-avatar-sm" id="pilot-avatar">B</div>
@@ -404,11 +508,10 @@
     <div class="status-right">
       <span class="status-badge in-office" id="status-badge">In Office</span>
       <span class="server-badge" id="server-badge">...</span>
-      <button class="btn-logout" onclick="doLogout()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;padding:4px 10px;cursor:pointer">Logout</button>
+      <button onclick="doLogout()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;padding:4px 10px;cursor:pointer">Logout</button>
     </div>
   </div>
 
-  <!-- PAGE HEADERS -->
   <div class="page-header" id="header-dashboard">
     <h1>Dashboard</h1>
     <p id="header-dashboard-sub"></p>
@@ -426,14 +529,10 @@
     <p>Season overview</p>
   </div>
 
-  <!-- DASHBOARD PAGE -->
   <div class="page active" id="page-dashboard">
-    <div class="dashboard-status" id="dashboard-content">
-      <!-- Filled by JS -->
-    </div>
+    <div class="dashboard-status" id="dashboard-content"></div>
   </div>
 
-  <!-- LOG PAGE -->
   <div class="page" id="page-log">
     <div class="card" id="flight-card">
       <h2 id="card-title">New Flight</h2>
@@ -502,19 +601,17 @@
     </div>
   </div>
 
-  <!-- FLIGHTS PAGE -->
   <div class="page" id="page-flights">
     <div id="flights-list"></div>
   </div>
 
-  <!-- STATS PAGE -->
   <div class="page" id="page-stats">
     <div class="stats-grid" id="stats-grid"></div>
     <div class="card" id="stats-breakdown"></div>
   </div>
 </div>
 
-<!-- BOTTOM NAV -->
+<!-- ── BOTTOM NAV (pilot only) ────────────────────────────────────────────── -->
 <nav id="bottom-nav" style="display:none">
   <button class="active" onclick="showPage('dashboard')" id="nav-dashboard">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
@@ -534,35 +631,93 @@
   </button>
 </nav>
 
+<!-- ── OFFICE DASHBOARD ────────────────────────────────────────────────────── -->
+<div id="office-dashboard">
+  <div class="office-header">
+    <h1>GFORCE Office</h1>
+    <div class="office-header-right">
+      <div class="ws-indicator" id="ws-indicator" title="Connection status"></div>
+      <button class="office-logout-btn" onclick="officeDoLogout()">Logout</button>
+    </div>
+  </div>
+
+  <div id="office-alert-banner">
+    ⚠️ PILOT TIMER EXPIRED — <span id="alert-pilot-name"></span> has not reported landing!
+  </div>
+
+  <div class="office-tab-bar">
+    <button class="office-tab-btn active" onclick="showOfficeTab('pilots')" id="office-tab-pilots-btn">Office</button>
+    <button class="office-tab-btn" onclick="showOfficeTab('flights')" id="office-tab-flights-btn">Flights</button>
+  </div>
+
+  <div class="office-content">
+    <div class="office-tab-content active" id="office-tab-pilots">
+      <div class="section-title">Pilots</div>
+      <div id="pilots-list"></div>
+    </div>
+
+    <div class="office-tab-content" id="office-tab-flights">
+      <div class="section-title" style="margin-top:0">All Flights</div>
+      <div class="export-bar">
+        <button class="btn-export-all" onclick="exportAllCSV()">Export All CSV</button>
+        <div id="pilot-export-btns"></div>
+      </div>
+      <div id="flights-table-container"></div>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
 // ─── Config ──────────────────────────────────────────────────────────────────
 const API_BASE = 'https://gforce-api-6jpm.onrender.com';
 
-// ─── State ────────────────────────────────────────────────────────────────────
-let token = localStorage.getItem('gforce_pilot_token');
+// ─── Pilot State ─────────────────────────────────────────────────────────────
+let pilotToken = localStorage.getItem('gforce_pilot_token');
 let pilotId = localStorage.getItem('gforce_pilot_id');
 let pilotName = localStorage.getItem('gforce_pilot_name');
 let editingId = null;
 let myFlights = [];
 let myStatus = { status: 'in_office', client_name: null, timer_expires_at: null };
 
+// ─── Office State ─────────────────────────────────────────────────────────────
+let officeToken = localStorage.getItem('gforce_office_token');
+let ws = null;
+let officePilots = [];
+let allFlights = [];
+let alertDismissed = new Set();
+let timerInterval;
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  if (token && pilotId) {
+  if (pilotToken && pilotId) {
     showApp(pilotName);
+  } else if (officeToken) {
+    showOfficeDashboard();
   } else {
     loadPilotList();
   }
+
+  document.getElementById('pilot-select').addEventListener('change', function() {
+    const pinInput = document.getElementById('pilot-pin');
+    if (this.value === '__office__') {
+      pinInput.placeholder = 'Office password';
+      pinInput.removeAttribute('inputmode');
+    } else {
+      pinInput.placeholder = 'Enter PIN';
+      pinInput.setAttribute('inputmode', 'numeric');
+    }
+  });
 });
 
+// ─── Load Pilot List ──────────────────────────────────────────────────────────
 async function loadPilotList() {
+  const sel = document.getElementById('pilot-select');
+  sel.innerHTML = '<option value="">Select...</option><option value="__office__" class="office-option">— Office —</option>';
   try {
     const res = await fetch(`${API_BASE}/api/public/pilots`);
     const pilots = await res.json();
-    const sel = document.getElementById('pilot-select');
-    sel.innerHTML = '<option value="">Select pilot...</option>';
     pilots.forEach(p => {
       sel.innerHTML += `<option value="${p.id}">${p.name}</option>`;
     });
@@ -573,20 +728,46 @@ async function loadPilotList() {
   }
 }
 
-// ─── Auth ─────────────────────────────────────────────────────────────────────
+// ─── Login ────────────────────────────────────────────────────────────────────
 async function doLogin() {
   const select = document.getElementById('pilot-select');
-  const name = select.options[select.selectedIndex].text;
+  const selectedVal = select.value;
   const pin = document.getElementById('pilot-pin').value;
+
   document.getElementById('login-error').style.display = 'none';
   document.getElementById('login-error2').style.display = 'none';
 
-  if (!select.value || !pin) {
-    document.getElementById('login-error').textContent = 'Select pilot and enter PIN';
+  if (!selectedVal || !pin) {
+    document.getElementById('login-error').textContent = 'Select a pilot or office, then enter your PIN / password';
     document.getElementById('login-error').style.display = 'block';
     return;
   }
 
+  if (selectedVal === '__office__') {
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/office`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pin })
+      });
+      const data = await res.json();
+      if (data.token) {
+        officeToken = data.token;
+        localStorage.setItem('gforce_office_token', officeToken);
+        showOfficeDashboard();
+      } else {
+        document.getElementById('login-error').textContent = 'Incorrect office password';
+        document.getElementById('login-error').style.display = 'block';
+      }
+    } catch {
+      document.getElementById('login-error2').textContent = 'Cannot reach server';
+      document.getElementById('login-error2').style.display = 'block';
+    }
+    return;
+  }
+
+  // Pilot login
+  const name = select.options[select.selectedIndex].text;
   try {
     const res = await fetch(`${API_BASE}/api/auth/pilot`, {
       method: 'POST',
@@ -594,26 +775,27 @@ async function doLogin() {
       body: JSON.stringify({ name, pin })
     });
     const data = await res.json();
-
     if (data.token) {
-      token = data.token;
+      pilotToken = data.token;
       pilotId = data.pilot.id;
       pilotName = data.pilot.name;
-      localStorage.setItem('gforce_pilot_token', token);
+      localStorage.setItem('gforce_pilot_token', pilotToken);
       localStorage.setItem('gforce_pilot_id', pilotId);
       localStorage.setItem('gforce_pilot_name', pilotName);
       showApp(pilotName);
     } else {
+      document.getElementById('login-error').textContent = 'Invalid PIN. Try again.';
       document.getElementById('login-error').style.display = 'block';
     }
   } catch {
-    document.getElementById('login-error2').style.display = 'block';
     document.getElementById('login-error2').textContent = 'Cannot reach server';
+    document.getElementById('login-error2').style.display = 'block';
   }
 }
 
+// ─── Pilot Logout ─────────────────────────────────────────────────────────────
 function doLogout() {
-  token = pilotId = pilotName = null;
+  pilotToken = pilotId = pilotName = null;
   localStorage.removeItem('gforce_pilot_token');
   localStorage.removeItem('gforce_pilot_id');
   localStorage.removeItem('gforce_pilot_name');
@@ -624,14 +806,13 @@ function doLogout() {
   loadPilotList();
 }
 
-// ─── App Shell ────────────────────────────────────────────────────────────────
+// ─── Pilot App Shell ──────────────────────────────────────────────────────────
 function showApp(name) {
   document.getElementById('login-page').style.display = 'none';
   document.getElementById('app-page').style.display = 'block';
   document.getElementById('bottom-nav').style.display = 'flex';
   document.getElementById('pilot-name-display').textContent = name;
   document.getElementById('pilot-avatar').textContent = name.charAt(0).toUpperCase();
-
   setupBtnGroups();
   setupForm();
   loadMyData();
@@ -645,13 +826,13 @@ function setupForm() {
   onDateChange();
 }
 
-// ─── API Helpers ─────────────────────────────────────────────────────────────
+// ─── Pilot API ────────────────────────────────────────────────────────────────
 function api(path, opts = {}) {
   return fetch(`${API_BASE}${path}`, {
     ...opts,
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
+      'Authorization': `Bearer ${pilotToken}`,
       ...opts.headers
     }
   });
@@ -675,7 +856,6 @@ async function loadMyData() {
   }
 }
 
-// ─── Status Badge ─────────────────────────────────────────────────────────────
 function updateStatusBadge() {
   const badge = document.getElementById('status-badge');
   const sub = document.getElementById('header-dashboard-sub');
@@ -690,14 +870,10 @@ function updateStatusBadge() {
   }
 }
 
-// ─── Dashboard ────────────────────────────────────────────────────────────────
 function renderDashboard() {
   const el = document.getElementById('dashboard-content');
-
   if (myStatus.status === 'airborne') {
     const expires = myStatus.timer_expires_at ? new Date(myStatus.timer_expires_at).getTime() : 0;
-    const remaining = expires - Date.now();
-
     el.innerHTML = `
       <div class="dashboard-status-icon">🚐</div>
       <div class="dashboard-status-label">Currently Away</div>
@@ -706,8 +882,6 @@ function renderDashboard() {
       <button class="btn-log-flight" onclick="goToLogFlight()">Log Flight</button>
       <button class="btn-extend" id="btn-extend" onclick="extendMyTimer()">+ 30 Minutes</button>
     `;
-
-    // Start countdown
     startDashboardCountdown(myStatus.timer_expires_at);
   } else {
     clearInterval(window._dashboardTimer);
@@ -720,9 +894,7 @@ function renderDashboard() {
   }
 }
 
-function goToLogFlight() {
-  showPage('log');
-}
+function goToLogFlight() { showPage('log'); }
 
 async function extendMyTimer() {
   const btn = document.getElementById('btn-extend');
@@ -733,9 +905,7 @@ async function extendMyTimer() {
     const res = await api('/api/pilot/extend-timer', { method: 'POST' });
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
-    // Update local timer state immediately
     myStatus.timer_expires_at = data.expires_at;
-    // Restart countdown with new expiry
     startDashboardCountdown(data.expires_at);
     toast('Timer extended by 30 minutes');
   } catch (e) {
@@ -766,10 +936,8 @@ function startDashboardCountdown(expires_at) {
   }, 1000);
 }
 
-// ─── Date Utils ───────────────────────────────────────────────────────────────
-function todayStr() {
-  return new Date().toISOString().split('T')[0];
-}
+// ─── Pilot Date Utils ─────────────────────────────────────────────────────────
+function todayStr() { return new Date().toISOString().split('T')[0]; }
 function fmtDate(s) {
   const d = new Date(s + 'T00:00:00');
   return d.toLocaleDateString('en-NZ', { weekday:'short', day:'numeric', month:'short' });
@@ -787,7 +955,7 @@ function getWeekEnd(weekStart) {
   return d.toISOString().split('T')[0];
 }
 
-// ─── Button Groups ─────────────────────────────────────────────────────────────
+// ─── Pilot Button Groups ──────────────────────────────────────────────────────
 function setupBtnGroups() {
   document.querySelectorAll('.btn-group').forEach(group => {
     group.addEventListener('click', e => {
@@ -810,12 +978,9 @@ function setGroupVal(id, val) {
   }
 }
 
-// ─── Weight Slider ─────────────────────────────────────────────────────────────
 function updateWeightDisplay() {
   document.getElementById('f-weight-display').textContent = document.getElementById('f-weight').value + ' kg';
 }
-
-// ─── Flight Number ─────────────────────────────────────────────────────────────
 function updateFlightNumForDate(date) {
   if (editingId !== null) return;
   const todayFlights = myFlights.filter(f => f.date === date);
@@ -832,7 +997,7 @@ function onDateChange() {
   updateFlightNumForDate(date);
 }
 
-// ─── Save Flight ───────────────────────────────────────────────────────────────
+// ─── Save Flight ──────────────────────────────────────────────────────────────
 async function saveFlight() {
   const date = document.getElementById('f-date').value;
   const flightNum = parseInt(document.getElementById('f-num-display').textContent);
@@ -848,7 +1013,6 @@ async function saveFlight() {
   }
 
   setServerStatus('syncing');
-
   try {
     if (editingId !== null) {
       const res = await api(`/api/flights/${editingId}`, {
@@ -865,7 +1029,6 @@ async function saveFlight() {
       if (!res.ok) throw new Error(await res.text());
       toast('Flight logged! Office notified.');
     }
-
     resetForm();
     await loadMyData();
     updateFlightNumForDate(document.getElementById('f-date').value);
@@ -907,13 +1070,10 @@ function setServerStatus(status) {
   }
 }
 
-// ─── Edit Flight ───────────────────────────────────────────────────────────────
 function editFlight(id) {
   const f = myFlights.find(fl => fl.id === id);
   if (!f) return;
-
   editingId = id;
-
   document.getElementById('f-date').value = f.date;
   document.getElementById('header-date').textContent = fmtDate(f.date);
   document.getElementById('f-num-display').textContent = f.flight_num;
@@ -923,7 +1083,6 @@ function editFlight(id) {
   setGroupVal('fg-landing', f.landing);
   setGroupVal('fg-time', String(f.time));
   document.getElementById('f-notes').value = f.notes || '';
-
   showPage('log');
   document.getElementById('card-title').textContent = 'Edit Flight';
   document.getElementById('save-btn').textContent = 'Update Flight';
@@ -931,22 +1090,18 @@ function editFlight(id) {
   document.getElementById('flight-card').classList.add('editing');
 }
 
-// ─── Flights Page ─────────────────────────────────────────────────────────────
 function renderFlights() {
   const flights = myFlights.slice().reverse();
   const el = document.getElementById('flights-list');
-
   if (flights.length === 0) {
     el.innerHTML = '<div class="empty-state">No flights logged yet</div>';
     return;
   }
-
   const byDate = {};
   flights.forEach(f => {
     if (!byDate[f.date]) byDate[f.date] = [];
     byDate[f.date].push(f);
   });
-
   let html = '';
   Object.keys(byDate).sort().reverse().forEach(date => {
     const dayFlights = byDate[date];
@@ -968,9 +1123,7 @@ function renderFlights() {
       </div>`;
     });
   });
-
   el.innerHTML = html;
-
   const today = myFlights.filter(f => f.date === todayStr());
   document.getElementById('header-flights-sub').textContent =
     `${myFlights.length} total · ${today.length} today`;
@@ -989,7 +1142,6 @@ async function deleteFlight(id) {
   }
 }
 
-// ─── Stats Page ───────────────────────────────────────────────────────────────
 function renderStats() {
   const flights = myFlights;
   if (flights.length === 0) {
@@ -998,37 +1150,315 @@ function renderStats() {
     return;
   }
   const today = flights.filter(f => f.date === todayStr());
-
   const ws = getWeekStart(todayStr());
   const we = getWeekEnd(ws);
   const weekFlights = flights.filter(f => f.date >= ws && f.date <= we);
-
   document.getElementById('stats-grid').innerHTML = `
     <div class="stat-card"><div class="stat-number">${flights.length}</div><div class="stat-label">Total Flights</div></div>
     <div class="stat-card"><div class="stat-number">${today.length}</div><div class="stat-label">Today</div></div>
     <div class="stat-card"><div class="stat-number">${weekFlights.length}</div><div class="stat-label">This Week</div></div>
   `;
-
   const sites = {};
   flights.forEach(f => { sites[f.takeoff] = (sites[f.takeoff]||0)+1; });
   const siteRows = Object.entries(sites).sort((a,b)=>b[1]-a[1])
     .map(([k,v]) => `<div class="flight-item"><div>${k}</div><span class="flight-badge">${v} flights</span></div>`).join('');
-
   document.getElementById('stats-breakdown').innerHTML = `<h2>By Takeoff Site</h2>${siteRows}`;
 }
 
-// ─── Navigation ───────────────────────────────────────────────────────────────
 function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.page-header').forEach(h => h.style.display = 'none');
-
   document.getElementById('page-'+name).classList.add('active');
   document.getElementById('nav-'+name).classList.add('active');
   document.getElementById('header-'+name).style.display = 'block';
-
-  if (name === 'flights') { /* already loaded via loadMyData */ }
   if (name === 'stats') { renderStats(); }
+}
+
+// ─── Office API ───────────────────────────────────────────────────────────────
+function officeApi(path, opts = {}) {
+  return fetch(`${API_BASE}${path}`, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${officeToken}`,
+      ...opts.headers
+    }
+  });
+}
+
+// ─── Office Auth ──────────────────────────────────────────────────────────────
+function showOfficeDashboard() {
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('office-dashboard').style.display = 'block';
+  loadOfficeData();
+  connectWS();
+}
+
+function officeDoLogout() {
+  localStorage.removeItem('gforce_office_token');
+  officeToken = null;
+  if (ws) { ws.close(); ws = null; }
+  clearInterval(timerInterval);
+  document.getElementById('office-dashboard').style.display = 'none';
+  document.getElementById('login-page').style.display = 'flex';
+  document.getElementById('pilot-pin').value = '';
+  loadPilotList();
+}
+
+// ─── Office Data ──────────────────────────────────────────────────────────────
+async function loadOfficeData() {
+  try {
+    const [pilotsRes, flightsRes] = await Promise.all([
+      officeApi('/api/pilots'),
+      officeApi('/api/office/flights')
+    ]);
+    if (pilotsRes.status === 401) { officeDoLogout(); return; }
+    officePilots = await pilotsRes.json();
+    allFlights = flightsRes.ok ? await flightsRes.json() : [];
+    renderOfficeTab();
+    renderFlightsTab();
+  } catch (e) {
+    toast('Cannot connect to server');
+  }
+}
+
+// ─── Office Tab ───────────────────────────────────────────────────────────────
+function renderOfficeTab() {
+  const el = document.getElementById('pilots-list');
+  el.innerHTML = officePilots.map(p => {
+    const isAirborne = p.status === 'airborne';
+    const timerExpiry = p.timer_expires_at;
+    const clientName = p.client_name || '';
+    const initial = p.name.charAt(0).toUpperCase();
+    return `<div class="pilot-card ${isAirborne ? 'airborne' : ''}" id="pilot-card-${p.id}">
+      <div class="pilot-card-top">
+        <div class="pilot-avatar">${initial}</div>
+        <div class="pilot-info">
+          <div class="pilot-name">${p.name}</div>
+          <div class="pilot-status ${isAirborne ? 'airborne' : 'in-office'}">
+            ${isAirborne ? '🚐 Left office' : '🏢 In office'}
+            ${p.last_landed_at ? ' · Last landed ' + fmtRelative(p.last_landed_at) : ''}
+          </div>
+          ${isAirborne && clientName ? `<div class="pilot-client">👤 ${clientName}</div>` : ''}
+        </div>
+        <div class="pilot-actions">
+          ${isAirborne
+            ? `<button class="btn-landed" onclick="doLandedEarly('${p.id}')">Landed</button>`
+            : `<button class="btn-leave" onclick="doLeaveOffice('${p.id}')">Left Office</button>`
+          }
+        </div>
+      </div>
+      ${isAirborne && timerExpiry ? `<div class="timer-display" id="timer-${p.id}" data-expires="${timerExpiry}">Timer: --:--</div>` : ''}
+      ${isAirborne ? `<div class="pilot-client-row">
+        <label>Client / Booking:</label>
+        <input type="text" id="client-${p.id}" value="${clientName}" placeholder="e.g. Jan Kowalski or BKG-1234"
+          onchange="updateClientName('${p.id}', this.value)" />
+      </div>` : ''}
+    </div>`;
+  }).join('');
+  updateTimers();
+}
+
+async function doLeaveOffice(pilotId) {
+  const clientName = document.getElementById(`client-${pilotId}`)?.value || '';
+  const res = await officeApi('/api/office/leave', {
+    method: 'POST',
+    body: JSON.stringify({ pilot_id: pilotId, client_name: clientName })
+  });
+  const data = await res.json();
+  if (res.ok) { toast(data.message); await loadOfficeData(); }
+  else { toast(data.error || 'Error'); }
+}
+
+async function doLandedEarly(pilotId) {
+  const res = await officeApi('/api/office/landed-early', {
+    method: 'POST',
+    body: JSON.stringify({ pilot_id: pilotId })
+  });
+  const data = await res.json();
+  if (res.ok) { toast(data.message); await loadOfficeData(); }
+  else { toast(data.error || 'Error'); }
+}
+
+async function updateClientName(pilotId, clientName) {
+  await officeApi('/api/office/leave', {
+    method: 'POST',
+    body: JSON.stringify({ pilot_id: pilotId, client_name: clientName })
+  });
+}
+
+// ─── Flights Tab ──────────────────────────────────────────────────────────────
+function renderFlightsTab() {
+  document.getElementById('pilot-export-btns').innerHTML = officePilots.map(p =>
+    `<button class="btn-export-pilot" onclick="exportPilotCSV('${p.id}')">${p.name}</button>`
+  ).join('');
+
+  const el = document.getElementById('flights-table-container');
+  if (allFlights.length === 0) {
+    el.innerHTML = '<div class="empty-state">No flights logged yet</div>';
+    return;
+  }
+
+  const byDate = {};
+  allFlights.forEach(f => {
+    if (!byDate[f.date]) byDate[f.date] = [];
+    byDate[f.date].push(f);
+  });
+
+  let html = `<table class="flight-table">
+    <thead><tr>
+      <th>Date</th><th>Pilot</th><th>Client</th><th>#</th>
+      <th>Weight</th><th>Site</th><th>Time</th><th>Photos</th><th>Notes</th>
+    </tr></thead><tbody>`;
+
+  Object.keys(byDate).sort().reverse().forEach(date => {
+    byDate[date].forEach(f => {
+      html += `<tr>
+        <td>${officeFmtDate(date)}</td>
+        <td class="pilot-col">${f.pilot_name}</td>
+        <td class="client-col">${f.client_name || '—'}</td>
+        <td>${f.flight_num}</td>
+        <td>${f.weight}kg</td>
+        <td>${f.takeoff} → ${f.landing}</td>
+        <td>${f.time}min</td>
+        <td>${f.photos > 0 ? '$' + f.photos : '—'}</td>
+        <td class="time-col">${f.notes || ''}</td>
+      </tr>`;
+    });
+  });
+
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function officeFmtDate(s) {
+  const d = new Date(s + 'T00:00:00');
+  return d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
+}
+
+function exportAllCSV() {
+  downloadCSV(buildCSV(allFlights), 'gforce_flights_all.csv');
+}
+function exportPilotCSV(pilotId) {
+  const pilot = officePilots.find(p => p.id === pilotId);
+  const pilotFlights = allFlights.filter(f => f.pilot_id === pilotId);
+  downloadCSV(buildCSV(pilotFlights), `gforce_flights_${pilot?.name || pilotId}.csv`);
+}
+function buildCSV(flights) {
+  const header = ['Date','Pilot','Client Name','Flight #','Weight (kg)','Takeoff','Landing','Time (min)','Photos ($)','Notes'];
+  const rows = flights.map(f => [
+    f.date, f.pilot_name||'', f.client_name||'', f.flight_num, f.weight,
+    f.takeoff, f.landing, f.time, f.photos||0, f.notes||''
+  ]);
+  return [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+}
+function downloadCSV(csv, filename) {
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  toast('Downloading...');
+}
+
+// ─── Office Timers ────────────────────────────────────────────────────────────
+function updateTimers() {
+  clearInterval(timerInterval);
+  function tick() {
+    const now = Date.now();
+    officePilots.forEach(p => {
+      if (p.status !== 'airborne' || !p.timer_expires_at) return;
+      const expires = new Date(p.timer_expires_at).getTime();
+      const remaining = expires - now;
+      const el = document.getElementById(`timer-${p.id}`);
+      if (!el) return;
+      if (remaining <= 0) {
+        el.textContent = 'EXPIRED';
+        el.classList.add('urgent');
+        const card = document.getElementById(`pilot-card-${p.id}`);
+        if (card) { card.classList.add('alert'); card.classList.remove('airborne'); }
+        showAlert(p.name);
+      } else {
+        const mins = Math.floor(remaining / 60000);
+        const secs = Math.floor((remaining % 60000) / 1000);
+        el.textContent = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')} remaining`;
+        el.classList.toggle('urgent', remaining < 600000);
+      }
+    });
+  }
+  tick();
+  timerInterval = setInterval(tick, 1000);
+}
+
+function showAlert(pilotName) {
+  if (alertDismissed.has(pilotName)) return;
+  document.getElementById('alert-pilot-name').textContent = pilotName;
+  document.getElementById('office-alert-banner').classList.add('show');
+  setTimeout(() => dismissAlert(pilotName), 30000);
+}
+function dismissAlert(pilotName) {
+  alertDismissed.add(pilotName);
+  document.getElementById('office-alert-banner').classList.remove('show');
+}
+
+// ─── Office Tabs ──────────────────────────────────────────────────────────────
+function showOfficeTab(name) {
+  document.querySelectorAll('.office-tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.office-tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`office-tab-${name}`).classList.add('active');
+  document.getElementById(`office-tab-${name}-btn`).classList.add('active');
+}
+
+// ─── WebSocket ────────────────────────────────────────────────────────────────
+function connectWS() {
+  ws = new WebSocket('wss://gforce-api-6jpm.onrender.com');
+  ws.onopen = () => {
+    document.getElementById('ws-indicator').classList.add('connected');
+    document.getElementById('ws-indicator').title = 'Connected';
+  };
+  ws.onclose = () => {
+    document.getElementById('ws-indicator').classList.remove('connected');
+    document.getElementById('ws-indicator').title = 'Disconnected';
+    if (officeToken) setTimeout(connectWS, 5000);
+  };
+  ws.onerror = () => ws.close();
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    switch (data.type) {
+      case 'LEFT_OFFICE':
+        toast(`${data.pilot_name} left office`);
+        loadOfficeData();
+        break;
+      case 'LANDED':
+      case 'LANDED_EARLY':
+        toast(`${data.pilot_name} landed!`);
+        dismissAlert(data.pilot_name);
+        loadOfficeData();
+        break;
+      case 'TIMER_EXPIRED':
+        toast(`⚠️ Timer expired for ${data.pilot_name}!`);
+        loadOfficeData();
+        break;
+      case 'TIMER_EXTENDED':
+        toast(`${data.pilot_name}: timer extended to +30 min`);
+        loadOfficeData();
+        break;
+    }
+  };
+}
+
+// ─── Office Utils ─────────────────────────────────────────────────────────────
+function fmtRelative(isoString) {
+  const d = new Date(isoString);
+  const diff = Date.now() - d.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
 }
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
@@ -1039,7 +1469,7 @@ function toast(msg) {
   setTimeout(() => el.classList.remove('show'), 2500);
 }
 
-// Register service worker
+// ─── Service Worker ───────────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/gforce-flight-log/sw.js').catch(() => {});
 }

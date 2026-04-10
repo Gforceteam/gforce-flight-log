@@ -1296,11 +1296,20 @@ async function loadOfficeData() {
 // ─── Office Tab ───────────────────────────────────────────────────────────────
 function renderOfficeTab() {
   const el = document.getElementById('pilots-list');
-  el.innerHTML = officePilots.map(p => {
+
+  // Sort: airborne first, then pilots with flight history, then never active — all alphabetical within group
+  const sorted = [...officePilots].sort((a, b) => {
+    const rank = p => p.status === 'airborne' ? 0 : p.last_landed_at ? 1 : 2;
+    const diff = rank(a) - rank(b);
+    return diff !== 0 ? diff : a.name.localeCompare(b.name);
+  });
+
+  el.innerHTML = sorted.map(p => {
     const isAirborne = p.status === 'airborne';
     const timerExpiry = p.timer_expires_at;
     const clientName = p.client_name || '';
     const initial = p.name.charAt(0).toUpperCase();
+
     return `<div class="pilot-card ${isAirborne ? 'airborne' : ''}" id="pilot-card-${p.id}">
       <div class="pilot-card-top">
         <div class="pilot-avatar">${initial}</div>
@@ -1308,7 +1317,7 @@ function renderOfficeTab() {
           <div class="pilot-name">${p.name}</div>
           <div class="pilot-status ${isAirborne ? 'airborne' : 'in-office'}">
             ${isAirborne ? '🚐 Left office' : '🏢 In office'}
-            ${p.last_landed_at ? ' · Last landed ' + fmtRelative(p.last_landed_at) : ''}
+            ${!isAirborne && p.last_landed_at ? ' · Last landed ' + fmtRelative(p.last_landed_at) : ''}
           </div>
           ${isAirborne && clientName ? `<div class="pilot-client">👤 ${clientName}</div>` : ''}
         </div>
@@ -1320,13 +1329,15 @@ function renderOfficeTab() {
         </div>
       </div>
       ${isAirborne && timerExpiry ? `<div class="timer-display" id="timer-${p.id}" data-expires="${timerExpiry}">Timer: --:--</div>` : ''}
-      ${isAirborne ? `<div class="pilot-client-row">
-        <label>Client / Booking:</label>
-        <input type="text" id="client-${p.id}" value="${clientName}" placeholder="e.g. Jan Kowalski or BKG-1234"
-          onchange="updateClientName('${p.id}', this.value)" />
-      </div>` : ''}
+      <div class="pilot-client-row">
+        <label>${isAirborne ? 'Client / Booking:' : 'Client / Booking:'}</label>
+        <input type="text" id="client-${p.id}" value="${clientName}"
+          placeholder="e.g. Jan Kowalski or BKG-1234"
+          ${isAirborne ? `onchange="updateClientName('${p.id}', this.value)"` : ''} />
+      </div>
     </div>`;
   }).join('');
+
   updateTimers();
 }
 

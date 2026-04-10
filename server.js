@@ -409,6 +409,52 @@ app.delete('/api/flights/:id', verifyToken, (req, res) => {
   }
 });
 
+// ─── Flight Following ─────────────────────────────────────────────────────────
+app.get('/api/flight-following', verifyToken, (req, res) => {
+  try {
+    const dates = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      dates.push(d.toISOString().slice(0, 10));
+    }
+    const from = dates[0];
+
+    const pilotsRes = db.exec(`SELECT id, name FROM pilots ORDER BY name`);
+    const flightsRes = db.exec(
+      `SELECT pilot_id, date, COUNT(*) as cnt FROM flights WHERE date >= '${from}' GROUP BY pilot_id, date`
+    );
+
+    const flightMap = {};
+    if (flightsRes.length > 0) {
+      const { columns, values } = flightsRes[0];
+      values.forEach(v => {
+        const row = {};
+        columns.forEach((c, i) => row[c] = v[i]);
+        if (!flightMap[row.pilot_id]) flightMap[row.pilot_id] = {};
+        flightMap[row.pilot_id][row.date] = row.cnt;
+      });
+    }
+
+    const pilots = pilotsRes.length > 0
+      ? pilotsRes[0].values.map(([id, name]) => {
+          const dayCounts = {};
+          let daysWorked = 0;
+          dates.forEach(d => {
+            const cnt = (flightMap[id] && flightMap[id][d]) || 0;
+            if (cnt > 0) { dayCounts[d] = cnt; daysWorked++; }
+          });
+          return { id, name, dayCounts, daysWorked };
+        })
+      : [];
+
+    res.json({ dates, pilots });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Office Routes ────────────────────────────────────────────────────────────
 app.post('/api/office/leave', verifyOffice, (req, res) => {
   try {

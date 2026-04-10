@@ -459,6 +459,29 @@
     }
     .btn-export-pilot:hover { border-color: var(--accent); color: var(--accent); }
 
+    /* ── TODAY TAB ─────────────────────────────────────────────────────── */
+    .today-summary {
+      font-size: 13px; color: var(--muted); margin-bottom: 14px;
+    }
+    .today-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .today-table th {
+      text-align: left; padding: 8px 10px; background: var(--surface);
+      color: var(--muted); font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.5px; border-bottom: 1px solid var(--border);
+    }
+    .today-table th.sortable {
+      cursor: pointer; user-select: none;
+    }
+    .today-table th.sortable:hover { color: var(--accent); }
+    .today-table th.sort-active { color: var(--accent); }
+    .today-table th .sort-arrow { margin-left: 4px; font-size: 9px; }
+    .today-table td {
+      padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: top;
+    }
+    .today-table tr:last-child td { border-bottom: none; }
+    .today-table .col-pilot { font-weight: 600; color: var(--accent); }
+    .today-table .col-time { color: var(--muted); font-size: 12px; white-space: nowrap; }
+
     /* ── SHARED ────────────────────────────────────────────────────────── */
     #toast {
       position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
@@ -647,6 +670,7 @@
 
   <div class="office-tab-bar">
     <button class="office-tab-btn active" onclick="showOfficeTab('pilots')" id="office-tab-pilots-btn">Office</button>
+    <button class="office-tab-btn" onclick="showOfficeTab('today')" id="office-tab-today-btn">Today</button>
     <button class="office-tab-btn" onclick="showOfficeTab('flights')" id="office-tab-flights-btn">Flights</button>
   </div>
 
@@ -654,6 +678,11 @@
     <div class="office-tab-content active" id="office-tab-pilots">
       <div class="section-title">Pilots</div>
       <div id="pilots-list"></div>
+    </div>
+
+    <div class="office-tab-content" id="office-tab-today">
+      <div class="today-summary" id="today-summary"></div>
+      <div id="office-today-list"></div>
     </div>
 
     <div class="office-tab-content" id="office-tab-flights">
@@ -688,6 +717,7 @@ let officePilots = [];
 let allFlights = [];
 let alertDismissed = new Set();
 let timerInterval;
+let todaySortBy = 'time'; // 'time' | 'pilot' | 'client'
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -1168,20 +1198,36 @@ function renderStats() {
     document.getElementById('stats-breakdown').innerHTML = '';
     return;
   }
-  const today = flights.filter(f => f.date === todayStr());
-  const ws = getWeekStart(todayStr());
+
+  const t = todayStr();
+  const ws = getWeekStart(t);
   const we = getWeekEnd(ws);
-  const weekFlights = flights.filter(f => f.date >= ws && f.date <= we);
+
+  // Month bounds
+  const monthStart = t.slice(0, 7) + '-01';
+  const today = new Date(t + 'T00:00:00');
+  const dayOfMonth = today.getDate();
+
+  const todayFlights = flights.filter(f => f.date === t);
+  const weekFlights  = flights.filter(f => f.date >= ws && f.date <= we);
+  const monthFlights = flights.filter(f => f.date >= monthStart && f.date <= t);
+
+  const avgWeight = flights.length
+    ? (flights.reduce((sum, f) => sum + Number(f.weight), 0) / flights.length).toFixed(1)
+    : '—';
+
+  const avgPerDay = monthFlights.length
+    ? (monthFlights.length / dayOfMonth).toFixed(1)
+    : '0';
+
   document.getElementById('stats-grid').innerHTML = `
-    <div class="stat-card"><div class="stat-number">${flights.length}</div><div class="stat-label">Total Flights</div></div>
-    <div class="stat-card"><div class="stat-number">${today.length}</div><div class="stat-label">Today</div></div>
+    <div class="stat-card"><div class="stat-number">${todayFlights.length}</div><div class="stat-label">Today</div></div>
     <div class="stat-card"><div class="stat-number">${weekFlights.length}</div><div class="stat-label">This Week</div></div>
+    <div class="stat-card"><div class="stat-number">${monthFlights.length}</div><div class="stat-label">This Month</div></div>
+    <div class="stat-card"><div class="stat-number">${avgWeight}<span style="font-size:16px;font-weight:500">kg</span></div><div class="stat-label">Avg Pax Weight</div></div>
+    <div class="stat-card" style="grid-column:1/-1"><div class="stat-number">${avgPerDay}</div><div class="stat-label">Avg Flights / Day This Month</div></div>
   `;
-  const sites = {};
-  flights.forEach(f => { sites[f.takeoff] = (sites[f.takeoff]||0)+1; });
-  const siteRows = Object.entries(sites).sort((a,b)=>b[1]-a[1])
-    .map(([k,v]) => `<div class="flight-item"><div>${k}</div><span class="flight-badge">${v} flights</span></div>`).join('');
-  document.getElementById('stats-breakdown').innerHTML = `<h2>By Takeoff Site</h2>${siteRows}`;
+  document.getElementById('stats-breakdown').innerHTML = '';
 }
 
 function showPage(name) {
@@ -1236,6 +1282,7 @@ async function loadOfficeData() {
     officePilots = await pilotsRes.json();
     allFlights = flightsRes.ok ? await flightsRes.json() : [];
     renderOfficeTab();
+    renderTodayTab();
     renderFlightsTab();
   } catch (e) {
     toast('Cannot connect to server');
@@ -1305,6 +1352,67 @@ async function updateClientName(pilotId, clientName) {
     method: 'POST',
     body: JSON.stringify({ pilot_id: pilotId, client_name: clientName })
   });
+}
+
+// ─── Today Tab ────────────────────────────────────────────────────────────────
+function renderTodayTab() {
+  const today = todayStr();
+  const todayFlights = allFlights.filter(f => f.date === today);
+
+  const sorted = [...todayFlights];
+  if (todaySortBy === 'pilot') {
+    sorted.sort((a, b) => (a.pilot_name || '').localeCompare(b.pilot_name || ''));
+  } else if (todaySortBy === 'client') {
+    sorted.sort((a, b) => (a.client_name || '').localeCompare(b.client_name || ''));
+  } else {
+    sorted.sort((a, b) => (a.landed_at || '').localeCompare(b.landed_at || ''));
+  }
+
+  const summary = document.getElementById('today-summary');
+  summary.textContent = sorted.length === 0 ? '' : `${sorted.length} flight${sorted.length !== 1 ? 's' : ''} logged today`;
+
+  const el = document.getElementById('office-today-list');
+  if (sorted.length === 0) {
+    el.innerHTML = '<div class="empty-state">No flights logged today yet</div>';
+    return;
+  }
+
+  const arrow = (col) => todaySortBy === col ? ' <span class="sort-arrow">▲</span>' : '';
+
+  let html = `<table class="today-table">
+    <thead><tr>
+      <th>Time</th>
+      <th class="sortable sort-${todaySortBy === 'pilot' ? 'active' : 'inactive'}" onclick="sortToday('pilot')">Pilot${arrow('pilot')}</th>
+      <th class="sortable sort-${todaySortBy === 'client' ? 'active' : 'inactive'}" onclick="sortToday('client')">Client${arrow('client')}</th>
+      <th>#</th>
+      <th>Weight</th>
+      <th>Site</th>
+      <th>Min</th>
+    </tr></thead>
+    <tbody>`;
+
+  sorted.forEach(f => {
+    const timeStr = f.landed_at
+      ? new Date(f.landed_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
+      : '—';
+    html += `<tr>
+      <td class="col-time">${timeStr}</td>
+      <td class="col-pilot">${f.pilot_name}</td>
+      <td>${f.client_name || '—'}</td>
+      <td>${f.flight_num}</td>
+      <td>${f.weight}kg</td>
+      <td>${f.takeoff} → ${f.landing}</td>
+      <td>${f.time}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function sortToday(col) {
+  todaySortBy = col;
+  renderTodayTab();
 }
 
 // ─── Flights Tab ──────────────────────────────────────────────────────────────

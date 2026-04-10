@@ -1020,22 +1020,23 @@ function startDashboardCountdown(expires_at) {
 }
 
 // ─── Pilot Date Utils ─────────────────────────────────────────────────────────
-function todayStr() { return new Date().toISOString().split('T')[0]; }
+const NZ_TZ = 'Pacific/Auckland';
+function todayStr() { return new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ }); }
 function fmtDate(s) {
-  const d = new Date(s + 'T00:00:00');
+  const d = new Date(s + 'T12:00:00');
   return d.toLocaleDateString('en-NZ', { weekday:'short', day:'numeric', month:'short' });
 }
 function getWeekStart(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
+  const d = new Date(dateStr + 'T12:00:00');
   const day = d.getDay();
   const diff = (day === 0) ? -6 : 1 - day;
   d.setDate(d.getDate() + diff);
-  return d.toISOString().split('T')[0];
+  return d.toLocaleDateString('en-CA', { timeZone: NZ_TZ });
 }
 function getWeekEnd(weekStart) {
-  const d = new Date(weekStart + 'T00:00:00');
+  const d = new Date(weekStart + 'T12:00:00');
   d.setDate(d.getDate() + 6);
-  return d.toISOString().split('T')[0];
+  return d.toLocaleDateString('en-CA', { timeZone: NZ_TZ });
 }
 
 // ─── Pilot Button Groups ──────────────────────────────────────────────────────
@@ -1322,7 +1323,7 @@ function renderOfficeFF() {
   for (let i = 13; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
-    dates.push(d.toISOString().slice(0, 10));
+    dates.push(d.toLocaleDateString('en-CA', { timeZone: NZ_TZ }));
   }
   const ffPilots = [...officePilots].sort((a, b) => a.name.localeCompare(b.name)).map(p => {
     const dayCounts = {};

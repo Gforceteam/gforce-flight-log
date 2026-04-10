@@ -539,10 +539,6 @@
     <h1>Dashboard</h1>
     <p id="header-dashboard-sub"></p>
   </div>
-  <div class="page-header" id="header-log">
-    <h1>Log Flight</h1>
-    <p id="header-date"></p>
-  </div>
   <div class="page-header" id="header-flights" style="display:none">
     <h1>My Flights</h1>
     <p id="header-flights-sub"></p>
@@ -717,7 +713,7 @@ let officePilots = [];
 let allFlights = [];
 let alertDismissed = new Set();
 let timerInterval;
-let todaySortBy = 'time'; // 'time' | 'pilot' | 'client'
+let todaySort = { col: 'time', dir: 'asc' }; // col: 'time'|'pilot'|'client', dir: 'asc'|'desc'
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -870,7 +866,7 @@ function startStatusPoll() {
 function setupForm() {
   const dateEl = document.getElementById('f-date');
   dateEl.value = todayStr();
-  document.getElementById('header-date').textContent = fmtDate(todayStr());
+  const hd1 = document.getElementById('header-date'); if (hd1) hd1.textContent = fmtDate(todayStr());
   updateWeightDisplay();
   onDateChange();
 }
@@ -1046,7 +1042,7 @@ function adjustFlightNum(delta) {
 }
 function onDateChange() {
   const date = document.getElementById('f-date').value;
-  document.getElementById('header-date').textContent = fmtDate(date);
+  const hd2 = document.getElementById('header-date'); if (hd2) hd2.textContent = fmtDate(date);
   updateFlightNumForDate(date);
 }
 
@@ -1104,7 +1100,7 @@ function resetForm() {
   document.querySelector('#fg-time button[data-val="10"]').classList.add('selected');
   const dateEl = document.getElementById('f-date');
   dateEl.value = todayStr();
-  document.getElementById('header-date').textContent = fmtDate(todayStr());
+  const hd3 = document.getElementById('header-date'); if (hd3) hd3.textContent = fmtDate(todayStr());
 }
 
 function cancelEdit() {
@@ -1128,7 +1124,7 @@ function editFlight(id) {
   if (!f) return;
   editingId = id;
   document.getElementById('f-date').value = f.date;
-  document.getElementById('header-date').textContent = fmtDate(f.date);
+  const hd4 = document.getElementById('header-date'); if (hd4) hd4.textContent = fmtDate(f.date);
   document.getElementById('f-num-display').textContent = f.flight_num;
   document.getElementById('f-weight').value = f.weight;
   updateWeightDisplay();
@@ -1167,7 +1163,7 @@ function renderFlights() {
         <div>
           <div style="font-size:14px;font-weight:600">Flight ${f.flight_num} · ${f.weight}kg · ${f.time}min</div>
           <div class="flight-meta">${f.takeoff} → ${f.landing}${f.notes ? ' · '+f.notes : ''}</div>
-          ${f.client_name ? `<div class="flight-meta" style="color:var(--accent2)">👤 ${f.client_name}</div>` : ''}
+          ${f.client_name ? `<div class="flight-meta" style="color:#fff">👤 ${f.client_name}</div>` : ''}
         </div>
         <div style="display:flex;gap:6px;align-items:center">
           <button class="btn-edit" onclick="editFlight('${f.id}')">&#9998;</button>
@@ -1306,7 +1302,7 @@ function renderOfficeTab() {
   const signedIn  = officePilots.filter(p => p.status !== 'airborne' && isSignedIn(p)).sort(alpha);
   const signedOut = officePilots.filter(p => p.status !== 'airborne' && !isSignedIn(p)).sort(alpha);
 
-  function pilotCard(p) {
+  function pilotCard(p, disabled = false) {
     const isAirborne = p.status === 'airborne';
     const clientName = p.client_name || '';
     const initial = p.name.charAt(0).toUpperCase();
@@ -1316,37 +1312,38 @@ function renderOfficeTab() {
         <div class="pilot-info">
           <div class="pilot-name">${p.name}</div>
           <div class="pilot-status ${isAirborne ? 'airborne' : 'in-office'}">
-            ${isAirborne ? '🚐 Left office' : '🏢 In office'}
+            ${isAirborne ? '🪂 Away' : '🏢 In office'}
             ${!isAirborne && p.last_landed_at ? ' · Last landed ' + fmtRelative(p.last_landed_at) : ''}
           </div>
           ${isAirborne && clientName ? `<div class="pilot-client">👤 ${clientName}</div>` : ''}
         </div>
-        <div class="pilot-actions">
+        ${!disabled ? `<div class="pilot-actions">
           ${isAirborne
-            ? `<button class="btn-landed" onclick="doLandedEarly('${p.id}')">Landed</button>`
-            : `<button class="btn-leave" onclick="doLeaveOffice('${p.id}')">Left Office</button>`
+            ? `<button class="btn-landed" onclick="doLandedEarly('${p.id}')">Flying</button>`
+            : `<button class="btn-leave" onclick="doLeaveOffice('${p.id}')">Away</button>`
           }
-        </div>
+        </div>` : ''}
       </div>
       ${isAirborne && p.timer_expires_at ? `<div class="timer-display" id="timer-${p.id}" data-expires="${p.timer_expires_at}">Timer: --:--</div>` : ''}
       <div class="pilot-client-row">
         <label>Client / Booking:</label>
         <input type="text" id="client-${p.id}" value="${clientName}"
           placeholder="e.g. Jan Kowalski or BKG-1234"
-          ${isAirborne ? `onchange="updateClientName('${p.id}', this.value)"` : ''} />
+          ${disabled ? 'disabled style="opacity:0.4;cursor:not-allowed"' : ''}
+          ${isAirborne && !disabled ? `onchange="updateClientName('${p.id}', this.value)"` : ''} />
       </div>
     </div>`;
   }
 
-  function section(label, pilots) {
+  function section(label, pilots, disabled = false) {
     if (pilots.length === 0) return `<div class="section-title">${label} <span style="color:var(--border);font-weight:400">— none</span></div>`;
-    return `<div class="section-title">${label}</div>` + pilots.map(pilotCard).join('');
+    return `<div class="section-title">${label}</div>` + pilots.map(p => pilotCard(p, disabled)).join('');
   }
 
   el.innerHTML =
     section('🪂 Flying', flying) +
     section('🟢 Signed In', signedIn) +
-    section('⚫ Signed Out', signedOut);
+    section('⚫ Signed Out', signedOut, true);
 
   updateTimers();
 }
@@ -1385,12 +1382,13 @@ function renderTodayTab() {
   const todayFlights = allFlights.filter(f => f.date === today);
 
   const sorted = [...todayFlights];
-  if (todaySortBy === 'pilot') {
-    sorted.sort((a, b) => (a.pilot_name || '').localeCompare(b.pilot_name || ''));
-  } else if (todaySortBy === 'client') {
-    sorted.sort((a, b) => (a.client_name || '').localeCompare(b.client_name || ''));
+  const dir = todaySort.dir === 'asc' ? 1 : -1;
+  if (todaySort.col === 'pilot') {
+    sorted.sort((a, b) => dir * (a.pilot_name || '').localeCompare(b.pilot_name || ''));
+  } else if (todaySort.col === 'client') {
+    sorted.sort((a, b) => dir * (a.client_name || '').localeCompare(b.client_name || ''));
   } else {
-    sorted.sort((a, b) => (a.landed_at || '').localeCompare(b.landed_at || ''));
+    sorted.sort((a, b) => dir * (a.landed_at || '').localeCompare(b.landed_at || ''));
   }
 
   const summary = document.getElementById('today-summary');
@@ -1402,13 +1400,13 @@ function renderTodayTab() {
     return;
   }
 
-  const arrow = (col) => todaySortBy === col ? ' <span class="sort-arrow">▲</span>' : '';
+  const arrow = (col) => todaySort.col === col ? ` <span class="sort-arrow">${todaySort.dir === 'asc' ? '▲' : '▼'}</span>` : '';
 
   let html = `<table class="today-table">
     <thead><tr>
-      <th>Time</th>
-      <th class="sortable sort-${todaySortBy === 'pilot' ? 'active' : 'inactive'}" onclick="sortToday('pilot')">Pilot${arrow('pilot')}</th>
-      <th class="sortable sort-${todaySortBy === 'client' ? 'active' : 'inactive'}" onclick="sortToday('client')">Client${arrow('client')}</th>
+      <th class="sortable sort-${todaySort.col === 'time' ? 'active' : 'inactive'}" onclick="sortToday('time')">Time${arrow('time')}</th>
+      <th class="sortable sort-${todaySort.col === 'pilot' ? 'active' : 'inactive'}" onclick="sortToday('pilot')">Pilot${arrow('pilot')}</th>
+      <th class="sortable sort-${todaySort.col === 'client' ? 'active' : 'inactive'}" onclick="sortToday('client')">Client${arrow('client')}</th>
       <th>#</th>
       <th>Weight</th>
       <th>Site</th>
@@ -1436,7 +1434,11 @@ function renderTodayTab() {
 }
 
 function sortToday(col) {
-  todaySortBy = col;
+  if (todaySort.col === col) {
+    todaySort.dir = todaySort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    todaySort = { col, dir: 'asc' };
+  }
   renderTodayTab();
 }
 

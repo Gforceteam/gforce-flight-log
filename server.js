@@ -281,6 +281,34 @@ app.get('/api/my-status', verifyToken, (req, res) => {
   }
 });
 
+app.post('/api/pilot/extend-timer', verifyToken, (req, res) => {
+  try {
+    const pilotId = req.pilot.id;
+    const timer = queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [pilotId]);
+    if (!timer) return res.status(404).json({ error: 'No active timer' });
+
+    const currentExpiry = new Date(timer.expires_at);
+    const newExpiry = new Date(currentExpiry.getTime() + 30 * 60 * 1000);
+
+    run('UPDATE active_timers SET expires_at = ? WHERE pilot_id = ?', [newExpiry.toISOString(), pilotId]);
+    run('INSERT INTO office_logs (id, pilot_id, event) VALUES (?, ?, ?)', [uuidv4(), pilotId, 'timer_extended_30min']);
+
+    broadcast({
+      type: 'TIMER_EXTENDED',
+      pilot_id: pilotId,
+      pilot_name: req.pilot.name,
+      client_name: timer.client_name,
+      started_at: timer.started_at,
+      expires_at: newExpiry.toISOString()
+    });
+
+    res.json({ message: 'Timer extended', expires_at: newExpiry.toISOString() });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/flights', verifyToken, (req, res) => {
   try {
     const { date, flight_num, weight, takeoff, landing, time, photos, notes, client_name } = req.body;
@@ -427,6 +455,38 @@ app.post('/api/office/landed-early', verifyOffice, (req, res) => {
     broadcast({ type: 'LANDED_EARLY', pilot_id, pilot_name: pilot.name });
 
     res.json({ message: 'Timer cancelled' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/office/extend', verifyOffice, (req, res) => {
+  try {
+    const { pilot_id } = req.body;
+    if (!pilot_id) return res.status(400).json({ error: 'pilot_id required' });
+
+    const timer = queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [pilot_id]);
+    if (!timer) return res.status(404).json({ error: 'No active timer for this pilot' });
+
+    // Add 30 minutes to the current expiry
+    const currentExpiry = new Date(timer.expires_at);
+    const newExpiry = new Date(currentExpiry.getTime() + 30 * 60 * 1000);
+
+    run('UPDATE active_timers SET expires_at = ? WHERE pilot_id = ?', [newExpiry.toISOString(), pilot_id]);
+    run('INSERT INTO office_logs (id, pilot_id, event) VALUES (?, ?, ?)', [uuidv4(), pilot_id, 'timer_extended_30min']);
+
+    const pilot = queryOne('SELECT name FROM pilots WHERE id = ?', [pilot_id]);
+    broadcast({
+      type: 'TIMER_EXTENDED',
+      pilot_id,
+      pilot_name: pilot.name,
+      client_name: timer.client_name,
+      started_at: timer.started_at,
+      expires_at: newExpiry.toISOString()
+    });
+
+    res.json({ message: `Timer extended by 30 minutes for ${pilot.name}`, expires_at: newExpiry.toISOString() });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: e.message });

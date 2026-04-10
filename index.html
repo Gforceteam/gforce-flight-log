@@ -8,15 +8,18 @@
   <meta name="apple-mobile-web-app-title" content="Flight Log" />
   <link rel="apple-touch-icon" href="/gforce-flight-log/icon-192.png" />
   <link rel="manifest" href="/gforce-flight-log/manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   <title>Gforce Flight Log</title>
   <style>
     :root {
-      --bg: #0f0f0f;
-      --surface: #1a1a1a;
-      --card: #222;
-      --border: #333;
-      --accent: #4fc3f7;
-      --accent2: #81c784;
+      --bg: #121212;
+      --surface: #1c1c1c;
+      --card: #222222;
+      --border: #333333;
+      --accent: #f37329;
+      --accent2: rgba(243,115,41,0.15);
       --danger: #ef5350;
       --warning: #ffb74d;
       --text: #f0f0f0;
@@ -25,7 +28,7 @@
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
@@ -40,8 +43,20 @@
       justify-content: center;
       min-height: 100vh;
       padding: 20px;
+      background: var(--card);
     }
-    #login-page h1 { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+    #login-page .login-logo {
+      width: 72px;
+      height: 72px;
+      background: var(--accent);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      font-size: 32px;
+    }
+    #login-page h1 { font-size: 28px; font-weight: 700; margin-bottom: 4px; color: var(--accent); letter-spacing: 2px; }
     #login-page .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
     .login-card {
       width: 100%;
@@ -69,13 +84,18 @@
       padding: 14px;
       background: var(--accent);
       border: none;
-      border-radius: var(--radius);
-      color: #000;
+      border-radius: 9999px;
+      color: #fff;
       font-size: 16px;
       font-weight: 700;
       cursor: pointer;
       margin-top: 4px;
+      font-family: 'Montserrat', sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 1px;
     }
+    .login-card button:hover { background: #e5681f; }
+    .login-card button:active { opacity: 0.9; }
     .login-error { color: var(--danger); font-size: 13px; margin-top: 10px; text-align: center; display: none; }
 
     /* APP */
@@ -84,7 +104,7 @@
     /* STATUS BAR */
     .status-bar {
       background: var(--surface);
-      border-bottom: 1px solid var(--border);
+      border-bottom: 3px solid var(--accent);
       padding: 12px 16px;
       display: flex;
       align-items: center;
@@ -96,9 +116,9 @@
     .pilot-left { display: flex; align-items: center; gap: 10px; }
     .pilot-avatar-sm {
       width: 32px; height: 32px; border-radius: 50%;
-      background: var(--card); border: 1px solid var(--border);
+      background: var(--accent); border: 1px solid var(--accent);
       display: flex; align-items: center; justify-content: center;
-      font-size: 14px; font-weight: 700; color: var(--accent);
+      font-size: 14px; font-weight: 700; color: #fff;
     }
     .pilot-greeting { font-size: 12px; color: var(--muted); }
     .pilot-name-sm { font-size: 14px; font-weight: 600; }
@@ -107,20 +127,20 @@
       font-size: 12px; font-weight: 700; padding: 4px 10px;
       border-radius: 20px;
     }
-    .status-badge.in-office { background: var(--accent2); color: #000; }
-    .status-badge.airborne { background: var(--warning); color: #000; }
+    .status-badge.in-office { background: var(--accent); color: #fff; }
+    .status-badge.airborne { background: var(--warning); color: #292f36; }
     .server-badge {
       font-size: 11px; padding: 3px 8px; border-radius: 10px; font-weight: 600;
     }
-    .server-badge.synced { background: var(--accent2); color: #000; }
+    .server-badge.synced { background: var(--accent); color: #fff; }
     .server-badge.offline { background: var(--danger); color: #fff; }
 
     /* NAV */
     nav {
       position: fixed;
       bottom: 0; left: 0; right: 0;
-      background: var(--surface);
-      border-top: 1px solid var(--border);
+      background: #292f36;
+      border-top: 1px solid rgba(255,255,255,0.1);
       display: flex;
       z-index: 100;
     }
@@ -143,7 +163,7 @@
       max-width: 500px;
       margin: 0 auto;
     }
-    .page-header h1 { font-size: 28px; font-weight: 700; padding-top: env(safe-area-inset-top, 16px); }
+    .page-header h1 { font-size: 28px; font-weight: 700; padding-top: env(safe-area-inset-top, 16px); color: var(--accent); font-family: 'Montserrat', sans-serif; letter-spacing: 1px; }
     .page-header p { color: var(--muted); font-size: 13px; margin-top: 2px; }
 
     /* DASHBOARD */
@@ -172,11 +192,15 @@
     .dashboard-timer.urgent { color: var(--danger); }
     .btn-log-flight {
       width: 100%; padding: 18px; background: var(--accent);
-      border: none; border-radius: var(--radius); color: #000;
+      border: none; border-radius: 9999px; color: #fff;
       font-size: 18px; font-weight: 700; cursor: pointer;
       margin-top: 16px;
+      font-family: 'Montserrat', sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 1px;
     }
-    .btn-log-flight:active { opacity: 0.8; }
+    .btn-log-flight:hover { background: #e5681f; }
+    .btn-log-flight:active { opacity: 0.9; }
 
     /* CARDS */
     .card {
@@ -186,8 +210,8 @@
       padding: 16px;
       margin-bottom: 12px;
     }
-    .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: var(--accent); }
-    .card.editing { border-color: var(--accent); }
+    .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: var(--accent); font-family: 'Montserrat', sans-serif; text-transform: uppercase; letter-spacing: 0.5px; }
+    .card.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 
     /* FORM */
     .field { margin-bottom: 14px; }
@@ -334,14 +358,20 @@
 
 <!-- LOGIN PAGE -->
 <div id="login-page">
-  <h1>Gforce Flight Log</h1>
-  <p class="subtitle">Pilot Portal</p>
+  <div class="login-logo">
+    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M20 4L6 34H12L20 16L28 34H34L20 4Z" fill="white"/>
+      <path d="M20 10L10 32H15L20 18L25 32H30L20 10Z" fill="#f37329"/>
+    </svg>
+  </div>
+  <h1>GFORCE</h1>
+  <p class="subtitle">Pilot Flight Log</p>
   <div class="login-card">
     <select id="pilot-select">
       <option value="">Select pilot...</option>
     </select>
     <input type="password" id="pilot-pin" placeholder="Enter PIN" maxlength="8" inputmode="numeric" onkeydown="if(event.key==='Enter')doLogin()" />
-    <button onclick="doLogin()">Sign In</button>
+    <button class="btn-signin" onclick="doLogin()">Sign In</button>
     <div id="login-error" class="login-error">Invalid PIN. Try again.</div>
     <div id="login-error2" class="login-error" style="display:none">Cannot reach server. Check your connection.</div>
   </div>

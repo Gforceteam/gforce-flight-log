@@ -643,6 +643,10 @@ function connectWS() {
         toast(`⚠️ Timer expired for ${data.pilot_name}!`);
         loadData();
         break;
+      case 'TIMER_EXTENDED':
+        toast(`${data.pilot_name}: timer extended to +30 min`);
+        loadData();
+        break;
     }
   };
 }

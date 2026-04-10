@@ -43,6 +43,25 @@ async function getFileSha(path) {
 }
 
 async function loadBackup() {
+  // Try raw public URL first — no token needed, survives Render cold starts
+  try {
+    const rawUrl = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BACKUP_BRANCH}/${BACKUP_PATH}`;
+    const data = await new Promise((resolve, reject) => {
+      https.get(rawUrl, res => {
+        let body = '';
+        res.on('data', c => body += c);
+        res.on('end', () => { try { resolve(JSON.parse(body)); } catch { reject(new Error('Bad JSON')); } });
+      }).on('error', reject);
+    });
+    if (data && data.flights) {
+      console.log(`📦 Backup restored (raw): ${data.flights?.length || 0} flights, ${data.pilots?.length || 0} pilots`);
+      return data;
+    }
+  } catch (e) {
+    console.log('📦 Raw backup fetch failed, trying API:', e.message);
+  }
+
+  // Fall back to authenticated GitHub API
   if (!GITHUB_TOKEN) {
     console.log('📦 No GITHUB_TOKEN, skipping backup restore');
     return null;

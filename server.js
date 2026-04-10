@@ -9,6 +9,7 @@ const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const { loadBackup, saveBackup } = require('./backup');
 
 const app = express();
 const server = http.createServer(app);
@@ -25,72 +26,101 @@ let db;
 
 async function initDb() {
   const SQL = await initSqlJs();
+  db = new SQL.Database();
 
-  if (fs.existsSync(DB_PATH)) {
-    const buf = fs.readFileSync(DB_PATH);
-    db = new SQL.Database(buf);
-  } else {
-    db = new SQL.Database();
+  // Helper to run SQL
+  function execSql(sql, params = []) {
+    db.run(sql, params);
   }
 
-  db.run(`
-    CREATE TABLE IF NOT EXISTS pilots (
+  // Create tables
+  execSql(`
+    CREATE TABLE pilots (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       pin_hash TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      created_at TEXT
     )
   `);
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS flights (
+  execSql(`
+    CREATE TABLE flights (
       id TEXT PRIMARY KEY,
-      pilot_id TEXT NOT NULL,
+      pilot_id TEXT,
       client_name TEXT,
-      date TEXT NOT NULL,
-      flight_num INTEGER NOT NULL,
-      weight REAL NOT NULL,
-      takeoff TEXT NOT NULL,
-      landing TEXT NOT NULL,
-      time INTEGER NOT NULL,
-      photos REAL DEFAULT 0,
+      date TEXT,
+      flight_num INTEGER,
+      weight REAL,
+      takeoff TEXT,
+      landing TEXT,
+      time INTEGER,
+      photos REAL,
       notes TEXT,
       landed_at TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      created_at TEXT
     )
   `);
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS office_logs (
+  execSql(`
+    CREATE TABLE office_logs (
       id TEXT PRIMARY KEY,
-      pilot_id TEXT NOT NULL,
-      event TEXT NOT NULL,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      pilot_id TEXT,
+      event TEXT,
+      created_at TEXT
     )
   `);
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS active_timers (
+  execSql(`
+    CREATE TABLE active_timers (
       pilot_id TEXT PRIMARY KEY,
       client_name TEXT,
-      started_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL
+      started_at TEXT,
+      expires_at TEXT
     )
   `);
 
-  // Seed pilots only if table is empty
-  const existing = db.exec("SELECT COUNT(*) as c FROM pilots");
-  if (!existing.length || existing[0].values[0][0] === 0) {
-    const pinHash = bcrypt.hashSync('1234', 10);
-    const pilots = [
-      'Brooke', 'Balda', 'Bellett', 'Ben F', 'Blake', 'Casey', 'Cathal',
-      'Cima', 'Clem', 'Dom', 'Eddy', 'Gavin', 'Georges', 'Janik', 'Leo',
-      'Marika', 'Mike', 'Pete', 'Thomas', 'Todd'
-    ];
-    pilots.forEach(name => {
-      db.run('INSERT INTO pilots (id, name, pin_hash) VALUES (?, ?, ?)', [uuidv4(), name, pinHash]);
-    });
-    console.log(`✅ ${pilots.length} pilots seeded with PIN 1234`);
+  // Try to restore from GitHub backup
+  const backup = await loadBackup();
+  if (backup) {
+    // Restore pilots (preserve existing IDs)
+    if (backup.pilots && backup.pilots.length > 0) {
+      backup.pilots.forEach(p => {
+        execSql('INSERT OR IGNORE INTO pilots (id, name, pin_hash, created_at) VALUES (?, ?, ?, ?)',
+          [p.id, p.name, p.pin_hash, p.created_at]);
+      });
+      console.log(`✅ Restored ${backup.pilots.length} pilots from backup`);
+    }
+    // Restore flights
+    if (backup.flights && backup.flights.length > 0) {
+      backup.flights.forEach(f => {
+        execSql(`INSERT OR IGNORE INTO flights
+          (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [f.id, f.pilot_id, f.client_name, f.date, f.flight_num, f.weight, f.takeoff, f.landing, f.time, f.photos, f.notes, f.landed_at, f.created_at]);
+      });
+      console.log(`✅ Restored ${backup.flights.length} flights from backup`);
+    }
+    // Restore active timers
+    if (backup.active_timers && backup.active_timers.length > 0) {
+      backup.active_timers.forEach(t => {
+        execSql('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at) VALUES (?, ?, ?, ?)',
+          [t.pilot_id, t.client_name, t.started_at, t.expires_at]);
+      });
+      console.log(`✅ Restored ${backup.active_timers.length} active timers`);
+    }
+  } else {
+    // Seed pilots only if no backup
+    const existing = db.exec('SELECT COUNT(*) as c FROM pilots');
+    if (!existing.length || existing[0].values[0][0] === 0) {
+      const pinHash = bcrypt.hashSync('1234', 10);
+      const pilots = [
+        'Brooke', 'Balda', 'Bellett', 'Ben F', 'Blake', 'Casey', 'Cathal',
+        'Cima', 'Clem', 'Dom', 'Eddy', 'Gavin', 'Georges', 'Janik', 'Leo',
+        'Marika', 'Mike', 'Pete', 'Thomas', 'Todd'
+      ];
+      pilots.forEach(name => {
+        db.run('INSERT INTO pilots (id, name, pin_hash, created_at) VALUES (?, ?, ?, ?)',
+          [uuidv4(), name, pinHash, new Date().toISOString()]);
+      });
+      console.log(`✅ ${pilots.length} pilots seeded with PIN 1234`);
+    }
   }
 
   saveDb();
@@ -101,6 +131,8 @@ function saveDb() {
   if (!db) return;
   const buf = db.export();
   fs.writeFileSync(DB_PATH, Buffer.from(buf));
+  // Non-blocking backup to GitHub
+  saveBackup(db).catch(() => {});
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

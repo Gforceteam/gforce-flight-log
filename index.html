@@ -900,6 +900,10 @@ async function loadMyData() {
     renderFlights();
     updateStatusBadge();
     setServerStatus('synced');
+    if (editingId === null) {
+      const dateEl = document.getElementById('f-date');
+      if (dateEl) updateFlightNumForDate(dateEl.value);
+    }
   } catch {
     setServerStatus('offline');
   }

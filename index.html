@@ -1296,20 +1296,20 @@ async function loadOfficeData() {
 // ─── Office Tab ───────────────────────────────────────────────────────────────
 function renderOfficeTab() {
   const el = document.getElementById('pilots-list');
+  const now = Date.now();
+  const ACTIVE_MS = 2 * 60 * 1000; // 2 minutes — pilot app polls every 15s
 
-  // Sort: airborne first, then pilots with flight history, then never active — all alphabetical within group
-  const sorted = [...officePilots].sort((a, b) => {
-    const rank = p => p.status === 'airborne' ? 0 : p.last_landed_at ? 1 : 2;
-    const diff = rank(a) - rank(b);
-    return diff !== 0 ? diff : a.name.localeCompare(b.name);
-  });
+  const isSignedIn = p => p.last_seen && (now - new Date(p.last_seen).getTime()) < ACTIVE_MS;
+  const alpha = (a, b) => a.name.localeCompare(b.name);
 
-  el.innerHTML = sorted.map(p => {
+  const flying    = officePilots.filter(p => p.status === 'airborne').sort(alpha);
+  const signedIn  = officePilots.filter(p => p.status !== 'airborne' && isSignedIn(p)).sort(alpha);
+  const signedOut = officePilots.filter(p => p.status !== 'airborne' && !isSignedIn(p)).sort(alpha);
+
+  function pilotCard(p) {
     const isAirborne = p.status === 'airborne';
-    const timerExpiry = p.timer_expires_at;
     const clientName = p.client_name || '';
     const initial = p.name.charAt(0).toUpperCase();
-
     return `<div class="pilot-card ${isAirborne ? 'airborne' : ''}" id="pilot-card-${p.id}">
       <div class="pilot-card-top">
         <div class="pilot-avatar">${initial}</div>
@@ -1328,15 +1328,25 @@ function renderOfficeTab() {
           }
         </div>
       </div>
-      ${isAirborne && timerExpiry ? `<div class="timer-display" id="timer-${p.id}" data-expires="${timerExpiry}">Timer: --:--</div>` : ''}
+      ${isAirborne && p.timer_expires_at ? `<div class="timer-display" id="timer-${p.id}" data-expires="${p.timer_expires_at}">Timer: --:--</div>` : ''}
       <div class="pilot-client-row">
-        <label>${isAirborne ? 'Client / Booking:' : 'Client / Booking:'}</label>
+        <label>Client / Booking:</label>
         <input type="text" id="client-${p.id}" value="${clientName}"
           placeholder="e.g. Jan Kowalski or BKG-1234"
           ${isAirborne ? `onchange="updateClientName('${p.id}', this.value)"` : ''} />
       </div>
     </div>`;
-  }).join('');
+  }
+
+  function section(label, pilots) {
+    if (pilots.length === 0) return `<div class="section-title">${label} <span style="color:var(--border);font-weight:400">— none</span></div>`;
+    return `<div class="section-title">${label}</div>` + pilots.map(pilotCard).join('');
+  }
+
+  el.innerHTML =
+    section('🪂 Flying', flying) +
+    section('🟢 Signed In', signedIn) +
+    section('⚫ Signed Out', signedOut);
 
   updateTimers();
 }

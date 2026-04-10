@@ -39,7 +39,8 @@ async function initDb() {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       pin_hash TEXT NOT NULL,
-      created_at TEXT
+      created_at TEXT,
+      last_seen TEXT
     )
   `);
   execSql(`
@@ -241,7 +242,7 @@ app.post('/api/auth/office', (req, res) => {
 // ─── Pilot Routes ────────────────────────────────────────────────────────────
 app.get('/api/pilots', verifyToken, (req, res) => {
   try {
-    const pilots = queryAll('SELECT id, name FROM pilots ORDER BY name');
+    const pilots = queryAll('SELECT id, name, last_seen FROM pilots ORDER BY name');
     const timers = queryAll('SELECT * FROM active_timers');
     const lastLanded = queryAll('SELECT pilot_id, MAX(landed_at) as last_landed FROM flights WHERE landed_at IS NOT NULL GROUP BY pilot_id');
 
@@ -254,7 +255,8 @@ app.get('/api/pilots', verifyToken, (req, res) => {
         client_name: timer ? timer.client_name : null,
         timer_started_at: timer ? timer.started_at : null,
         timer_expires_at: timer ? timer.expires_at : null,
-        last_landed_at: lastL ? lastL.last_landed : null
+        last_landed_at: lastL ? lastL.last_landed : null,
+        last_seen: p.last_seen || null
       };
     });
 
@@ -268,6 +270,7 @@ app.get('/api/pilots', verifyToken, (req, res) => {
 // My status (pilot checking own status)
 app.get('/api/my-status', verifyToken, (req, res) => {
   try {
+    run('UPDATE pilots SET last_seen = ? WHERE id = ?', [new Date().toISOString(), req.pilot.id]);
     const timer = queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
     res.json({
       status: timer ? 'airborne' : 'in_office',

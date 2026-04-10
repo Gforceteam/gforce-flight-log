@@ -1,18 +1,14 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <title>Gforce Staff Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #0f0f0f;
-      --surface: #1a1a1a;
-      --card: #222;
-      --border: #333;
-      --accent: #4fc3f7;
-      --accent2: #81c784;
+      --bg: #121212;
+      --surface: #1c1c1c;
+      --card: #222222;
+      --border: #333333;
+      --accent: #f37329;
+      --accent2: rgba(243,115,41,0.15);
       --danger: #ef5350;
       --warning: #ffb74d;
       --text: #f0f0f0;
@@ -21,7 +17,7 @@
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
@@ -35,20 +31,31 @@
       justify-content: center;
       min-height: 100vh;
       padding: 20px;
+      background: var(--card);
     }
-    #login-screen h1 { font-size: 32px; font-weight: 700; margin-bottom: 8px; }
+    #login-screen .login-logo {
+      width: 72px;
+      height: 72px;
+      background: var(--accent);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+    #login-screen h1 { font-size: 32px; font-weight: 700; margin-bottom: 8px; color: var(--accent); font-family: 'Montserrat', sans-serif; letter-spacing: 2px; }
     #login-screen p { color: var(--muted); margin-bottom: 24px; font-size: 14px; }
     .login-form {
       width: 100%;
       max-width: 360px;
-      background: var(--card);
+      background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 24px;
     }
     .login-form input {
       width: 100%;
-      background: var(--surface);
+      background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 8px;
       color: var(--text);
@@ -63,11 +70,16 @@
       padding: 14px;
       background: var(--accent);
       border: none;
-      border-radius: var(--radius);
-      color: #000;
+      border-radius: 9999px;
+      color: #fff;
       font-size: 16px;
       font-weight: 700;
       cursor: pointer;
+      font-family: 'Montserrat', sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .login-form button:hover { background: #e5681f; }
     }
     #login-error { color: var(--danger); font-size: 13px; margin-top: 10px; text-align: center; display: none; }
 
@@ -76,8 +88,8 @@
 
     /* HEADER */
     .header {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
+      background: #292f36;
+      border-bottom: 3px solid var(--accent);
       padding: 16px 20px;
       display: flex;
       justify-content: space-between;
@@ -86,12 +98,12 @@
       top: 0;
       z-index: 10;
     }
-    .header h1 { font-size: 22px; font-weight: 700; }
+    .header h1 { font-size: 22px; font-weight: 700; color: var(--accent); font-family: 'Montserrat', sans-serif; letter-spacing: 1px; }
     .header-right { display: flex; align-items: center; gap: 12px; }
     .ws-indicator {
       width: 10px; height: 10px; border-radius: 50%; background: var(--danger);
     }
-    .ws-indicator.connected { background: var(--accent2); }
+    .ws-indicator.connected { background: var(--accent); }
     .logout-btn {
       background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
       color: var(--muted); font-size: 13px; padding: 6px 12px; cursor: pointer;
@@ -159,7 +171,7 @@
     .pilot-info { flex: 1; min-width: 0; }
     .pilot-name { font-size: 16px; font-weight: 600; }
     .pilot-status { font-size: 13px; margin-top: 2px; }
-    .pilot-status.in-office { color: var(--accent2); }
+    .pilot-status.in-office { color: var(--accent); font-weight: 600; }
     .pilot-status.airborne { color: var(--warning); }
     .pilot-client { font-size: 13px; color: var(--accent); margin-top: 2px; font-weight: 600; }
 
@@ -247,7 +259,13 @@
 
 <!-- LOGIN -->
 <div id="login-screen">
-  <h1>Gforce Office</h1>
+  <div class="login-logo">
+    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M20 4L6 34H12L20 16L28 34H34L20 4Z" fill="white"/>
+      <path d="M20 10L10 32H15L20 18L25 32H30L20 10Z" fill="#f37329"/>
+    </svg>
+  </div>
+  <h1>GFORCE</h1>
   <p>Staff Dashboard</p>
   <div class="login-form">
     <input type="password" id="office-password" placeholder="Office password" onkeydown="if(event.key==='Enter')doLogin()" />
@@ -259,7 +277,7 @@
 <!-- DASHBOARD -->
 <div id="dashboard">
   <div class="header">
-    <h1>Gforce Office</h1>
+    <h1>GFORCE Office</h1>
     <div class="header-right">
       <div class="ws-indicator" id="ws-indicator" title="Connection status"></div>
       <button class="logout-btn" onclick="doLogout()">Logout</button>

@@ -451,7 +451,7 @@
 
       <div class="field">
         <label>Photo Payment ($)</label>
-        <input type="number" id="f-photos" min="0" step="5" placeholder="0" inputmode="numeric" />
+        <input type="number" id="f-photos" min="0" step="5" value="0" inputmode="numeric" />
       </div>
 
       <div class="field">
@@ -817,7 +817,7 @@ function resetForm() {
   document.getElementById('cancel-btn').style.display = 'none';
   document.getElementById('flight-card').classList.remove('editing');
   document.getElementById('f-weight').value = 72;
-  document.getElementById('f-photos').value = '';
+  document.getElementById('f-photos').value = '0';
   document.getElementById('f-notes').value = '';
   updateWeightDisplay();
   document.querySelector('#fg-time button.selected')?.classList.remove('selected');
@@ -858,7 +858,7 @@ function editFlight(id) {
   setGroupVal('fg-takeoff', f.takeoff);
   setGroupVal('fg-landing', f.landing);
   setGroupVal('fg-time', String(f.time));
-  document.getElementById('f-photos').value = f.photos > 0 ? f.photos : '';
+  document.getElementById('f-photos').value = f.photos > 0 ? f.photos : '0';
   document.getElementById('f-notes').value = f.notes || '';
 
   showPage('log');

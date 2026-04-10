@@ -18,6 +18,7 @@
       --accent: #4fc3f7;
       --accent2: #81c784;
       --danger: #ef5350;
+      --warning: #ffb74d;
       --text: #f0f0f0;
       --muted: #888;
       --radius: 12px;
@@ -75,12 +76,44 @@
       cursor: pointer;
       margin-top: 4px;
     }
-    .login-card button:active { opacity: 0.8; }
     .login-error { color: var(--danger); font-size: 13px; margin-top: 10px; text-align: center; display: none; }
-    #login-error { display: none; }
 
     /* APP */
     #app-page { display: none; }
+
+    /* STATUS BAR */
+    .status-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .pilot-left { display: flex; align-items: center; gap: 10px; }
+    .pilot-avatar-sm {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--card); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 700; color: var(--accent);
+    }
+    .pilot-greeting { font-size: 12px; color: var(--muted); }
+    .pilot-name-sm { font-size: 14px; font-weight: 600; }
+    .status-right { display: flex; align-items: center; gap: 8px; }
+    .status-badge {
+      font-size: 12px; font-weight: 700; padding: 4px 10px;
+      border-radius: 20px;
+    }
+    .status-badge.in-office { background: var(--accent2); color: #000; }
+    .status-badge.airborne { background: var(--warning); color: #000; }
+    .server-badge {
+      font-size: 11px; padding: 3px 8px; border-radius: 10px; font-weight: 600;
+    }
+    .server-badge.synced { background: var(--accent2); color: #000; }
+    .server-badge.offline { background: var(--danger); color: #fff; }
 
     /* NAV */
     nav {
@@ -92,18 +125,10 @@
       z-index: 100;
     }
     nav button {
-      flex: 1;
-      padding: 12px 0 16px;
-      background: none;
-      border: none;
-      color: var(--muted);
-      font-size: 11px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
-      cursor: pointer;
-      transition: color 0.15s;
+      flex: 1; padding: 12px 0 16px; background: none; border: none;
+      color: var(--muted); font-size: 11px; display: flex;
+      flex-direction: column; align-items: center; gap: 4px;
+      cursor: pointer; transition: color 0.15s;
     }
     nav button.active { color: var(--accent); }
     nav button svg { width: 22px; height: 22px; }
@@ -112,7 +137,7 @@
     .page { display: none; padding: 16px; max-width: 500px; margin: 0 auto; }
     .page.active { display: block; }
 
-    /* HEADER */
+    /* PAGE HEADER */
     .page-header {
       padding: 16px 16px 0;
       max-width: 500px;
@@ -121,30 +146,37 @@
     .page-header h1 { font-size: 28px; font-weight: 700; padding-top: env(safe-area-inset-top, 16px); }
     .page-header p { color: var(--muted); font-size: 13px; margin-top: 2px; }
 
-    /* PILOT BAR */
-    .pilot-bar {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 10px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      max-width: 500px;
-      margin: 0 auto;
+    /* DASHBOARD */
+    .dashboard-status {
+      text-align: center;
+      padding: 30px 20px;
     }
-    .pilot-bar-left { display: flex; align-items: center; gap: 10px; }
-    .pilot-avatar-sm {
-      width: 32px; height: 32px; border-radius: 50%;
-      background: var(--card); border: 1px solid var(--border);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 14px; font-weight: 700; color: var(--accent);
+    .dashboard-status-icon {
+      font-size: 64px;
+      margin-bottom: 12px;
     }
-    .pilot-greeting { font-size: 13px; color: var(--muted); }
-    .pilot-name-sm { font-size: 14px; font-weight: 600; }
-    .btn-logout {
-      background: none; border: 1px solid var(--border); border-radius: 6px;
-      color: var(--muted); font-size: 12px; padding: 4px 10px; cursor: pointer;
+    .dashboard-status-label {
+      font-size: 13px; color: var(--muted); text-transform: uppercase;
+      letter-spacing: 1px; margin-bottom: 4px;
     }
+    .dashboard-status-value {
+      font-size: 24px; font-weight: 700;
+    }
+    .dashboard-client {
+      font-size: 18px; color: var(--accent); margin-top: 6px;
+    }
+    .dashboard-timer {
+      font-size: 48px; font-weight: 700; color: var(--warning);
+      font-variant-numeric: tabular-nums; margin: 20px 0;
+    }
+    .dashboard-timer.urgent { color: var(--danger); }
+    .btn-log-flight {
+      width: 100%; padding: 18px; background: var(--accent);
+      border: none; border-radius: var(--radius); color: #000;
+      font-size: 18px; font-weight: 700; cursor: pointer;
+      margin-top: 16px;
+    }
+    .btn-log-flight:active { opacity: 0.8; }
 
     /* CARDS */
     .card {
@@ -160,64 +192,37 @@
     /* FORM */
     .field { margin-bottom: 14px; }
     .field label {
-      display: block;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 6px;
+      display: block; font-size: 12px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
     }
     .field input, .field select, .field textarea {
-      width: 100%;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      padding: 10px 12px;
-      font-size: 16px;
-      outline: none;
-      appearance: none;
-      -webkit-appearance: none;
+      width: 100%; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); padding: 10px 12px;
+      font-size: 16px; outline: none; appearance: none; -webkit-appearance: none;
     }
     .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); }
     .field textarea { resize: vertical; min-height: 70px; font-size: 14px; }
 
     /* FLIGHT NUMBER STEPPER */
     .flight-num-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 14px;
+      display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
     }
     .flight-num-row label {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      min-width: 90px;
+      font-size: 12px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.5px; min-width: 90px;
     }
-    .flight-num-controls {
-      display: flex;
-      align-items: center;
-      flex: 1;
-      gap: 6px;
-    }
+    .flight-num-controls { display: flex; align-items: center; flex: 1; gap: 6px; }
     .flight-num-btn {
-      width: 40px; height: 40px;
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; color: var(--text);
+      width: 40px; height: 40px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px; color: var(--text);
       font-size: 20px; font-weight: 600; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      line-height: 1; padding: 0;
+      display: flex; align-items: center; justify-content: center; line-height: 1; padding: 0;
     }
     .flight-num-btn:active { background: var(--border); }
     .flight-num-display {
-      flex: 1; text-align: center;
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; color: var(--accent);
-      font-size: 18px; font-weight: 700;
+      flex: 1; text-align: center; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px;
+      color: var(--accent); font-size: 18px; font-weight: 700;
       padding: 8px; min-width: 48px;
     }
 
@@ -230,17 +235,15 @@
     }
     .weight-slider::-webkit-slider-thumb {
       -webkit-appearance: none; appearance: none;
-      width: 24px; height: 24px; background: var(--accent);
-      border-radius: 50%; cursor: pointer;
+      width: 24px; height: 24px; background: var(--accent); border-radius: 50%; cursor: pointer;
     }
     .weight-slider::-moz-range-thumb {
       width: 24px; height: 24px; background: var(--accent);
       border-radius: 50%; cursor: pointer; border: none;
     }
     .weight-value {
-      min-width: 52px; background: var(--surface);
-      border: 1px solid var(--border); border-radius: 8px;
-      color: var(--text); font-size: 16px; font-weight: 600;
+      min-width: 52px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 16px; font-weight: 600;
       padding: 8px 10px; text-align: center;
     }
 
@@ -255,18 +258,17 @@
     .btn-group button.selected { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 700; }
     .btn-group.site button { font-size: 13px; }
 
-    /* PRIMARY BUTTON */
+    /* BUTTONS */
     .btn-primary {
-      width: 100%; padding: 14px;
-      background: var(--accent); border: none; border-radius: var(--radius);
-      color: #000; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 4px;
+      width: 100%; padding: 14px; background: var(--accent); border: none;
+      border-radius: var(--radius); color: #000; font-size: 16px;
+      font-weight: 700; cursor: pointer; margin-top: 4px;
     }
     .btn-primary:active { opacity: 0.8; }
     .btn-secondary {
-      width: 100%; padding: 12px;
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius); color: var(--text);
-      font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px;
+      width: 100%; padding: 12px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      color: var(--text); font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px;
     }
     .btn-cancel {
       width: 100%; padding: 12px; background: transparent;
@@ -296,6 +298,7 @@
       padding: 2px 10px; font-size: 12px; font-weight: 700;
     }
     .flight-badge.green { background: var(--accent2); }
+    .flight-badge.client { background: var(--accent2); }
 
     .date-group-header {
       font-size: 13px; font-weight: 700; color: var(--muted);
@@ -304,8 +307,7 @@
     }
     .duty-badge {
       background: var(--surface); border: 1px solid var(--border);
-      border-radius: 6px; font-size: 11px; color: var(--accent2);
-      padding: 2px 8px;
+      border-radius: 6px; font-size: 11px; color: var(--accent2); padding: 2px 8px;
     }
 
     /* TOAST */
@@ -325,39 +327,7 @@
     }
     .stat-number { font-size: 28px; font-weight: 700; color: var(--accent); }
     .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
-
-    /* EXPORT */
-    .export-section { margin-bottom: 12px; }
-    .week-row {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px;
-      display: flex; justify-content: space-between; align-items: center;
-    }
-    .week-label { font-size: 14px; font-weight: 600; }
-    .week-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
-
-    .duty-row {
-      display: flex; align-items: center; gap: 10px;
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 10px 14px; margin-bottom: 6px;
-    }
-    .duty-date { font-size: 13px; flex: 1; }
-    .duty-input {
-      width: 70px; background: var(--surface); border: 1px solid var(--border);
-      border-radius: 6px; color: var(--text); padding: 6px 8px;
-      font-size: 15px; text-align: center;
-    }
-    .duty-label { font-size: 11px; color: var(--muted); }
-    hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
-
     .empty-state { text-align: center; color: var(--muted); padding: 40px 20px; font-size: 15px; }
-
-    /* SERVER STATUS */
-    .server-badge {
-      font-size: 11px; padding: 3px 8px; border-radius: 10px; font-weight: 600;
-    }
-    .server-badge.synced { background: var(--accent2); color: #000; }
-    .server-badge.offline { background: var(--danger); color: #fff; }
   </style>
 </head>
 <body>
@@ -379,20 +349,27 @@
 
 <!-- APP PAGE -->
 <div id="app-page">
-  <div class="pilot-bar">
-    <div class="pilot-bar-left">
+  <!-- STATUS BAR -->
+  <div class="status-bar">
+    <div class="pilot-left">
       <div class="pilot-avatar-sm" id="pilot-avatar">B</div>
       <div>
         <div class="pilot-greeting">Pilot</div>
         <div class="pilot-name-sm" id="pilot-name-display">Brooke</div>
       </div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px">
+    <div class="status-right">
+      <span class="status-badge in-office" id="status-badge">In Office</span>
       <span class="server-badge" id="server-badge">...</span>
-      <button class="btn-logout" onclick="doLogout()">Logout</button>
+      <button class="btn-logout" onclick="doLogout()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;padding:4px 10px;cursor:pointer">Logout</button>
     </div>
   </div>
 
+  <!-- PAGE HEADERS -->
+  <div class="page-header" id="header-dashboard">
+    <h1>Dashboard</h1>
+    <p id="header-dashboard-sub"></p>
+  </div>
   <div class="page-header" id="header-log">
     <h1>Log Flight</h1>
     <p id="header-date"></p>
@@ -406,8 +383,15 @@
     <p>Season overview</p>
   </div>
 
+  <!-- DASHBOARD PAGE -->
+  <div class="page active" id="page-dashboard">
+    <div class="dashboard-status" id="dashboard-content">
+      <!-- Filled by JS -->
+    </div>
+  </div>
+
   <!-- LOG PAGE -->
-  <div class="page active" id="page-log">
+  <div class="page" id="page-log">
     <div class="card" id="flight-card">
       <h2 id="card-title">New Flight</h2>
 
@@ -494,7 +478,11 @@
 
 <!-- BOTTOM NAV -->
 <nav id="bottom-nav" style="display:none">
-  <button class="active" onclick="showPage('log')" id="nav-log">
+  <button class="active" onclick="showPage('dashboard')" id="nav-dashboard">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+    Dashboard
+  </button>
+  <button onclick="showPage('log')" id="nav-log">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
     Log
   </button>
@@ -520,6 +508,7 @@ let pilotId = localStorage.getItem('gforce_pilot_id');
 let pilotName = localStorage.getItem('gforce_pilot_name');
 let editingId = null;
 let myFlights = [];
+let myStatus = { status: 'in_office', client_name: null, timer_expires_at: null };
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -605,13 +594,17 @@ function showApp(name) {
   document.getElementById('pilot-name-display').textContent = name;
   document.getElementById('pilot-avatar').textContent = name.charAt(0).toUpperCase();
 
-  // Set date
+  setupBtnGroups();
+  setupForm();
+  loadMyData();
+}
+
+function setupForm() {
   const dateEl = document.getElementById('f-date');
   dateEl.value = todayStr();
   document.getElementById('header-date').textContent = fmtDate(todayStr());
   updateWeightDisplay();
-  setupBtnGroups();
-  updateFlightNumForDate(dateEl.value);
+  onDateChange();
 }
 
 // ─── API Helpers ─────────────────────────────────────────────────────────────
@@ -624,6 +617,87 @@ function api(path, opts = {}) {
       ...opts.headers
     }
   });
+}
+
+async function loadMyData() {
+  try {
+    const [statusRes, flightsRes] = await Promise.all([
+      api('/api/my-status'),
+      api('/api/flights')
+    ]);
+    if (statusRes.status === 401 || flightsRes.status === 401) { doLogout(); return; }
+    myStatus = await statusRes.json();
+    myFlights = flightsRes.ok ? await flightsRes.json() : [];
+    renderDashboard();
+    renderFlights();
+    updateStatusBadge();
+    setServerStatus('synced');
+  } catch {
+    setServerStatus('offline');
+  }
+}
+
+// ─── Status Badge ─────────────────────────────────────────────────────────────
+function updateStatusBadge() {
+  const badge = document.getElementById('status-badge');
+  const sub = document.getElementById('header-dashboard-sub');
+  if (myStatus.status === 'airborne') {
+    badge.textContent = 'Away';
+    badge.className = 'status-badge airborne';
+    sub.textContent = myStatus.client_name ? `Client: ${myStatus.client_name}` : '';
+  } else {
+    badge.textContent = 'In Office';
+    badge.className = 'status-badge in-office';
+    sub.textContent = '';
+  }
+}
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+function renderDashboard() {
+  const el = document.getElementById('dashboard-content');
+
+  if (myStatus.status === 'airborne') {
+    const expires = myStatus.timer_expires_at ? new Date(myStatus.timer_expires_at).getTime() : 0;
+    const remaining = expires - Date.now();
+
+    el.innerHTML = `
+      <div class="dashboard-status-icon">🚐</div>
+      <div class="dashboard-status-label">Currently Away</div>
+      ${myStatus.client_name ? `<div class="dashboard-client">👤 ${myStatus.client_name}</div>` : ''}
+      <div class="dashboard-timer" id="dashboard-timer">--:--</div>
+      <button class="btn-log-flight" onclick="goToLogFlight()">Log Flight</button>
+    `;
+
+    // Start countdown
+    clearInterval(window._dashboardTimer);
+    window._dashboardTimer = setInterval(() => {
+      const now = Date.now();
+      const remaining = expires - now;
+      const timerEl = document.getElementById('dashboard-timer');
+      if (!timerEl) { clearInterval(window._dashboardTimer); return; }
+      if (remaining <= 0) {
+        timerEl.textContent = 'EXPIRED';
+        timerEl.classList.add('urgent');
+      } else {
+        const mins = Math.floor(remaining / 60000);
+        const secs = Math.floor((remaining % 60000) / 1000);
+        timerEl.textContent = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+        timerEl.classList.toggle('urgent', remaining < 600000);
+      }
+    }, 1000);
+  } else {
+    clearInterval(window._dashboardTimer);
+    el.innerHTML = `
+      <div class="dashboard-status-icon">🏢</div>
+      <div class="dashboard-status-label">Status</div>
+      <div class="dashboard-status-value">In Office</div>
+      <p style="color:var(--muted);font-size:14px;margin-top:8px">Waiting for office to start timer</p>
+    `;
+  }
+}
+
+function goToLogFlight() {
+  showPage('log');
 }
 
 // ─── Date Utils ───────────────────────────────────────────────────────────────
@@ -645,12 +719,6 @@ function getWeekEnd(weekStart) {
   const d = new Date(weekStart + 'T00:00:00');
   d.setDate(d.getDate() + 6);
   return d.toISOString().split('T')[0];
-}
-function formatWeekLabel(ws) {
-  const we = getWeekEnd(ws);
-  const a = new Date(ws + 'T00:00:00');
-  const b = new Date(we + 'T00:00:00');
-  return `${a.toLocaleDateString('en-NZ',{day:'numeric',month:'short'})} – ${b.toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'})}`;
 }
 
 // ─── Button Groups ─────────────────────────────────────────────────────────────
@@ -684,8 +752,8 @@ function updateWeightDisplay() {
 // ─── Flight Number ─────────────────────────────────────────────────────────────
 function updateFlightNumForDate(date) {
   if (editingId !== null) return;
-  const today = myFlights.filter(f => f.date === date);
-  document.getElementById('f-num-display').textContent = today.length + 1;
+  const todayFlights = myFlights.filter(f => f.date === date);
+  document.getElementById('f-num-display').textContent = todayFlights.length + 1;
 }
 function adjustFlightNum(delta) {
   const display = document.getElementById('f-num-display');
@@ -718,7 +786,6 @@ async function saveFlight() {
 
   try {
     if (editingId !== null) {
-      // PUT to update existing flight
       const res = await api(`/api/flights/${editingId}`, {
         method: 'PUT',
         body: JSON.stringify({ date, flight_num: flightNum, weight, takeoff, landing, time, photos, notes })
@@ -726,7 +793,6 @@ async function saveFlight() {
       if (!res.ok) throw new Error(await res.text());
       toast('Flight updated!');
     } else {
-      // POST new flight
       const res = await api('/api/flights', {
         method: 'POST',
         body: JSON.stringify({ date, flight_num: flightNum, weight, takeoff, landing, time, photos, notes })
@@ -735,10 +801,8 @@ async function saveFlight() {
       toast('Flight logged! Office notified.');
     }
 
-    // Reset form first (optimistic)
     resetForm();
-    // Then reload flights and update counter
-    await loadMyFlights();
+    await loadMyData();
     updateFlightNumForDate(document.getElementById('f-date').value);
   } catch (e) {
     toast('Save failed: ' + e.message);
@@ -805,18 +869,6 @@ function editFlight(id) {
 }
 
 // ─── Flights Page ─────────────────────────────────────────────────────────────
-async function loadMyFlights() {
-  try {
-    const res = await api('/api/flights');
-    if (res.status === 401) { doLogout(); return; }
-    myFlights = await res.json();
-    renderFlights();
-    setServerStatus('synced');
-  } catch {
-    setServerStatus('offline');
-  }
-}
-
 function renderFlights() {
   const flights = myFlights.slice().reverse();
   const el = document.getElementById('flights-list');
@@ -844,6 +896,7 @@ function renderFlights() {
         <div>
           <div style="font-size:14px;font-weight:600">Flight ${f.flight_num} · ${f.weight}kg · ${f.time}min</div>
           <div class="flight-meta">${f.takeoff} → ${f.landing}${f.photos > 0 ? ' · $'+f.photos+' photos' : ''}${f.notes ? ' · '+f.notes : ''}</div>
+          ${f.client_name ? `<div class="flight-meta" style="color:var(--accent2)">👤 ${f.client_name}</div>` : ''}
         </div>
         <div style="display:flex;gap:6px;align-items:center">
           ${f.photos > 0 ? `<span class="flight-badge green">$${f.photos}</span>` : ''}
@@ -867,7 +920,7 @@ async function deleteFlight(id) {
     const res = await api(`/api/flights/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error(await res.text());
     toast('Flight deleted');
-    await loadMyFlights();
+    await loadMyData();
     updateFlightNumForDate(document.getElementById('f-date').value);
   } catch (e) {
     toast('Delete failed: ' + e.message);
@@ -914,8 +967,8 @@ function showPage(name) {
   document.getElementById('nav-'+name).classList.add('active');
   document.getElementById('header-'+name).style.display = 'block';
 
-  if (name === 'flights') { loadMyFlights(); }
-  if (name === 'stats') { loadMyFlights().then(renderStats); }
+  if (name === 'flights') { /* already loaded via loadMyData */ }
+  if (name === 'stats') { renderStats(); }
 }
 
 // ─── Toast ────────────────────────────────────────────────────────────────────

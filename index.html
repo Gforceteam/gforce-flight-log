@@ -79,6 +79,7 @@
       margin-bottom: 12px;
     }
     .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: var(--accent); }
+    .card.editing { border-color: var(--accent); }
 
     /* FORM */
     .field { margin-bottom: 14px; }
@@ -107,6 +108,102 @@
       border-color: var(--accent);
     }
     .field textarea { resize: vertical; min-height: 70px; font-size: 14px; }
+
+    /* FLIGHT NUMBER STEPPER */
+    .flight-num-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .flight-num-row label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      min-width: 90px;
+    }
+    .flight-num-controls {
+      display: flex;
+      align-items: center;
+      flex: 1;
+      gap: 6px;
+    }
+    .flight-num-btn {
+      width: 40px;
+      height: 40px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 20px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      padding: 0;
+    }
+    .flight-num-btn:active { background: var(--border); }
+    .flight-num-display {
+      flex: 1;
+      text-align: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--accent);
+      font-size: 18px;
+      font-weight: 700;
+      padding: 8px;
+      min-width: 48px;
+    }
+
+    /* WEIGHT SLIDER */
+    .weight-slider-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .weight-slider {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+    .weight-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 24px;
+      height: 24px;
+      background: var(--accent);
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .weight-slider::-moz-range-thumb {
+      width: 24px;
+      height: 24px;
+      background: var(--accent);
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+    }
+    .weight-value {
+      min-width: 52px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 600;
+      padding: 8px 10px;
+      text-align: center;
+    }
 
     /* BUTTON GROUPS */
     .btn-group {
@@ -161,6 +258,18 @@
       cursor: pointer;
       margin-top: 8px;
     }
+    .btn-cancel {
+      width: 100%;
+      padding: 12px;
+      background: transparent;
+      border: 1px solid var(--danger);
+      border-radius: var(--radius);
+      color: var(--danger);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+    }
     .btn-danger {
       background: var(--surface);
       border: 1px solid var(--danger);
@@ -168,6 +277,15 @@
       color: var(--danger);
       font-size: 13px;
       padding: 6px 12px;
+      cursor: pointer;
+    }
+    .btn-edit {
+      background: var(--surface);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      color: var(--accent);
+      font-size: 13px;
+      padding: 6px 10px;
       cursor: pointer;
     }
 
@@ -319,17 +437,29 @@
 
 <!-- LOG PAGE -->
 <div class="page active" id="page-log">
-  <div class="card">
-    <h2>New Flight</h2>
+  <div class="card" id="flight-card">
+    <h2 id="card-title">New Flight</h2>
+
+    <div class="flight-num-row">
+      <label>Flight #</label>
+      <div class="flight-num-controls">
+        <button class="flight-num-btn" onclick="adjustFlightNum(-1)">−</button>
+        <div class="flight-num-display" id="f-num-display">1</div>
+        <button class="flight-num-btn" onclick="adjustFlightNum(1)">+</button>
+      </div>
+    </div>
 
     <div class="field">
       <label>Date</label>
-      <input type="date" id="f-date" />
+      <input type="date" id="f-date" onchange="onDateChange()" />
     </div>
 
     <div class="field">
       <label>Client Weight (kg)</label>
-      <input type="number" id="f-weight" min="20" max="150" placeholder="e.g. 72" inputmode="numeric" />
+      <div class="weight-slider-row">
+        <input type="range" class="weight-slider" id="f-weight" min="20" max="150" value="72" oninput="updateWeightDisplay()" />
+        <div class="weight-value" id="f-weight-display">72 kg</div>
+      </div>
     </div>
 
     <div class="field">
@@ -374,7 +504,8 @@
       <textarea id="f-notes" placeholder="Optional..."></textarea>
     </div>
 
-    <button class="btn-primary" onclick="saveFlight()">Save Flight</button>
+    <button class="btn-primary" id="save-btn" onclick="saveFlight()">Save Flight</button>
+    <button class="btn-cancel" id="cancel-btn" onclick="cancelEdit()" style="display:none">Cancel Edit</button>
   </div>
 </div>
 
@@ -432,6 +563,9 @@
 <div id="toast"></div>
 
 <script>
+// ---- STATE ----
+let editingId = null;
+
 // ---- DATA ----
 function getFlights() {
   return JSON.parse(localStorage.getItem('gforce_flights') || '[]');
@@ -476,8 +610,11 @@ function formatWeekLabel(ws) {
 
 // ---- INIT ----
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('f-date').value = todayStr();
+  const dateEl = document.getElementById('f-date');
+  dateEl.value = todayStr();
   document.getElementById('header-date').textContent = fmtDate(todayStr());
+  updateWeightDisplay();
+  updateFlightNumForDate(dateEl.value);
   setupBtnGroups();
 });
 
@@ -497,10 +634,45 @@ function getGroupVal(id) {
   return sel ? sel.dataset.val : null;
 }
 
+function setGroupVal(id, val) {
+  const btn = document.querySelector(`#${id} button[data-val="${val}"]`);
+  if (btn) {
+    document.querySelectorAll(`#${id} button`).forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+  }
+}
+
+// ---- WEIGHT SLIDER ----
+function updateWeightDisplay() {
+  const slider = document.getElementById('f-weight');
+  document.getElementById('f-weight-display').textContent = slider.value + ' kg';
+}
+
+// ---- FLIGHT NUMBER ----
+function updateFlightNumForDate(date) {
+  if (editingId !== null) return; // don't auto-change during edit
+  const flights = getFlights();
+  const nextNum = flights.filter(f => f.date === date).length + 1;
+  document.getElementById('f-num-display').textContent = nextNum;
+}
+
+function adjustFlightNum(delta) {
+  const display = document.getElementById('f-num-display');
+  const current = parseInt(display.textContent);
+  const newVal = Math.max(1, current + delta);
+  display.textContent = newVal;
+}
+
+function onDateChange() {
+  const date = document.getElementById('f-date').value;
+  document.getElementById('header-date').textContent = fmtDate(date);
+  updateFlightNumForDate(date);
+}
+
 // ---- SAVE FLIGHT ----
 function saveFlight() {
   const date = document.getElementById('f-date').value;
-  const flightNum = getFlights().filter(f => f.date === date).length + 1;
+  const flightNum = parseInt(document.getElementById('f-num-display').textContent);
   const weight = document.getElementById('f-weight').value;
   const takeoff = getGroupVal('fg-takeoff');
   const landing = getGroupVal('fg-landing');
@@ -514,20 +686,86 @@ function saveFlight() {
   }
 
   const flights = getFlights();
-  flights.push({ date, flightNum: parseInt(flightNum), weight: parseFloat(weight),
-    takeoff, landing, time: parseInt(time), photos: parseFloat(photos), notes,
-    id: Date.now() });
-  saveFlights(flights);
+
+  if (editingId !== null) {
+    // Update existing flight
+    const idx = flights.findIndex(f => f.id === editingId);
+    if (idx !== -1) {
+      flights[idx] = { ...flights[idx], date, flightNum, weight: parseFloat(weight),
+        takeoff, landing, time: parseInt(time), photos: parseFloat(photos), notes };
+    }
+    saveFlights(flights);
+    cancelEdit();
+    toast('Flight updated!');
+  } else {
+    // Add new flight
+    flights.push({ date, flightNum, weight: parseFloat(weight),
+      takeoff, landing, time: parseInt(time), photos: parseFloat(photos), notes,
+      id: Date.now() });
+    saveFlights(flights);
+    toast(`Flight ${flightNum} saved!`);
+  }
 
   // Reset for next flight
-  document.getElementById('f-weight').value = '';
+  document.getElementById('f-weight').value = 72;
   document.getElementById('f-photos').value = '';
   document.getElementById('f-notes').value = '';
+  updateWeightDisplay();
   // Keep date, reselect time=10, deselect takeoff/landing
   document.querySelector('#fg-time button.selected')?.classList.remove('selected');
   document.querySelector('#fg-time button[data-val="10"]').classList.add('selected');
+  updateFlightNumForDate(date);
+}
 
-  toast(`Flight ${flightNum} saved!`);
+function cancelEdit() {
+  editingId = null;
+  document.getElementById('card-title').textContent = 'New Flight';
+  document.getElementById('save-btn').textContent = 'Save Flight';
+  document.getElementById('cancel-btn').style.display = 'none';
+  document.getElementById('flight-card').classList.remove('editing');
+  // Reset form
+  document.getElementById('f-weight').value = 72;
+  document.getElementById('f-photos').value = '';
+  document.getElementById('f-notes').value = '';
+  document.querySelector('#fg-takeoff button.selected')?.classList.remove('selected');
+  document.querySelector('#fg-landing button.selected')?.classList.remove('selected');
+  document.querySelector('#fg-time button.selected')?.classList.remove('selected');
+  document.querySelector('#fg-time button[data-val="10"]').classList.add('selected');
+  updateWeightDisplay();
+  const dateEl = document.getElementById('f-date');
+  dateEl.value = todayStr();
+  document.getElementById('header-date').textContent = fmtDate(todayStr());
+  updateFlightNumForDate(dateEl.value);
+}
+
+// ---- EDIT FLIGHT ----
+function editFlight(id) {
+  const flights = getFlights();
+  const f = flights.find(fl => fl.id === id);
+  if (!f) return;
+
+  editingId = id;
+
+  // Fill form
+  document.getElementById('f-date').value = f.date;
+  document.getElementById('header-date').textContent = fmtDate(f.date);
+  document.getElementById('f-num-display').textContent = f.flightNum;
+  document.getElementById('f-weight').value = f.weight;
+  updateWeightDisplay();
+  setGroupVal('fg-takeoff', f.takeoff);
+  setGroupVal('fg-landing', f.landing);
+  setGroupVal('fg-time', String(f.time));
+  document.getElementById('f-photos').value = f.photos > 0 ? f.photos : '';
+  document.getElementById('f-notes').value = f.notes || '';
+
+  // Switch to log page
+  showPage('log');
+
+  // Update UI to show editing mode
+  document.getElementById('card-title').textContent = 'Edit Flight';
+  document.getElementById('save-btn').textContent = 'Update Flight';
+  document.getElementById('cancel-btn').style.display = 'block';
+  document.getElementById('flight-card').classList.add('editing');
 }
 
 // ---- FLIGHTS PAGE ----
@@ -564,6 +802,7 @@ function renderFlights() {
         </div>
         <div style="display:flex;gap:6px;align-items:center">
           ${f.photos > 0 ? `<span class="flight-badge green">$${f.photos}</span>` : ''}
+          <button class="btn-edit" onclick="editFlight(${f.id})">&#9998;</button>
           <button class="btn-danger" onclick="deleteFlight(${f.id})">✕</button>
         </div>
       </div>`;

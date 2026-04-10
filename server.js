@@ -283,6 +283,42 @@ app.get('/api/flights', verifyToken, (req, res) => {
   }
 });
 
+app.put('/api/flights/:id', verifyToken, (req, res) => {
+  try {
+    const { date, flight_num, weight, takeoff, landing, time, photos, notes } = req.body;
+    const { id } = req.params;
+    const pilotId = req.pilot.id;
+
+    // Verify flight belongs to this pilot
+    const existing = queryOne('SELECT * FROM flights WHERE id = ? AND pilot_id = ?', [id, pilotId]);
+    if (!existing) return res.status(404).json({ error: 'Flight not found' });
+
+    run(`UPDATE flights SET date=?, flight_num=?, weight=?, takeoff=?, landing=?, time=?, photos=?, notes=? WHERE id=? AND pilot_id=?`,
+      [date, flight_num, weight, takeoff, landing, time, photos || 0, notes || '', id, pilotId]);
+
+    res.json({ id, message: 'Flight updated' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/flights/:id', verifyToken, (req, res) => {
+  try {
+    const { id } = req.params;
+    const pilotId = req.pilot.id;
+
+    const existing = queryOne('SELECT * FROM flights WHERE id = ? AND pilot_id = ?', [id, pilotId]);
+    if (!existing) return res.status(404).json({ error: 'Flight not found' });
+
+    run('DELETE FROM flights WHERE id = ? AND pilot_id = ?', [id, pilotId]);
+    res.json({ id, message: 'Flight deleted' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Office Routes ────────────────────────────────────────────────────────────
 app.post('/api/office/leave', verifyOffice, (req, res) => {
   try {

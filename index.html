@@ -410,6 +410,20 @@ async function exportCSV(pilotId) {
   toast('Downloading...');
 }
 
+function loadPilotsNoAwait() {
+  api('/api/pilots').then(res => {
+    if (res.status === 401) { doLogout(); return; }
+    return res.json();
+  }).then(data => {
+    if (!data) return;
+    pilots = data;
+    renderPilots();
+    renderExportList();
+  }).catch(() => {
+    // silent fail for background refresh
+  });
+}
+
 // ─── Render ───────────────────────────────────────────────────────────────────
 function renderPilots() {
   const el = document.getElementById('pilots-list');
@@ -442,8 +456,8 @@ function renderPilots() {
     </div>`;
   }).join('');
 
-  // Start timer updates
-  if (isAirborne) updateTimers();
+  // Always refresh timers after rendering
+  updateTimers();
 }
 
 function renderExportList() {

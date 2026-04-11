@@ -581,7 +581,6 @@
       <button id="availability-btn" onclick="toggleAvailability()" title="Toggle your availability for office to send you away"
         style="background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer;font-weight:600;transition:all 0.2s;">🔴 Not Available</button>
       <span class="server-badge" id="server-badge">...</span>
-      <button onclick="showChangePwModal()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;padding:4px 10px;cursor:pointer" title="Change password">🔑</button>
       <button onclick="doLogout()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;padding:4px 10px;cursor:pointer">Logout</button>
     </div>
   </div>
@@ -593,6 +592,10 @@
   <div class="page-header" id="header-flights" style="display:none">
     <h1>My Flights</h1>
     <p id="header-flights-sub"></p>
+  </div>
+  <div class="page-header" id="header-settings" style="display:none">
+    <h1>Settings</h1>
+    <p>App &amp; account</p>
   </div>
   <div class="page-header" id="header-stats" style="display:none">
     <h1>Stats</h1>
@@ -691,6 +694,40 @@
   <div class="page" id="page-ff">
     <div id="ff-content"><div class="empty-state">Loading…</div></div>
   </div>
+
+  <div class="page" id="page-settings">
+    <div style="padding:0 0 24px;">
+
+      <!-- App update -->
+      <div class="card stat-section" style="margin-bottom:12px;">
+        <div class="stat-section-title" style="margin-bottom:6px;">🔄 App Version</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Pull the latest version from the server. Do this if the office has told you there's been an update.</div>
+        <div id="settings-update-status" style="font-size:12px;color:var(--muted);margin-bottom:10px;"></div>
+        <button onclick="updateApp()" style="width:100%;padding:13px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;letter-spacing:0.5px;">⬇ Update App</button>
+      </div>
+
+      <!-- Push notifications -->
+      <div class="card stat-section" style="margin-bottom:12px;">
+        <div class="stat-section-title" style="margin-bottom:6px;">🔔 Push Notifications</div>
+        <div id="settings-notif-status" style="font-size:13px;color:var(--muted);margin-bottom:14px;">Checking…</div>
+        <button id="settings-notif-btn" onclick="settingsToggleNotif()" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Enable Notifications</button>
+      </div>
+
+      <!-- Change password -->
+      <div class="card stat-section" style="margin-bottom:12px;">
+        <div class="stat-section-title" style="margin-bottom:6px;">🔑 Change Password</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Update your personal login password.</div>
+        <button onclick="showChangePwModal()" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Change Password</button>
+      </div>
+
+      <!-- Logout -->
+      <div class="card stat-section">
+        <div class="stat-section-title" style="margin-bottom:6px;">Account</div>
+        <button onclick="doLogout()" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--danger);font-size:14px;font-weight:600;cursor:pointer;">Sign Out</button>
+      </div>
+
+    </div>
+  </div>
 </div>
 
 <!-- ── BOTTOM NAV (pilot only) ────────────────────────────────────────────── -->
@@ -715,6 +752,10 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="14" x2="21" y2="14"/><line x1="8" y1="4" x2="8" y2="20"/></svg>
     Follow
   </button>
+  <button onclick="showPage('settings')" id="nav-settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    Settings
+  </button>
 </nav>
 
 <!-- ── OFFICE DASHBOARD ────────────────────────────────────────────────────── -->
@@ -737,6 +778,7 @@
     <button class="office-tab-btn" onclick="showOfficeTab('today')" id="office-tab-today-btn">Today</button>
     <button class="office-tab-btn" onclick="showOfficeTab('flights')" id="office-tab-flights-btn">Flight Log</button>
     <button class="office-tab-btn" onclick="showOfficeTab('ff')" id="office-tab-ff-btn">Duty Sheet</button>
+    <button class="office-tab-btn" onclick="showOfficeTab('settings')" id="office-tab-settings-btn">⚙</button>
   </div>
 
   <div class="office-content">
@@ -759,6 +801,38 @@
 
     <div class="office-tab-content" id="office-tab-ff">
       <div class="ff-wrap" id="office-ff-content"><div class="empty-state">Loading…</div></div>
+    </div>
+
+    <div class="office-tab-content" id="office-tab-settings">
+      <div style="padding:4px 0 24px;">
+
+        <!-- App update -->
+        <div class="card stat-section" style="margin-bottom:12px;">
+          <div class="stat-section-title" style="margin-bottom:6px;">🔄 App Version</div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Force the app to reload and pull the latest version. Share this with pilots when you've pushed an update.</div>
+          <button onclick="updateApp()" style="width:100%;padding:13px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;letter-spacing:0.5px;">⬇ Update App</button>
+        </div>
+
+        <!-- Reset pilot password -->
+        <div class="card stat-section" style="margin-bottom:12px;">
+          <div class="stat-section-title" style="margin-bottom:6px;">🔑 Reset Pilot Password</div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Set a new password for a pilot who is locked out.</div>
+          <select id="office-reset-pilot-sel" style="width:100%;padding:11px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;margin-bottom:10px;">
+            <option value="">Select pilot…</option>
+          </select>
+          <input type="password" id="office-reset-pw" placeholder="New password (min 6 chars)" maxlength="128"
+            style="width:100%;padding:11px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;margin-bottom:10px;" />
+          <div id="office-reset-error" style="color:var(--danger);font-size:13px;margin-bottom:8px;min-height:16px;"></div>
+          <button onclick="officeResetPassword()" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Reset Password</button>
+        </div>
+
+        <!-- Logout -->
+        <div class="card stat-section">
+          <div class="stat-section-title" style="margin-bottom:6px;">Account</div>
+          <button onclick="officeDoLogout()" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--danger);font-size:14px;font-weight:600;cursor:pointer;">Sign Out</button>
+        </div>
+
+      </div>
     </div>
 
     <div class="office-tab-content" id="office-tab-flights">
@@ -1843,6 +1917,7 @@ function showPage(name) {
   if (hdr) hdr.style.display = 'block';
   if (name === 'stats') { statsMonthOffset = 0; renderStats(); }
   if (name === 'ff') renderPilotFF();
+  if (name === 'settings') renderSettingsPage();
 }
 
 // ─── Flight Following ─────────────────────────────────────────────────────────
@@ -2389,6 +2464,43 @@ function showOfficeTab(name) {
   document.getElementById(`office-tab-${name}-btn`).classList.add('active');
   if (name === 'ff') renderOfficeFF();
   if (name === 'groups') loadOfficeData();
+  if (name === 'settings') populateOfficeResetPilots();
+}
+
+async function populateOfficeResetPilots() {
+  const sel = document.getElementById('office-reset-pilot-sel');
+  if (!sel || sel.options.length > 1) return; // already populated
+  try {
+    const res = await officeApi('/api/pilots');
+    if (!res.ok) return;
+    const pilots = await res.json();
+    pilots.sort((a, b) => a.name.localeCompare(b.name)).forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name;
+      sel.appendChild(opt);
+    });
+  } catch {}
+}
+
+async function officeResetPassword() {
+  const pilotId = document.getElementById('office-reset-pilot-sel').value;
+  const newPw = document.getElementById('office-reset-pw').value;
+  const errEl = document.getElementById('office-reset-error');
+  errEl.textContent = '';
+  if (!pilotId) { errEl.textContent = 'Select a pilot'; return; }
+  if (!newPw || newPw.length < 6) { errEl.textContent = 'Password must be at least 6 characters'; return; }
+  try {
+    const res = await officeApi('/api/office/pilot-password', {
+      method: 'PUT',
+      body: JSON.stringify({ pilot_id: pilotId, new_password: newPw })
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error || 'Failed'; return; }
+    document.getElementById('office-reset-pw').value = '';
+    document.getElementById('office-reset-pilot-sel').value = '';
+    toast('✅ ' + data.message);
+  } catch { errEl.textContent = 'Network error'; }
 }
 
 // ─── WebSocket ────────────────────────────────────────────────────────────────
@@ -2625,9 +2737,76 @@ function notifyPilotSentAway() {
   }
 }
 
+// ─── Settings page ────────────────────────────────────────────────────────────
+function renderSettingsPage() {
+  // Notification status
+  const statusEl = document.getElementById('settings-notif-status');
+  const btnEl = document.getElementById('settings-notif-btn');
+  if (statusEl && btnEl) {
+    if (!('Notification' in window)) {
+      statusEl.textContent = 'Push notifications not supported on this browser.';
+      btnEl.style.display = 'none';
+    } else if (Notification.permission === 'granted') {
+      statusEl.textContent = '✅ Push notifications are enabled. You will be alerted when the office sends you away.';
+      btnEl.textContent = 'Disable Notifications';
+      btnEl.style.borderColor = 'var(--danger)';
+      btnEl.style.color = 'var(--danger)';
+    } else if (Notification.permission === 'denied') {
+      statusEl.textContent = '🚫 Notifications are blocked. Go to iPhone Settings → Safari → [this site] → Notifications to allow them.';
+      btnEl.style.display = 'none';
+    } else {
+      statusEl.textContent = 'Notifications are off. Enable them to get alerted when the office sends you away.';
+      btnEl.textContent = 'Enable Notifications';
+      btnEl.style.borderColor = '';
+      btnEl.style.color = '';
+    }
+  }
+}
+
+async function settingsToggleNotif() {
+  if (Notification.permission === 'granted') {
+    await unsubscribeFromPush();
+    toast('Notifications disabled');
+    renderSettingsPage();
+  } else {
+    await requestAndSubscribePush(document.getElementById('settings-notif-btn'));
+    renderSettingsPage();
+  }
+}
+
+async function updateApp() {
+  const statusEl = document.getElementById('settings-update-status');
+  if (statusEl) statusEl.textContent = 'Checking for updates…';
+  try {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) await reg.update();
+    }
+    if (statusEl) statusEl.textContent = 'Reloading…';
+    // Small delay so user sees the message, then force a network fetch of the page
+    setTimeout(() => window.location.reload(), 400);
+  } catch {
+    window.location.reload();
+  }
+}
+
 // ─── Service Worker ───────────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/gforce-flight-log/sw.js').catch(() => {});
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('/gforce-flight-log/sw.js').then(reg => {
+    // Proactively check for a new SW version each time the app loads
+    reg.update().catch(() => {});
+  }).catch(() => {});
+
+  // When a new SW takes control (after skipWaiting activates it), reload to get
+  // the latest index.html. Guard against the initial install firing this.
+  let _reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController && !_reloading) {
+      _reloading = true;
+      window.location.reload();
+    }
+  });
 }
 
 // ─── Change Password ──────────────────────────────────────────────────────────

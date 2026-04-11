@@ -373,6 +373,13 @@ app.post('/api/drives', verifyToken, async (req, res) => {
       'INSERT INTO drives (id, pilot_id, date, notes, group_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
       [id, req.pilot.id, date, notes || '', group_id || null, now]
     );
+    // Clear active timer — pilot is back in office after the drive
+    const activeTimer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
+    if (activeTimer) {
+      await run('DELETE FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
+      await run('INSERT INTO office_logs (id, pilot_id, event) VALUES (?, ?, ?)', [uuidv4(), req.pilot.id, 'drive_logged']);
+      broadcast({ type: 'LANDED', pilot_id: req.pilot.id, pilot_name: req.pilot.name, landed_at: now });
+    }
     res.status(201).json({ id, message: 'Drive logged' });
   } catch (e) {
     console.error(e);

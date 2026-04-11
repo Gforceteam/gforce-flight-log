@@ -986,15 +986,14 @@ function api(path, opts = {}) {
 
 async function loadMyData() {
   try {
-    const [statusRes, flightsRes, drivesRes] = await Promise.all([
+    const [statusRes, flightsRes] = await Promise.all([
       api('/api/my-status'),
-      api('/api/flights'),
-      api('/api/drives')
+      api('/api/flights')
     ]);
     if (statusRes.status === 401 || flightsRes.status === 401) { doLogout(); return; }
     myStatus = await statusRes.json();
     myFlights = flightsRes.ok ? await flightsRes.json() : [];
-    myDrives = drivesRes.ok ? await drivesRes.json() : [];
+    myDrives = [];
     renderDashboard();
     renderFlights();
     updateStatusBadge();
@@ -1196,16 +1195,18 @@ async function saveFlight() {
   const date = document.getElementById('f-date').value;
   const notes = document.getElementById('f-notes').value;
 
-  // Peak Drive mode — log to drives endpoint
+  // Peak Drive mode — log as a flight with special markers
   if (isPeakDrive) {
     setServerStatus('syncing');
     try {
-      const res = await api('/api/drives', {
+      const flightNum = parseInt(document.getElementById('f-num-display').textContent);
+      const wingReg = (document.getElementById('f-wing')?.value || '').trim().toUpperCase() || null;
+      const res = await api('/api/flights', {
         method: 'POST',
-        body: JSON.stringify({ date, notes, group_id: myStatus.group_id || null })
+        body: JSON.stringify({ date, flight_num: flightNum, weight: 0, takeoff: 'CP', landing: 'CP', time: 0, notes: '🚗 PEAK DRIVE' + (notes ? ' — ' + notes : ''), wing_reg: wingReg })
       });
       if (!res.ok) throw new Error(await res.text());
-      toast('🚗 Drive logged!');
+      toast('🚗 Peak drive logged!');
       resetForm();
       await loadMyData();
     } catch (e) {
@@ -1690,6 +1691,7 @@ async function loadOfficeData() {
 
 // ─── Groups Tab ───────────────────────────────────────────────────────────────
 function renderGroupsTab() {
+  _groupSelected.clear();
   const el = document.getElementById('groups-panel');
   const now = Date.now();
   const ACTIVE_MS = 3 * 60 * 1000; // signed in = seen in last 3 min
@@ -2055,10 +2057,10 @@ function exportPilotCSV(pilotId) {
   downloadCSV(buildCSV(pilotFlights), `gforce_flights_${pilot?.name || pilotId}.csv`);
 }
 function buildCSV(flights) {
-  const header = ['Date','Pilot','Client Name','Flight #','Weight (kg)','Takeoff','Landing','Time (min)','Photos ($)','Notes'];
+  const header = ['Date','Pilot','Client Name','Flight #','Weight (kg)','Takeoff','Landing','Time (min)','Notes'];
   const rows = flights.map(f => [
     f.date, f.pilot_name||'', f.client_name||'', f.flight_num, f.weight,
-    f.takeoff, f.landing, f.time, f.photos||0, f.notes||''
+    f.takeoff, f.landing, f.time, f.notes||''
   ]);
   return [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
 }
@@ -2217,6 +2219,18 @@ function notifyPilotSentAway() {
     });
   } catch (e) {}
 
+  // Build group info for notification
+  const groupInfo = myStatus.group_name ? `📋 ${myStatus.group_name}` : '';
+  const groupPilotsList = (myStatus.group_pilots && myStatus.group_pilots.length)
+    ? myStatus.group_pilots.join(', ')
+    : '';
+  const groupSection = (groupInfo || groupPilotsList) ? `
+    <div style="margin:16px 0;padding:12px 16px;background:#1a1a1a;border-radius:10px;border:1px solid #333;">
+      ${groupInfo ? `<div style="font-size:15px;font-weight:700;color:#f37329;margin-bottom:${groupPilotsList ? '6px' : '0'};">${groupInfo}</div>` : ''}
+      ${groupPilotsList ? `<div style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Flying with</div>
+      <div style="font-size:15px;font-weight:600;color:#f0f0f0;">${groupPilotsList}</div>` : ''}
+    </div>` : '';
+
   // In-app modal
   const existing = document.getElementById('sent-away-modal');
   if (existing) existing.remove();
@@ -2224,20 +2238,24 @@ function notifyPilotSentAway() {
   modal.id = 'sent-away-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;';
   modal.innerHTML = `
-    <div style="background:#222;border:2px solid #f37329;border-radius:16px;padding:32px 28px;text-align:center;max-width:320px;width:90%;">
+    <div style="background:#222;border:2px solid #f37329;border-radius:16px;padding:32px 28px;text-align:center;max-width:340px;width:90%;">
       <div style="font-size:56px;margin-bottom:12px;">🪂</div>
       <div style="font-size:22px;font-weight:700;color:#f37329;font-family:Montserrat,sans-serif;letter-spacing:1px;margin-bottom:8px;">YOU'RE AWAY!</div>
-      <div style="color:#ccc;font-size:14px;margin-bottom:24px;">Office has started your timer. Have a great flight!</div>
+      <div style="color:#ccc;font-size:14px;">Office has started your timer. Have a great flight!</div>
+      ${groupSection}
       <button onclick="document.getElementById('sent-away-modal').remove()" style="background:#f37329;border:none;border-radius:9999px;color:#fff;font-size:16px;font-weight:700;padding:14px 32px;cursor:pointer;font-family:Montserrat,sans-serif;">GOT IT</button>
     </div>`;
   document.body.appendChild(modal);
 
   // Push notification (if permitted)
+  const pushBody = groupPilotsList
+    ? `You're away! Flying with ${groupPilotsList}.`
+    : "You've been sent away! Timer started.";
   if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification('GForce Flight Log', { body: "You've been sent away! Timer started.", icon: '/gforce-flight-log/icon-192.png' });
+    new Notification('GForce Flight Log', { body: pushBody, icon: '/gforce-flight-log/icon-192.png' });
   } else if ('Notification' in window && Notification.permission !== 'denied') {
     Notification.requestPermission().then(p => {
-      if (p === 'granted') new Notification('GForce Flight Log', { body: "You've been sent away! Timer started.", icon: '/gforce-flight-log/icon-192.png' });
+      if (p === 'granted') new Notification('GForce Flight Log', { body: pushBody, icon: '/gforce-flight-log/icon-192.png' });
     });
   }
 }

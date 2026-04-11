@@ -725,6 +725,7 @@
 
   <div class="office-tab-bar">
     <button class="office-tab-btn active" onclick="showOfficeTab('pilots')" id="office-tab-pilots-btn">Office</button>
+    <button class="office-tab-btn" onclick="showOfficeTab('groups')" id="office-tab-groups-btn">Groups</button>
     <button class="office-tab-btn" onclick="showOfficeTab('today')" id="office-tab-today-btn">Today</button>
     <button class="office-tab-btn" onclick="showOfficeTab('flights')" id="office-tab-flights-btn">Flights</button>
     <button class="office-tab-btn" onclick="showOfficeTab('ff')" id="office-tab-ff-btn">Following</button>
@@ -734,6 +735,10 @@
     <div class="office-tab-content active" id="office-tab-pilots">
       <div class="section-title">Pilots</div>
       <div id="pilots-list"></div>
+    </div>
+
+    <div class="office-tab-content" id="office-tab-groups">
+      <div id="groups-panel"></div>
     </div>
 
     <div class="office-tab-content" id="office-tab-today">
@@ -930,7 +935,7 @@ function startStatusPoll() {
       if (!res.ok) return;
       const newStatus = await res.json();
       const prevStatus = myStatus.status;
-      myStatus = { status: newStatus.status, client_name: newStatus.client_name, timer_expires_at: newStatus.timer_expires_at };
+      myStatus = { status: newStatus.status, client_name: newStatus.client_name, timer_expires_at: newStatus.timer_expires_at, group_name: newStatus.group_name, group_pilots: newStatus.group_pilots || [] };
       if (newStatus.current_wing && newStatus.current_wing !== currentWing) {
         currentWing = newStatus.current_wing;
         const wingEl = document.getElementById('f-wing');
@@ -1012,6 +1017,8 @@ function renderDashboard() {
     el.innerHTML = `
       <div class="dashboard-status-icon">🪂</div>
       <div class="dashboard-status-label">Currently Away</div>
+      ${myStatus.group_name ? `<div class="dashboard-client" style="font-size:15px;">📋 ${myStatus.group_name}</div>` : ''}
+      ${myStatus.group_pilots && myStatus.group_pilots.length ? `<div style="color:#888;font-size:13px;margin-top:4px;">With: ${myStatus.group_pilots.join(', ')}</div>` : ''}
       <div class="dashboard-timer" id="dashboard-timer">--:--</div>
       <button class="btn-log-flight" onclick="goToLogFlight()">Log Flight</button>
       <button class="btn-extend" id="btn-extend" onclick="extendMyTimer()">+ 30 Minutes</button>
@@ -1560,6 +1567,91 @@ async function loadOfficeData() {
   }
 }
 
+// ─── Groups Tab ───────────────────────────────────────────────────────────────
+function renderGroupsTab() {
+  const el = document.getElementById('groups-panel');
+  const available = officePilots.filter(p => p.status !== 'airborne').sort((a, b) => a.name.localeCompare(b.name));
+  const airborne = officePilots.filter(p => p.status === 'airborne').sort((a, b) => a.name.localeCompare(b.name));
+
+  let html = `
+    <div style="padding:16px 0 8px;">
+      <div class="section-title" style="margin-top:0;">Send Group Away</div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="field">
+          <label>Group Name / Booking</label>
+          <input type="text" id="group-name-input" placeholder="e.g. Smith Family or BK-2042" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:16px;outline:none;" />
+        </div>
+        <div class="field">
+          <label>Select Pilots</label>
+          <div id="group-pilot-checkboxes" style="display:flex;flex-direction:column;gap:8px;">`;
+
+  if (available.length === 0) {
+    html += `<div style="color:var(--muted);font-size:14px;">No pilots available (all airborne)</div>`;
+  } else {
+    available.forEach(p => {
+      html += `
+        <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface);border-radius:8px;cursor:pointer;">
+          <input type="checkbox" data-pilot-id="${p.id}" data-pilot-name="${p.name}" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;" />
+          <span style="font-size:15px;font-weight:500;">${p.name}</span>
+        </label>`;
+    });
+  }
+
+  html += `
+        </div>
+      </div>
+      <button onclick="submitGroupAway()" style="width:100%;padding:14px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;font-family:Montserrat,sans-serif;text-transform:uppercase;letter-spacing:1px;">Send Group Away</button>
+    </div>`;
+
+  if (airborne.length > 0) {
+    html += `<div class="section-title" style="margin-top:24px;">Currently Airborne Groups</div>`;
+    // Group airborne pilots by group_id
+    const grouped = {};
+    const ungrouped = [];
+    airborne.forEach(p => {
+      if (p.group_id) {
+        if (!grouped[p.group_id]) grouped[p.group_id] = { name: p.client_name || p.group_id, pilots: [] };
+        grouped[p.group_id].pilots.push(p);
+      } else {
+        ungrouped.push(p);
+      }
+    });
+    Object.values(grouped).forEach(g => {
+      html += `<div class="card" style="border-color:var(--warning);margin-bottom:10px;">
+        <div style="font-weight:700;color:var(--accent);margin-bottom:8px;">📋 ${g.name}</div>
+        <div style="color:#ccc;font-size:14px;">${g.pilots.map(p => p.name).join(', ')}</div>
+      </div>`;
+    });
+  }
+
+  el.innerHTML = html;
+}
+
+async function submitGroupAway() {
+  const name = document.getElementById('group-name-input').value.trim();
+  if (!name) { toast('Enter a group name or booking number'); return; }
+  const checked = document.querySelectorAll('#group-pilot-checkboxes input[type=checkbox]:checked');
+  if (checked.length === 0) { toast('Select at least one pilot'); return; }
+  const pilot_ids = Array.from(checked).map(c => c.dataset.pilotId);
+  const pilot_names = Array.from(checked).map(c => c.dataset.pilotName);
+  try {
+    const res = await officeApi('/api/office/group-leave', {
+      method: 'POST',
+      body: JSON.stringify({ group_name: name, pilot_ids })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      toast(`Group "${name}" away — ${pilot_names.join(', ')}`);
+      document.getElementById('group-name-input').value = '';
+      document.querySelectorAll('#group-pilot-checkboxes input[type=checkbox]').forEach(c => c.checked = false);
+      await loadOfficeData();
+      renderGroupsTab();
+    } else {
+      toast('Error: ' + (data.error || 'Failed'));
+    }
+  } catch (e) { toast('Error: ' + e.message); }
+}
+
 // ─── Office Tab ───────────────────────────────────────────────────────────────
 function renderOfficeTab() {
   const el = document.getElementById('pilots-list');
@@ -1866,6 +1958,7 @@ function showOfficeTab(name) {
   document.getElementById(`office-tab-${name}`).classList.add('active');
   document.getElementById(`office-tab-${name}-btn`).classList.add('active');
   if (name === 'ff') renderOfficeFF();
+  if (name === 'groups') renderGroupsTab();
 }
 
 // ─── WebSocket ────────────────────────────────────────────────────────────────
@@ -1891,6 +1984,19 @@ function connectWS() {
         if (pilotId && data.pilot_id === pilotId) {
           myStatus.status = 'airborne';
           myStatus.timer_expires_at = data.expires_at;
+          renderDashboard();
+          updateStatusBadge();
+          notifyPilotSentAway();
+        }
+        break;
+      case 'GROUP_LEFT_OFFICE':
+        toast(`Group away: ${data.pilot_names.join(', ')}`);
+        loadOfficeData();
+        if (pilotId && data.pilot_ids.includes(pilotId)) {
+          myStatus.status = 'airborne';
+          myStatus.timer_expires_at = data.expires_at;
+          myStatus.group_name = data.group_name;
+          myStatus.group_pilots = data.pilot_names.filter(n => n !== pilotName);
           renderDashboard();
           updateStatusBadge();
           notifyPilotSentAway();

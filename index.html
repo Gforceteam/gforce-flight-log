@@ -820,7 +820,6 @@ let currentWing = '';
 document.addEventListener('DOMContentLoaded', () => {
   if (pilotToken && pilotId) {
     showApp(pilotName);
-    subscribeToPush(); // re-subscribe on page reload (subscription may have expired)
   } else if (officeToken) {
     showOfficeDashboard();
   } else {
@@ -911,8 +910,6 @@ async function doLogin() {
       localStorage.setItem('gforce_pilot_id', pilotId);
       localStorage.setItem('gforce_pilot_name', pilotName);
       showApp(pilotName);
-      // Subscribe to push notifications after login (non-blocking)
-      subscribeToPush();
     } else {
       document.getElementById('login-error').textContent = 'Invalid PIN. Try again.';
       document.getElementById('login-error').style.display = 'block';
@@ -949,10 +946,6 @@ function showApp(name) {
   setupForm();
   loadMyData();
   startStatusPoll();
-  // Request notification permission early so it's ready when sent away
-  if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
-  }
 }
 
 function startStatusPoll() {
@@ -1063,7 +1056,14 @@ async function toggleAvailability() {
     if (!res.ok) throw new Error(await res.text());
     pilotAvailable = newState;
     updateStatusBadge();
+    renderDashboard();
     toast(newState ? '🟢 You\'re now available — office can send you away' : '🔴 Signed out — you won\'t appear for office');
+    // Piggyback on this user gesture to request push permission if not yet done
+    if (newState && 'Notification' in window && Notification.permission === 'default') {
+      requestAndSubscribePush(null);
+    } else if (newState && Notification.permission === 'granted') {
+      subscribeToPush(); // re-subscribe silently if already permitted
+    }
   } catch (e) {
     toast('Could not update availability: ' + e.message);
   }
@@ -1089,11 +1089,19 @@ function renderDashboard() {
     startDashboardCountdown(myStatus.timer_expires_at);
   } else {
     clearInterval(window._dashboardTimer);
+    // Show notification setup prompt if permission not yet granted — must be a real button tap for iOS
+    const notifPrompt = ('Notification' in window && Notification.permission !== 'granted') ? `
+      <div style="margin-top:20px;padding:14px 16px;background:rgba(243,115,41,0.12);border:1px solid rgba(243,115,41,0.4);border-radius:12px;text-align:center;">
+        <div style="font-size:15px;font-weight:700;color:var(--accent);margin-bottom:6px;">🔔 Enable Push Notifications</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:12px;">Get an alert on your phone when office sends you away — even when the app is closed.</div>
+        <button onclick="requestAndSubscribePush(this)" style="background:var(--accent);border:none;border-radius:9999px;color:#fff;padding:10px 24px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">Enable Notifications</button>
+      </div>` : '';
     el.innerHTML = `
       <div class="dashboard-status-icon">🏢</div>
       <div class="dashboard-status-label">Status</div>
-      <div class="dashboard-status-value">In Office</div>
-      <p style="color:var(--muted);font-size:14px;margin-top:8px">Waiting for office to start timer</p>
+      <div class="dashboard-status-value">${pilotAvailable ? 'Available' : 'Not Available'}</div>
+      <p style="color:var(--muted);font-size:14px;margin-top:8px">${pilotAvailable ? 'Office can send you away' : 'Toggle Available to appear for office'}</p>
+      ${notifPrompt}
     `;
   }
 }
@@ -2349,15 +2357,35 @@ function urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
 }
 
+// Called from a button onclick — guaranteed user gesture, so iOS will show permission dialog
+async function requestAndSubscribePush(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Setting up…'; }
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      toast('Push notifications not supported on this browser');
+      return;
+    }
+    // This MUST be called from a user gesture for iOS to show the permission dialog
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      toast('Notifications blocked — enable in iPhone Settings > Safari/Apps');
+      if (btn) { btn.disabled = false; btn.textContent = 'Enable Notifications'; }
+      return;
+    }
+    await subscribeToPush();
+    toast('🔔 Push notifications enabled!');
+    renderDashboard(); // re-render to hide the prompt
+  } catch (e) {
+    toast('Could not enable notifications: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Try Again'; }
+  }
+}
+
 async function subscribeToPush() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (Notification.permission !== 'granted') return;
   try {
-    // Request notification permission first (needs user context — best effort here)
-    if (Notification.permission === 'default') await Notification.requestPermission();
-    if (Notification.permission !== 'granted') return;
-
     const reg = await navigator.serviceWorker.ready;
-    // Reuse existing subscription or create a new one
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
       sub = await reg.pushManager.subscribe({
@@ -2365,14 +2393,14 @@ async function subscribeToPush() {
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
       });
     }
-    // Save subscription to server
     await api('/api/pilot/push-subscription', {
       method: 'POST',
       body: JSON.stringify({ subscription: sub })
     });
-    console.log('✅ Push subscription active');
+    console.log('✅ Push subscription saved');
   } catch (e) {
-    console.log('Push subscription unavailable:', e.message);
+    console.log('Push subscription failed:', e.message);
+    throw e;
   }
 }
 
@@ -2471,12 +2499,8 @@ function notifyPilotSentAway() {
     });
   }
 
-  if ('Notification' in window) {
-    if (Notification.permission === 'granted') {
-      showSystemNotif();
-    } else if (Notification.permission !== 'denied') {
-      Notification.requestPermission().then(p => { if (p === 'granted') showSystemNotif(); });
-    }
+  if ('Notification' in window && Notification.permission === 'granted') {
+    showSystemNotif();
   }
 }
 

@@ -193,12 +193,36 @@ app.get('/api/my-status', verifyToken, async (req, res) => {
     await run('UPDATE pilots SET last_seen = ? WHERE id = ?', [new Date().toISOString(), req.pilot.id]);
     const timer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
     const pilot = await queryOne('SELECT current_wing FROM pilots WHERE id = ?', [req.pilot.id]);
+    let groupName = null;
+    let groupPilots = [];
+    let groupId = timer ? (timer.group_id || null) : null;
+    if (timer && timer.group_id) {
+      const grp = await queryOne('SELECT * FROM flight_groups WHERE id = ?', [timer.group_id]);
+      if (grp) {
+        groupName = grp.name;
+        const members = await queryAll(
+          'SELECT p.id, p.name FROM group_members gm JOIN pilots p ON gm.pilot_id = p.id WHERE gm.group_id = ? AND gm.pilot_id != ?',
+          [timer.group_id, req.pilot.id]
+        );
+        if (members.length > 0) {
+          const memberTimers = await queryAll(
+            'SELECT pilot_id FROM active_timers WHERE pilot_id IN (' + members.map(() => '?').join(',') + ')',
+            members.map(m => m.id)
+          );
+          const activeIds = new Set(memberTimers.map(t => t.pilot_id));
+          groupPilots = members.filter(m => activeIds.has(m.id)).map(m => m.name);
+        }
+      }
+    }
     res.json({
       status: timer ? 'airborne' : 'in_office',
       client_name: timer ? timer.client_name : null,
       timer_started_at: timer ? timer.started_at : null,
       timer_expires_at: timer ? timer.expires_at : null,
-      current_wing: pilot ? pilot.current_wing : null
+      current_wing: pilot ? pilot.current_wing : null,
+      group_name: groupName,
+      group_pilots: groupPilots,
+      group_id: groupId
     });
   } catch (e) {
     console.error(e);

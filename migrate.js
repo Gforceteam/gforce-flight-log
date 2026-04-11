@@ -23,7 +23,26 @@ function fetchBackup() {
   });
 }
 
+async function createTables() {
+  await db.batch([
+    { sql: `CREATE TABLE IF NOT EXISTS pilots (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL, pin_hash TEXT NOT NULL,
+      created_at TEXT, last_seen TEXT, current_wing TEXT)` },
+    { sql: `CREATE TABLE IF NOT EXISTS flights (
+      id TEXT PRIMARY KEY, pilot_id TEXT, client_name TEXT, date TEXT,
+      flight_num INTEGER, weight REAL, takeoff TEXT, landing TEXT,
+      time INTEGER, photos REAL, notes TEXT, landed_at TEXT,
+      created_at TEXT, wing_reg TEXT)` },
+    { sql: `CREATE TABLE IF NOT EXISTS office_logs (
+      id TEXT PRIMARY KEY, pilot_id TEXT, event TEXT, created_at TEXT)` },
+    { sql: `CREATE TABLE IF NOT EXISTS active_timers (
+      pilot_id TEXT PRIMARY KEY, client_name TEXT, started_at TEXT, expires_at TEXT)` }
+  ], 'write');
+  console.log('✅ Tables created');
+}
+
 async function migrate() {
+  await createTables();
   console.log('📦 Fetching backup.json from GitHub...');
   const backup = await fetchBackup();
   console.log(`📦 Found ${backup.pilots?.length || 0} pilots, ${backup.flights?.length || 0} flights`);

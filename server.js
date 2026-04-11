@@ -477,6 +477,22 @@ app.delete('/api/drives/:id', verifyToken, async (req, res) => {
   }
 });
 
+// ─── Who's Flying (pilot-facing) ─────────────────────────────────────────────
+app.get('/api/flying', verifyToken, async (req, res) => {
+  try {
+    const rows = await queryAll(`
+      SELECT p.name, at.client_name, at.started_at, at.expires_at, at.group_id
+      FROM active_timers at
+      JOIN pilots p ON at.pilot_id = p.id
+      ORDER BY at.started_at ASC
+    `);
+    res.json(rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Flight Following ─────────────────────────────────────────────────────────
 app.get('/api/flight-following', verifyToken, async (req, res) => {
   try {

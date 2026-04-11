@@ -527,9 +527,10 @@
     .ff-pilot-name { text-align: left !important; font-weight: 600; min-width: 70px; }
     .ff-day-val { font-weight: 600; color: var(--text); }
     .ff-total { font-weight: 700; color: #fff; min-width: 52px; }
-    .ff-ok   { background: #4a8f1e; }
-    .ff-warn { background: #c07000; }
-    .ff-limit{ background: #c0392b; }
+    .ff-ok        { background: #4a8f1e; }  /* 6–14 days left: green */
+    .ff-warn      { background: #c07000; }  /* 5 days left: yellow/amber */
+    .ff-warn-hard { background: #c05800; }  /* 3 days left: orange */
+    .ff-limit     { background: #c0392b; }  /* ≤2 days left: red */
     #page-ff { padding: 0; }
     #ff-content { padding: 12px 16px; }
 
@@ -1373,9 +1374,10 @@ function renderStats() {
     last14.push(d.toLocaleDateString('en-CA', { timeZone: NZ_TZ }));
   }
   const daysWorked = last14.filter(d => flights.some(f => f.date === d)).length;
-  const daysRemaining = Math.max(0, 12 - daysWorked);
-  const compPct = (daysWorked / 12) * 100;
-  const compBarClass = daysWorked >= 12 ? 'wing-bar-danger' : daysWorked >= 10 ? 'wing-bar-warn' : 'wing-bar-ok';
+  const daysLeft = 14 - daysWorked; // days remaining (need min 2 off)
+  const daysRemaining = Math.max(0, daysLeft);
+  const compPct = (daysWorked / 14) * 100;
+  const compBarClass = daysLeft <= 2 ? 'wing-bar-danger' : daysLeft <= 3 ? 'wing-bar-warn' : daysLeft <= 5 ? 'wing-bar-warn' : 'wing-bar-ok';
 
   // Site breakdown
   const routeCounts = {};
@@ -1427,16 +1429,17 @@ function renderStats() {
       <div style="display:flex;justify-content:space-between;align-items:flex-end">
         <div>
           <span style="font-size:32px;font-weight:700">${daysWorked}</span>
-          <span style="font-size:14px;color:var(--muted)"> / 12 max</span>
+          <span style="font-size:14px;color:var(--muted)"> days flown</span>
         </div>
         <div style="text-align:right">
-          <span style="font-size:24px;font-weight:700;color:${daysRemaining===0?'#c0392b':daysRemaining<=2?'#c07000':'#4a8f1e'}">${daysRemaining}</span>
+          <span style="font-size:24px;font-weight:700;color:${daysLeft<=2?'#c0392b':daysLeft<=3?'#c05800':daysLeft<=5?'#c07000':'#4a8f1e'}">${daysRemaining}</span>
           <span style="font-size:13px;color:var(--muted)"> days left</span>
         </div>
       </div>
       <div class="wing-progress-wrap"><div class="wing-progress-bar ${compBarClass}" style="width:${compPct}%"></div></div>
-      ${daysRemaining === 0 ? '<div style="margin-top:8px;font-size:13px;font-weight:600;color:#c0392b">⛔ Rest day required before next flight</div>'
-        : daysRemaining <= 2 ? '<div style="margin-top:8px;font-size:13px;font-weight:600;color:#c07000">⚡ Approaching 12-day limit</div>' : ''}
+      ${daysLeft <= 2 ? '<div style="margin-top:8px;font-size:13px;font-weight:600;color:#c0392b">⛔ Must take a rest day before flying again</div>'
+        : daysLeft <= 3 ? '<div style="margin-top:8px;font-size:13px;font-weight:600;color:#c05800">⚠️ Only 1 rest day remaining</div>'
+        : daysLeft <= 5 ? '<div style="margin-top:8px;font-size:13px;font-weight:600;color:#c07000">⚡ Getting close — 2 rest days needed in 14</div>' : ''}
     </div>`;
 
   // Total kg card
@@ -1514,18 +1517,19 @@ function buildFFTable(dates, pilots) {
   let html = `<table class="ff-table"><thead><tr>
     <th class="ff-pilot-name">Pilot</th>
     ${dates.map(d => `<th class="${d === today ? 'ff-today-col' : ''}">${ffFmtDate(d)}</th>`).join('')}
-    <th>Last 14 days</th>
+    <th>Days Left</th>
   </tr></thead><tbody>`;
 
   pilots.forEach(p => {
-    const cls = p.daysWorked >= 12 ? 'ff-limit' : p.daysWorked >= 10 ? 'ff-warn' : 'ff-ok';
+    const daysLeft = 14 - p.daysWorked;
+    const cls = daysLeft <= 2 ? 'ff-limit' : daysLeft <= 3 ? 'ff-warn-hard' : daysLeft <= 5 ? 'ff-warn' : 'ff-ok';
     html += `<tr>
       <td class="ff-pilot-name">${p.name}</td>
       ${dates.map(d => {
         const cnt = p.dayCounts[d];
         return `<td class="${d === today ? 'ff-today-col' : ''}">${cnt ? `<span class="ff-day-val">${cnt}</span>` : ''}</td>`;
       }).join('')}
-      <td class="ff-total ${cls}">${p.daysWorked}</td>
+      <td class="ff-total ${cls}">${daysLeft}</td>
     </tr>`;
   });
   html += `</tbody></table>`;

@@ -55,11 +55,14 @@ async function createTables() {
   await db.execute(`CREATE TABLE IF NOT EXISTS active_timers (
     pilot_id TEXT PRIMARY KEY, client_name TEXT, started_at TEXT, expires_at TEXT, group_id TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS flight_groups (
-    id TEXT PRIMARY KEY, name TEXT, started_at TEXT)`);
+    id TEXT PRIMARY KEY, name TEXT, started_at TEXT, is_peak_trip INTEGER DEFAULT 0)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS group_members (
     group_id TEXT, pilot_id TEXT, PRIMARY KEY (group_id, pilot_id))`);
-  // Add group_id column to active_timers if it doesn't exist (migration)
+  await db.execute(`CREATE TABLE IF NOT EXISTS drives (
+    id TEXT PRIMARY KEY, pilot_id TEXT, date TEXT, group_id TEXT, notes TEXT, created_at TEXT)`);
+  // Migrations
   try { await db.execute('ALTER TABLE active_timers ADD COLUMN group_id TEXT'); } catch {}
+  try { await db.execute('ALTER TABLE flight_groups ADD COLUMN is_peak_trip INTEGER DEFAULT 0'); } catch {}
   console.log('✅ Tables ready');
 }
 
@@ -201,15 +204,16 @@ app.get('/api/my-status', verifyToken, async (req, res) => {
     const pilot = await queryOne('SELECT current_wing FROM pilots WHERE id = ?', [req.pilot.id]);
     let group = null;
     let groupPilots = [];
+    let isPeakTrip = false;
     if (timer && timer.group_id) {
       const grp = await queryOne('SELECT * FROM flight_groups WHERE id = ?', [timer.group_id]);
       if (grp) {
         group = grp.name;
+        isPeakTrip = !!grp.is_peak_trip;
         const members = await queryAll(
           'SELECT p.id, p.name FROM group_members gm JOIN pilots p ON gm.pilot_id = p.id WHERE gm.group_id = ? AND gm.pilot_id != ?',
           [timer.group_id, req.pilot.id]
         );
-        // Only include members who are still airborne
         const memberTimers = await queryAll(
           'SELECT pilot_id FROM active_timers WHERE pilot_id IN (' + members.map(() => '?').join(',') + ')',
           members.map(m => m.id)
@@ -225,7 +229,9 @@ app.get('/api/my-status', verifyToken, async (req, res) => {
       timer_expires_at: timer ? timer.expires_at : null,
       current_wing: pilot ? pilot.current_wing : null,
       group_name: group,
-      group_pilots: groupPilots
+      group_pilots: groupPilots,
+      group_id: timer ? (timer.group_id || null) : null,
+      is_peak_trip: isPeakTrip
     });
   } catch (e) {
     console.error(e);
@@ -429,18 +435,44 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
   }
 });
 
+// ─── Drives ──────────────────────────────────────────────────────────────────
+app.post('/api/drives', verifyToken, async (req, res) => {
+  try {
+    const { date, notes, group_id } = req.body;
+    if (!date) return res.status(400).json({ error: 'date required' });
+    const id = uuidv4();
+    await run('INSERT INTO drives (id, pilot_id, date, group_id, notes, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, req.pilot.id, date, group_id || null, notes || '', new Date().toISOString()]);
+    res.status(201).json({ id, message: 'Drive logged' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/drives', verifyToken, async (req, res) => {
+  try {
+    const drives = await queryAll('SELECT * FROM drives WHERE pilot_id = ? ORDER BY date DESC', [req.pilot.id]);
+    res.json(drives);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
   try {
     const { group_name, pilot_ids } = req.body;
     if (!group_name || !pilot_ids || !pilot_ids.length) {
       return res.status(400).json({ error: 'group_name and pilot_ids required' });
     }
+    const { is_peak_trip } = req.body;
     const groupId = uuidv4();
     const now = new Date();
     const expires = new Date(now.getTime() + 60 * 60 * 1000);
 
-    await run('INSERT INTO flight_groups (id, name, started_at) VALUES (?, ?, ?)',
-      [groupId, group_name, now.toISOString()]);
+    await run('INSERT INTO flight_groups (id, name, started_at, is_peak_trip) VALUES (?, ?, ?, ?)',
+      [groupId, group_name, now.toISOString(), is_peak_trip ? 1 : 0]);
 
     const pilotNames = [];
     for (const pid of pilot_ids) {

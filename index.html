@@ -1600,6 +1600,10 @@ function renderGroupsTab() {
   html += `
         </div>
       </div>
+      <label style="display:flex;align-items:center;gap:10px;margin:12px 0;cursor:pointer;">
+        <input type="checkbox" id="group-peak-trip" style="width:18px;height:18px;accent-color:#ffb74d;cursor:pointer;" />
+        <span style="font-size:14px;font-weight:600;color:#ffb74d;">🏔️ Peak Trip (Coronet Peak van run)</span>
+      </label>
       <button onclick="submitGroupAway()" style="width:100%;padding:14px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;font-family:Montserrat,sans-serif;text-transform:uppercase;letter-spacing:1px;">Send Group Away</button>
     </div>`;
 
@@ -1634,10 +1638,11 @@ async function submitGroupAway() {
   if (checked.length === 0) { toast('Select at least one pilot'); return; }
   const pilot_ids = Array.from(checked).map(c => c.dataset.pilotId);
   const pilot_names = Array.from(checked).map(c => c.dataset.pilotName);
+  const is_peak_trip = document.getElementById('group-peak-trip')?.checked || false;
   try {
     const res = await officeApi('/api/office/group-leave', {
       method: 'POST',
-      body: JSON.stringify({ group_name: name, pilot_ids })
+      body: JSON.stringify({ group_name: name, pilot_ids, is_peak_trip })
     });
     const data = await res.json();
     if (res.ok) {

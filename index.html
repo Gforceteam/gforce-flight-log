@@ -603,9 +603,14 @@
 
   <div class="page" id="page-log">
     <div class="card" id="flight-card">
-      <h2 id="card-title">New Flight</h2>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <h2 id="card-title" style="margin-bottom:0;">New Flight</h2>
+        <button id="peak-drive-btn" onclick="togglePeakDrive()" style="display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--surface);border:2px solid var(--border);border-radius:20px;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s;">
+          🚗 Peak Drive
+        </button>
+      </div>
 
-      <div class="flight-num-row">
+      <div class="flight-num-row" id="field-flightnum">
         <label>Flight #</label>
         <div class="flight-num-controls">
           <button class="flight-num-btn" onclick="adjustFlightNum(-1)">−</button>
@@ -619,7 +624,7 @@
         <input type="date" id="f-date" onchange="onDateChange()" />
       </div>
 
-      <div class="field">
+      <div id="field-weight" class="field">
         <label>Client Weight (kg)</label>
         <div class="weight-slider-row">
           <input type="range" class="weight-slider" id="f-weight" min="15" max="120" value="72" oninput="updateWeightDisplay()" />
@@ -627,7 +632,7 @@
         </div>
       </div>
 
-      <div class="field">
+      <div id="field-takeoff" class="field">
         <label>Takeoff</label>
         <div class="btn-group site" id="fg-takeoff">
           <button data-val="E">E</button>
@@ -637,7 +642,7 @@
         </div>
       </div>
 
-      <div class="field">
+      <div id="field-landing" class="field">
         <label>Landing</label>
         <div class="btn-group site" id="fg-landing">
           <button data-val="S">S</button>
@@ -647,7 +652,7 @@
         </div>
       </div>
 
-      <div class="field">
+      <div id="field-time" class="field">
         <label>Flight Time (min)</label>
         <div class="btn-group" id="fg-time">
           <button data-val="5">5</button>
@@ -661,7 +666,7 @@
         <textarea id="f-notes" placeholder="Optional..."></textarea>
       </div>
 
-      <div class="field">
+      <div id="field-wing" class="field">
         <label>Wing Registration</label>
         <input type="text" id="f-wing" placeholder="e.g. ZK-GFC" autocomplete="off"
           onchange="updateWing(this.value)" />
@@ -1150,19 +1155,71 @@ function onDateChange() {
   updateFlightNumForDate(date);
 }
 
+// ─── Peak Drive Toggle ────────────────────────────────────────────────────────
+let isPeakDrive = false;
+
+function togglePeakDrive() {
+  if (editingId !== null) return; // can't switch mode while editing
+  isPeakDrive = !isPeakDrive;
+  const btn = document.getElementById('peak-drive-btn');
+  const greyFields = ['field-weight', 'field-takeoff', 'field-landing', 'field-time', 'field-wing', 'field-flightnum'];
+  if (isPeakDrive) {
+    btn.style.background = 'var(--warning)';
+    btn.style.borderColor = 'var(--warning)';
+    btn.style.color = '#292f36';
+    document.getElementById('card-title').textContent = 'Peak Drive';
+    document.getElementById('save-btn').textContent = '🚗 Log Drive';
+    greyFields.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.style.opacity = '0.35'; el.style.pointerEvents = 'none'; }
+    });
+  } else {
+    btn.style.background = 'var(--surface)';
+    btn.style.borderColor = 'var(--border)';
+    btn.style.color = 'var(--muted)';
+    document.getElementById('card-title').textContent = 'New Flight';
+    document.getElementById('save-btn').textContent = 'Save Flight';
+    greyFields.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.style.opacity = ''; el.style.pointerEvents = ''; }
+    });
+  }
+}
+
 // ─── Save Flight ──────────────────────────────────────────────────────────────
 async function saveFlight() {
   if (myStatus.status !== 'airborne') {
     toast('You must be sent away by office before logging a flight');
     return;
   }
+
   const date = document.getElementById('f-date').value;
+  const notes = document.getElementById('f-notes').value;
+
+  // Peak Drive mode — log to drives endpoint
+  if (isPeakDrive) {
+    setServerStatus('syncing');
+    try {
+      const res = await api('/api/drives', {
+        method: 'POST',
+        body: JSON.stringify({ date, notes, group_id: myStatus.group_id || null })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast('🚗 Drive logged!');
+      resetForm();
+      await loadMyData();
+    } catch (e) {
+      toast('Save failed: ' + e.message);
+      setServerStatus('offline');
+    }
+    return;
+  }
+
   const flightNum = parseInt(document.getElementById('f-num-display').textContent);
   const weight = document.getElementById('f-weight').value;
   const takeoff = getGroupVal('fg-takeoff');
   const landing = getGroupVal('fg-landing');
   const time = getGroupVal('fg-time');
-  const notes = document.getElementById('f-notes').value;
 
   if (!date || !flightNum || !weight || !takeoff || !landing || !time) {
     toast('Fill in all required fields');
@@ -1200,6 +1257,13 @@ async function saveFlight() {
 
 function resetForm() {
   editingId = null;
+  // Reset peak drive mode
+  isPeakDrive = false;
+  const btn = document.getElementById('peak-drive-btn');
+  if (btn) { btn.style.background = 'var(--surface)'; btn.style.borderColor = 'var(--border)'; btn.style.color = 'var(--muted)'; }
+  ['field-weight','field-takeoff','field-landing','field-time','field-wing','field-flightnum'].forEach(id => {
+    const el = document.getElementById(id); if (el) { el.style.opacity = ''; el.style.pointerEvents = ''; }
+  });
   document.getElementById('card-title').textContent = 'New Flight';
   document.getElementById('save-btn').textContent = 'Save Flight';
   document.getElementById('cancel-btn').style.display = 'none';
@@ -1666,10 +1730,6 @@ function renderGroupsTab() {
   html += `
         </div>
       </div>
-      <label style="display:flex;align-items:center;gap:10px;margin:12px 0;cursor:pointer;">
-        <input type="checkbox" id="group-peak-trip" style="width:18px;height:18px;accent-color:#ffb74d;cursor:pointer;" />
-        <span style="font-size:14px;font-weight:600;color:#ffb74d;">🏔️ Peak Trip (Coronet Peak van run)</span>
-      </label>
       <button onclick="submitGroupAway()" style="width:100%;padding:14px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;font-family:Montserrat,sans-serif;text-transform:uppercase;letter-spacing:1px;">Send Group Away</button>
     </div>`;
 
@@ -1729,11 +1789,10 @@ async function submitGroupAway() {
   const available = officePilots.filter(p => p.status !== 'airborne' && isSignedIn(p));
   const pilot_ids = available.filter(p => _groupSelected.has(p.id)).map(p => p.id);
   const pilot_names = available.filter(p => _groupSelected.has(p.id)).map(p => p.name);
-  const is_peak_trip = document.getElementById('group-peak-trip')?.checked || false;
   try {
     const res = await officeApi('/api/office/group-leave', {
       method: 'POST',
-      body: JSON.stringify({ group_name: name, pilot_ids, is_peak_trip })
+      body: JSON.stringify({ group_name: name, pilot_ids })
     });
     const data = await res.json();
     if (res.ok) {

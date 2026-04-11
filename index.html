@@ -1778,7 +1778,8 @@ function renderOfficeTab() {
         </div>
         ${!disabled ? `<div class="pilot-actions">
           ${isAirborne
-            ? `<button class="btn-landed" onclick="doLandedEarly('${p.id}')">Flying</button>`
+            ? `<button class="btn-landed" style="cursor:default;opacity:1;background:var(--warning);color:#292f36;">🪂 Flying</button>
+               <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name}')">Cancel</button>`
             : `<button class="btn-leave" onclick="doLeaveOffice('${p.id}')">Away</button>`
           }
         </div>` : ''}
@@ -1816,6 +1817,11 @@ async function doLeaveOffice(pilotId) {
   const data = await res.json();
   if (res.ok) { toast(data.message); await loadOfficeData(); }
   else { toast(data.error || 'Error'); }
+}
+
+function confirmLandedEarly(pilotId, pilotName) {
+  if (!confirm(`Cancel timer for ${pilotName}? This will mark them as back in office.`)) return;
+  doLandedEarly(pilotId);
 }
 
 async function doLandedEarly(pilotId) {

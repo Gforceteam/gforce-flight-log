@@ -778,6 +778,7 @@
 <script>
 // ─── Config ──────────────────────────────────────────────────────────────────
 const API_BASE = 'https://gforce-api.fly.dev';
+const VAPID_PUBLIC_KEY = 'BGpwh5XQFo1PLmfcYqAwO3sFt8Y4JNMX89x594oX76yTW4cttHEgvcIndfNa-IM3RyjXW0-n_W3A2svCME2fySQ';
 
 // ─── Pilot State ─────────────────────────────────────────────────────────────
 let pilotToken = localStorage.getItem('gforce_pilot_token');
@@ -819,6 +820,7 @@ let currentWing = '';
 document.addEventListener('DOMContentLoaded', () => {
   if (pilotToken && pilotId) {
     showApp(pilotName);
+    subscribeToPush(); // re-subscribe on page reload (subscription may have expired)
   } else if (officeToken) {
     showOfficeDashboard();
   } else {
@@ -909,6 +911,8 @@ async function doLogin() {
       localStorage.setItem('gforce_pilot_id', pilotId);
       localStorage.setItem('gforce_pilot_name', pilotName);
       showApp(pilotName);
+      // Subscribe to push notifications after login (non-blocking)
+      subscribeToPush();
     } else {
       document.getElementById('login-error').textContent = 'Invalid PIN. Try again.';
       document.getElementById('login-error').style.display = 'block';
@@ -921,6 +925,7 @@ async function doLogin() {
 
 // ─── Pilot Logout ─────────────────────────────────────────────────────────────
 function doLogout() {
+  unsubscribeFromPush(); // remove push subscription from server
   pilotToken = pilotId = pilotName = null;
   clearInterval(window._statusPoll);
   localStorage.removeItem('gforce_pilot_token');
@@ -2334,6 +2339,52 @@ function toast(msg) {
   el.textContent = msg;
   el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ─── Push Subscription ───────────────────────────────────────────────────────
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+async function subscribeToPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    // Request notification permission first (needs user context — best effort here)
+    if (Notification.permission === 'default') await Notification.requestPermission();
+    if (Notification.permission !== 'granted') return;
+
+    const reg = await navigator.serviceWorker.ready;
+    // Reuse existing subscription or create a new one
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+    // Save subscription to server
+    await api('/api/pilot/push-subscription', {
+      method: 'POST',
+      body: JSON.stringify({ subscription: sub })
+    });
+    console.log('✅ Push subscription active');
+  } catch (e) {
+    console.log('Push subscription unavailable:', e.message);
+  }
+}
+
+async function unsubscribeFromPush() {
+  try {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) await sub.unsubscribe();
+    }
+    await api('/api/pilot/push-subscription', { method: 'DELETE' });
+  } catch (e) {}
 }
 
 // ─── Pilot Sent-Away Notification ───────────────────────────────────────────

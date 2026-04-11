@@ -1208,6 +1208,7 @@ async function saveFlight() {
       toast('🚗 Drive logged!');
       resetForm();
       await loadMyData();
+      showPage('dashboard');
     } catch (e) {
       toast('Save failed: ' + e.message);
       setServerStatus('offline');

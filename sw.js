@@ -1,4 +1,4 @@
-const CACHE = 'gforce-v1';
+const CACHE = 'gforce-v2';
 const APP = '/gforce-flight-log/';
 
 self.addEventListener('install', e => {
@@ -23,7 +23,6 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  // Only handle app requests
   if (!url.pathname.startsWith(APP) && url.pathname !== APP.slice(0,-1)) return;
 
   e.respondWith(
@@ -41,6 +40,18 @@ self.addEventListener('fetch', e => {
         }
         return new Response('', { status: 503 });
       });
+    })
+  );
+});
+
+// When pilot taps the system notification, focus or open the app
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
+      const appClient = cs.find(c => c.url.includes('/gforce-flight-log/'));
+      if (appClient) return appClient.focus();
+      return clients.openWindow(APP);
     })
   );
 });

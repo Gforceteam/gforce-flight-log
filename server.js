@@ -426,6 +426,22 @@ app.put('/api/pilot/available', verifyToken, async (req, res) => {
   }
 });
 
+// ─── Did Not Fly — pilot cancels their own timer without logging a flight ─────
+app.post('/api/pilot/cancel-timer', verifyToken, async (req, res) => {
+  try {
+    const timer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
+    if (!timer) return res.status(404).json({ error: 'No active timer' });
+    await run('DELETE FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
+    await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)',
+      [uuidv4(), req.pilot.id, 'did_not_fly', new Date().toISOString()]);
+    broadcast({ type: 'DID_NOT_FLY', pilot_id: req.pilot.id, pilot_name: req.pilot.name });
+    res.json({ message: 'Timer cancelled — marked as did not fly' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Drives ───────────────────────────────────────────────────────────────────
 app.get('/api/drives', verifyToken, async (req, res) => {
   try {

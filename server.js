@@ -64,7 +64,9 @@ async function createTables() {
     id TEXT PRIMARY KEY, pilot_id TEXT, client_name TEXT, date TEXT,
     flight_num INTEGER, weight REAL, takeoff TEXT, landing TEXT,
     time INTEGER, photos REAL, notes TEXT, landed_at TEXT,
-    created_at TEXT, wing_reg TEXT)`);
+    created_at TEXT, wing_reg TEXT, hours_worked REAL)`);
+  // Add hours_worked column to existing DBs that predate this column
+  try { await db.execute('ALTER TABLE flights ADD COLUMN hours_worked REAL'); } catch (_) {}
   await db.execute(`CREATE TABLE IF NOT EXISTS office_logs (
     id TEXT PRIMARY KEY, pilot_id TEXT, event TEXT, created_at TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS active_timers (
@@ -436,6 +438,26 @@ app.post('/api/pilot/cancel-timer', verifyToken, async (req, res) => {
       [uuidv4(), req.pilot.id, 'did_not_fly', new Date().toISOString()]);
     broadcast({ type: 'DID_NOT_FLY', pilot_id: req.pilot.id, pilot_name: req.pilot.name });
     res.json({ message: 'Timer cancelled — marked as did not fly' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Daily Hours Worked — stored on last flight of the day ───────────────────
+app.put('/api/pilot/hours', verifyToken, async (req, res) => {
+  const { date, hours } = req.body;
+  if (!date) return res.status(400).json({ error: 'date required' });
+  try {
+    // Find the last flight for this pilot on this date (highest flight_num)
+    const flight = await queryOne(
+      'SELECT id FROM flights WHERE pilot_id = ? AND date = ? ORDER BY flight_num DESC, created_at DESC LIMIT 1',
+      [req.pilot.id, date]
+    );
+    if (!flight) return res.status(404).json({ error: 'No flights on this date' });
+    const h = hours !== null && hours !== '' ? parseFloat(hours) : null;
+    await run('UPDATE flights SET hours_worked = ? WHERE id = ?', [h, flight.id]);
+    res.json({ message: 'Hours updated', flight_id: flight.id, hours: h });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: e.message });

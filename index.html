@@ -1584,9 +1584,8 @@ function officeApi(path, opts = {}) {
 function showOfficeDashboard() {
   document.getElementById('login-page').style.display = 'none';
   document.getElementById('office-dashboard').style.display = 'block';
-  loadOfficeData();
   connectWS();
-  showOfficeTab('groups');
+  loadOfficeData().then(() => showOfficeTab('groups'));
 }
 
 function officeDoLogout() {
@@ -1613,6 +1612,7 @@ async function loadOfficeData() {
     renderOfficeTab();
     renderTodayTab();
     renderFlightsTab();
+    renderGroupsTab();
   } catch (e) {
     toast('Cannot connect to server');
   }
@@ -1630,7 +1630,10 @@ function renderGroupsTab() {
 
   let html = `
     <div style="padding:16px 0 8px;">
-      <div class="section-title" style="margin-top:0;">Send Group Away</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div class="section-title" style="margin-top:0;margin-bottom:0;">Send Group Away</div>
+        <button onclick="loadOfficeData()" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:12px;padding:4px 10px;cursor:pointer;">↻ Refresh</button>
+      </div>
       <div class="card" style="margin-bottom:16px;">
         <div class="field">
           <label>Group Name / Booking</label>
@@ -1691,20 +1694,22 @@ function renderGroupsTab() {
 const _groupSelected = new Set();
 
 function toggleGroupPilot(id) {
-  const row = document.getElementById(`grp-row-${id}`);
-  const tick = document.getElementById(`grp-tick-${id}`);
-  const chk = document.getElementById(`grp-chk-${id}`);
+  const row = document.getElementById('grp-row-' + id);
+  const tick = document.getElementById('grp-tick-' + id);
+  const chk  = document.getElementById('grp-chk-'  + id);
+  if (!row) return;
   if (_groupSelected.has(id)) {
     _groupSelected.delete(id);
     tick.style.display = 'none';
-    row.style.border = '2px solid transparent';
+    row.style.borderColor = 'transparent';
     chk.style.background = 'var(--card)';
+    tick.style.color = 'var(--accent)';
   } else {
     _groupSelected.add(id);
     tick.style.display = 'block';
-    row.style.border = '2px solid var(--accent)';
+    row.style.borderColor = 'var(--accent)';
     chk.style.background = 'var(--accent)';
-    chk.querySelector('span').style.color = '#000';
+    tick.style.color = '#000';
   }
 }
 

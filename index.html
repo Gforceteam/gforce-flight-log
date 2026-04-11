@@ -778,6 +778,8 @@ let pilotId = localStorage.getItem('gforce_pilot_id');
 let pilotName = localStorage.getItem('gforce_pilot_name');
 let editingId = null;
 let myFlights = [];
+let myDrives = [];
+let statsMonthOffset = 0; // 0 = current month, -1 = last month, etc.
 let myStatus = { status: 'in_office', client_name: null, timer_expires_at: null };
 
 // ─── Office State ─────────────────────────────────────────────────────────────
@@ -976,13 +978,15 @@ function api(path, opts = {}) {
 
 async function loadMyData() {
   try {
-    const [statusRes, flightsRes] = await Promise.all([
+    const [statusRes, flightsRes, drivesRes] = await Promise.all([
       api('/api/my-status'),
-      api('/api/flights')
+      api('/api/flights'),
+      api('/api/drives')
     ]);
     if (statusRes.status === 401 || flightsRes.status === 401) { doLogout(); return; }
     myStatus = await statusRes.json();
     myFlights = flightsRes.ok ? await flightsRes.json() : [];
+    myDrives = drivesRes.ok ? await drivesRes.json() : [];
     renderDashboard();
     renderFlights();
     updateStatusBadge();
@@ -1304,26 +1308,52 @@ async function updateWing(val) {
   } catch {}
 }
 
+function changeStatsMonth(delta) {
+  statsMonthOffset = Math.min(0, statsMonthOffset + delta);
+  renderStats();
+}
+
 function renderStats() {
   const flights = myFlights;
-  if (flights.length === 0) {
-    document.getElementById('stats-grid').innerHTML = '<div class="empty-state" style="grid-column:1/-1">No flights yet</div>';
+  const drives = myDrives || [];
+
+  // Month navigator
+  const now = new Date();
+  const viewDate = new Date(now.getFullYear(), now.getMonth() + statsMonthOffset, 1);
+  const isCurrentMonth = statsMonthOffset === 0;
+  const monthKey = viewDate.toLocaleDateString('en-CA', { timeZone: NZ_TZ }).slice(0, 7);
+  const monthLabel = viewDate.toLocaleDateString('en-NZ', { month: 'long', year: 'numeric', timeZone: NZ_TZ });
+  const monthEndDate = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0);
+  const monthStartStr = monthKey + '-01';
+  const monthEndStr = monthEndDate.toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+
+  const navHtml = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding:10px 14px;background:var(--surface);border-radius:10px;grid-column:1/-1;">
+    <button onclick="changeStatsMonth(-1)" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 14px;cursor:pointer;font-size:20px;line-height:1;">‹</button>
+    <div style="font-weight:700;font-size:15px;color:var(--accent);">${monthLabel}</div>
+    <button onclick="changeStatsMonth(1)" ${isCurrentMonth ? 'disabled' : ''} style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 14px;cursor:pointer;font-size:20px;line-height:1;opacity:${isCurrentMonth ? '0.3' : '1'};">›</button>
+  </div>`;
+
+  const monthFlights = flights.filter(f => f.date >= monthStartStr && f.date <= monthEndStr);
+  const monthDrives  = drives.filter(d => d.date >= monthStartStr && d.date <= monthEndStr);
+
+  const t = todayStr();
+  const effectiveEnd = isCurrentMonth ? t : monthEndStr;
+  const daysElapsed = Math.max(1, Math.round((new Date(effectiveEnd + 'T12:00:00') - new Date(monthStartStr + 'T12:00:00')) / 86400000) + 1);
+
+  if (flights.length === 0 && drives.length === 0) {
+    document.getElementById('stats-grid').innerHTML = `${navHtml}<div class="empty-state" style="grid-column:1/-1">No flights yet</div>`;
     document.getElementById('stats-breakdown').innerHTML = '';
     return;
   }
 
-  const t = todayStr();
   const ws = getWeekStart(t);
   const we = getWeekEnd(ws);
-  const monthStart = t.slice(0, 7) + '-01';
-  const dayOfMonth = new Date(t + 'T12:00:00').getDate();
 
   const todayFlights = flights.filter(f => f.date === t);
   const weekFlights  = flights.filter(f => f.date >= ws && f.date <= we);
-  const monthFlights = flights.filter(f => f.date >= monthStart && f.date <= t);
 
-  const avgWeight = (flights.reduce((sum, f) => sum + Number(f.weight), 0) / flights.length).toFixed(1);
-  const avgPerDay = monthFlights.length ? (monthFlights.length / dayOfMonth).toFixed(1) : '0';
+  const avgWeight = flights.length ? (flights.reduce((sum, f) => sum + Number(f.weight), 0) / flights.length).toFixed(1) : '0';
+  const avgPerDay = monthFlights.length ? (monthFlights.length / daysElapsed).toFixed(1) : '0';
 
   // Total kg + elephant equivalent
   const totalKg = Math.round(flights.reduce((sum, f) => sum + Number(f.weight), 0));
@@ -1352,23 +1382,25 @@ function renderStats() {
   flights.forEach(f => { const r = f.takeoff + ' → ' + f.landing; routeCounts[r] = (routeCounts[r] || 0) + 1; });
   const topRoutes = Object.entries(routeCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
-  // Monthly chart — last 7 months
+  // Monthly chart — 7 months ending at viewed month
   const months = [];
   for (let i = 6; i >= 0; i--) {
-    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i);
+    const d = new Date(viewDate.getFullYear(), viewDate.getMonth() - i, 1);
     const key = d.toLocaleDateString('en-CA', { timeZone: NZ_TZ }).slice(0, 7);
     const label = d.toLocaleDateString('en-NZ', { month: 'short', timeZone: NZ_TZ });
     const count = flights.filter(f => f.date.startsWith(key)).length;
-    months.push({ label, count });
+    months.push({ label, count, active: key === monthKey });
   }
   const maxMonth = Math.max(...months.map(m => m.count), 1);
 
-  document.getElementById('stats-grid').innerHTML = `
+  document.getElementById('stats-grid').innerHTML = navHtml + `
+    <div class="stat-card"><div class="stat-number">${monthFlights.length}</div><div class="stat-label">${isCurrentMonth ? 'This Month' : 'That Month'}</div></div>
+    <div class="stat-card"><div class="stat-number">${avgPerDay}</div><div class="stat-label">Avg / Day</div></div>
+    ${isCurrentMonth ? `
     <div class="stat-card"><div class="stat-number">${todayFlights.length}</div><div class="stat-label">Today</div></div>
-    <div class="stat-card"><div class="stat-number">${weekFlights.length}</div><div class="stat-label">This Week</div></div>
-    <div class="stat-card"><div class="stat-number">${monthFlights.length}</div><div class="stat-label">This Month</div></div>
+    <div class="stat-card"><div class="stat-number">${weekFlights.length}</div><div class="stat-label">This Week</div></div>` : ''}
     <div class="stat-card"><div class="stat-number">${avgWeight}<span style="font-size:16px;font-weight:500">kg</span></div><div class="stat-label">Avg Pax Weight</div></div>
-    <div class="stat-card" style="grid-column:1/-1"><div class="stat-number">${avgPerDay}</div><div class="stat-label">Avg Flights / Day This Month</div></div>
+    <div class="stat-card"><div class="stat-number">${monthDrives.length}</div><div class="stat-label">Drives</div></div>
   `;
 
   // Wing card
@@ -1436,14 +1468,28 @@ function renderStats() {
       <div class="month-chart">
         ${months.map(m => `
           <div class="month-row">
-            <div class="month-label">${m.label}</div>
-            <div class="month-bar-wrap"><div class="month-bar" style="width:${m.count?(m.count/maxMonth)*100:0}%"></div></div>
-            <div class="month-count">${m.count || ''}</div>
+            <div class="month-label" style="${m.active?'color:var(--accent);font-weight:700;':''}">${m.label}</div>
+            <div class="month-bar-wrap"><div class="month-bar" style="width:${m.count?(m.count/maxMonth)*100:0}%;${m.active?'background:var(--accent);':''}"></div></div>
+            <div class="month-count" style="${m.active?'color:var(--accent);font-weight:700;':''}">${m.count||''}</div>
           </div>`).join('')}
       </div>
     </div>`;
 
-  document.getElementById('stats-breakdown').innerHTML = wingCard + compCard + kgCard + siteCard + chartCard;
+  // Drives card
+  const drivesCard = monthDrives.length ? `
+    <div class="card stat-section">
+      <div class="stat-section-title">🚐 Peak Drives</div>
+      ${monthDrives.map(d => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
+          <div>
+            <div style="font-size:14px;font-weight:600;">${fmtDate(d.date)}</div>
+            ${d.notes ? `<div style="font-size:12px;color:var(--muted);margin-top:2px;">${d.notes}</div>` : ''}
+          </div>
+          <div style="font-size:12px;color:var(--warning);font-weight:700;">PEAK</div>
+        </div>`).join('')}
+    </div>` : '';
+
+  document.getElementById('stats-breakdown').innerHTML = wingCard + compCard + kgCard + siteCard + chartCard + drivesCard;
 }
 
 function showPage(name) {
@@ -1454,7 +1500,7 @@ function showPage(name) {
   document.getElementById('nav-'+name).classList.add('active');
   const hdr = document.getElementById('header-'+name);
   if (hdr) hdr.style.display = 'block';
-  if (name === 'stats') renderStats();
+  if (name === 'stats') { statsMonthOffset = 0; renderStats(); }
   if (name === 'ff') renderPilotFF();
 }
 

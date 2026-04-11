@@ -379,7 +379,7 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
     if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
 
     const now = new Date();
-    const expires = new Date(now.getTime() + 90 * 60 * 1000);
+    const expires = new Date(now.getTime() + 60 * 60 * 1000);
 
     await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at) VALUES (?, ?, ?, ?)',
       [pilot_id, client_name || null, now.toISOString(), expires.toISOString()]);

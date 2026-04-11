@@ -1621,8 +1621,12 @@ async function loadOfficeData() {
 // ─── Groups Tab ───────────────────────────────────────────────────────────────
 function renderGroupsTab() {
   const el = document.getElementById('groups-panel');
-  const available = officePilots.filter(p => p.status !== 'airborne').sort((a, b) => a.name.localeCompare(b.name));
-  const airborne = officePilots.filter(p => p.status === 'airborne').sort((a, b) => a.name.localeCompare(b.name));
+  const now = Date.now();
+  const ACTIVE_MS = 3 * 60 * 1000; // signed in = seen in last 3 min
+  const isSignedIn = p => p.last_seen && (now - new Date(p.last_seen).getTime()) < ACTIVE_MS;
+  const alpha = (a, b) => a.name.localeCompare(b.name);
+  const available = officePilots.filter(p => p.status !== 'airborne' && isSignedIn(p)).sort(alpha);
+  const airborne = officePilots.filter(p => p.status === 'airborne').sort(alpha);
 
   let html = `
     <div style="padding:16px 0 8px;">
@@ -1637,14 +1641,16 @@ function renderGroupsTab() {
           <div id="group-pilot-checkboxes" style="display:flex;flex-direction:column;gap:8px;">`;
 
   if (available.length === 0) {
-    html += `<div style="color:var(--muted);font-size:14px;">No pilots available (all airborne)</div>`;
+    html += `<div style="color:var(--muted);font-size:14px;">No pilots signed in and available</div>`;
   } else {
     available.forEach(p => {
       html += `
-        <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface);border-radius:8px;cursor:pointer;">
-          <input type="checkbox" data-pilot-id="${p.id}" data-pilot-name="${p.name}" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;" />
+        <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--surface);border-radius:8px;cursor:pointer;border:2px solid transparent;" id="grp-row-${p.id}" onclick="toggleGroupPilot('${p.id}')">
+          <div style="width:22px;height:22px;border-radius:5px;border:2px solid var(--accent);background:var(--card);display:flex;align-items:center;justify-content:center;flex-shrink:0;" id="grp-chk-${p.id}">
+            <span id="grp-tick-${p.id}" style="display:none;color:var(--accent);font-size:16px;line-height:1;">✓</span>
+          </div>
           <span style="font-size:15px;font-weight:500;">${p.name}</span>
-        </label>`;
+        </div>`;
     });
   }
 
@@ -1682,13 +1688,36 @@ function renderGroupsTab() {
   el.innerHTML = html;
 }
 
+const _groupSelected = new Set();
+
+function toggleGroupPilot(id) {
+  const row = document.getElementById(`grp-row-${id}`);
+  const tick = document.getElementById(`grp-tick-${id}`);
+  const chk = document.getElementById(`grp-chk-${id}`);
+  if (_groupSelected.has(id)) {
+    _groupSelected.delete(id);
+    tick.style.display = 'none';
+    row.style.border = '2px solid transparent';
+    chk.style.background = 'var(--card)';
+  } else {
+    _groupSelected.add(id);
+    tick.style.display = 'block';
+    row.style.border = '2px solid var(--accent)';
+    chk.style.background = 'var(--accent)';
+    chk.querySelector('span').style.color = '#000';
+  }
+}
+
 async function submitGroupAway() {
   const name = document.getElementById('group-name-input').value.trim();
   if (!name) { toast('Enter a group name or booking number'); return; }
-  const checked = document.querySelectorAll('#group-pilot-checkboxes input[type=checkbox]:checked');
-  if (checked.length === 0) { toast('Select at least one pilot'); return; }
-  const pilot_ids = Array.from(checked).map(c => c.dataset.pilotId);
-  const pilot_names = Array.from(checked).map(c => c.dataset.pilotName);
+  if (_groupSelected.size === 0) { toast('Select at least one pilot'); return; }
+  const now = Date.now();
+  const ACTIVE_MS = 3 * 60 * 1000;
+  const isSignedIn = p => p.last_seen && (now - new Date(p.last_seen).getTime()) < ACTIVE_MS;
+  const available = officePilots.filter(p => p.status !== 'airborne' && isSignedIn(p));
+  const pilot_ids = available.filter(p => _groupSelected.has(p.id)).map(p => p.id);
+  const pilot_names = available.filter(p => _groupSelected.has(p.id)).map(p => p.name);
   const is_peak_trip = document.getElementById('group-peak-trip')?.checked || false;
   try {
     const res = await officeApi('/api/office/group-leave', {
@@ -1699,7 +1728,7 @@ async function submitGroupAway() {
     if (res.ok) {
       toast(`Group "${name}" away — ${pilot_names.join(', ')}`);
       document.getElementById('group-name-input').value = '';
-      document.querySelectorAll('#group-pilot-checkboxes input[type=checkbox]').forEach(c => c.checked = false);
+      _groupSelected.clear();
       await loadOfficeData();
       renderGroupsTab();
     } else {

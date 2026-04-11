@@ -496,6 +496,22 @@
     .today-table .col-pilot { font-weight: 600; color: var(--accent); }
     .today-table .col-time { color: var(--muted); font-size: 12px; white-space: nowrap; }
 
+    /* ── STATS EXTRAS ──────────────────────────────────────────────────── */
+    .stat-section { margin-bottom: 12px; }
+    .stat-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 10px; }
+    .wing-progress-wrap { margin-top: 10px; background: var(--surface); border-radius: 6px; height: 8px; overflow: hidden; }
+    .wing-progress-bar { height: 100%; border-radius: 6px; transition: width 0.5s; }
+    .wing-bar-ok   { background: #4a8f1e; }
+    .wing-bar-warn { background: #c07000; }
+    .wing-bar-danger { background: #c0392b; }
+    .month-chart { margin-top: 4px; }
+    .month-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+    .month-label { width: 28px; color: var(--muted); font-size: 11px; text-align: right; flex-shrink: 0; }
+    .month-bar-wrap { flex: 1; background: var(--surface); border-radius: 4px; height: 18px; overflow: hidden; }
+    .month-bar { background: var(--accent); height: 100%; border-radius: 4px; transition: width 0.4s; min-width: 0; }
+    .month-count { width: 22px; font-size: 12px; font-weight: 600; color: var(--text); text-align: right; flex-shrink: 0; }
+    #f-wing { text-transform: uppercase; }
+
     /* ── FLIGHT FOLLOWING ──────────────────────────────────────────────── */
     .ff-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .ff-table { border-collapse: collapse; font-size: 12px; min-width: 600px; }
@@ -650,6 +666,12 @@
         <textarea id="f-notes" placeholder="Optional..."></textarea>
       </div>
 
+      <div class="field">
+        <label>Wing Registration</label>
+        <input type="text" id="f-wing" placeholder="e.g. ZK-GFC" autocomplete="off"
+          onchange="updateWing(this.value)" />
+      </div>
+
       <button class="btn-primary" id="save-btn" onclick="saveFlight()">Save Flight</button>
       <button class="btn-cancel" id="cancel-btn" onclick="cancelEdit()" style="display:none">Cancel Edit</button>
     </div>
@@ -768,6 +790,7 @@ let alertDismissed = new Set();
 let timerInterval;
 let todaySort = { col: 'time', dir: 'asc' }; // col: 'time'|'pilot'|'client', dir: 'asc'|'desc'
 let flightsSearch = '';
+let currentWing = '';
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -908,8 +931,13 @@ function startStatusPoll() {
       const res = await api('/api/my-status');
       if (!res.ok) return;
       const newStatus = await res.json();
+      myStatus = { status: newStatus.status, client_name: newStatus.client_name, timer_expires_at: newStatus.timer_expires_at };
+      if (newStatus.current_wing && newStatus.current_wing !== currentWing) {
+        currentWing = newStatus.current_wing;
+        const wingEl = document.getElementById('f-wing');
+        if (wingEl) wingEl.value = currentWing;
+      }
       if (newStatus.client_name !== myStatus.client_name || newStatus.status !== myStatus.status) {
-        myStatus = newStatus;
         renderDashboard();
         updateStatusBadge();
       }
@@ -921,6 +949,8 @@ function setupForm() {
   const dateEl = document.getElementById('f-date');
   dateEl.value = todayStr();
   const hd1 = document.getElementById('header-date'); if (hd1) hd1.textContent = fmtDate(todayStr());
+  const wingEl = document.getElementById('f-wing');
+  if (wingEl) wingEl.value = currentWing;
   updateWeightDisplay();
   onDateChange();
 }
@@ -1119,16 +1149,19 @@ async function saveFlight() {
   setServerStatus('syncing');
   try {
     if (editingId !== null) {
+      const wingReg = (document.getElementById('f-wing')?.value || '').trim().toUpperCase() || null;
       const res = await api(`/api/flights/${editingId}`, {
         method: 'PUT',
-        body: JSON.stringify({ date, flight_num: flightNum, weight, takeoff, landing, time, notes })
+        body: JSON.stringify({ date, flight_num: flightNum, weight, takeoff, landing, time, notes, wing_reg: wingReg })
       });
       if (!res.ok) throw new Error(await res.text());
       toast('Flight updated!');
     } else {
+      const wingReg = (document.getElementById('f-wing')?.value || '').trim().toUpperCase() || null;
+      if (wingReg && wingReg !== currentWing) currentWing = wingReg;
       const res = await api('/api/flights', {
         method: 'POST',
-        body: JSON.stringify({ date, flight_num: flightNum, weight, takeoff, landing, time, notes })
+        body: JSON.stringify({ date, flight_num: flightNum, weight, takeoff, landing, time, notes, wing_reg: wingReg })
       });
       if (!res.ok) throw new Error(await res.text());
       toast('Flight logged! Office notified.');
@@ -1187,6 +1220,8 @@ function editFlight(id) {
   setGroupVal('fg-landing', f.landing);
   setGroupVal('fg-time', String(f.time));
   document.getElementById('f-notes').value = f.notes || '';
+  const wingEl = document.getElementById('f-wing');
+  if (wingEl) wingEl.value = f.wing_reg || currentWing;
   showPage('log');
   document.getElementById('card-title').textContent = 'Edit Flight';
   document.getElementById('save-btn').textContent = 'Update Flight';
@@ -1246,6 +1281,17 @@ async function deleteFlight(id) {
   }
 }
 
+async function updateWing(val) {
+  const reg = val.trim().toUpperCase();
+  currentWing = reg;
+  const el = document.getElementById('f-wing');
+  if (el) el.value = reg;
+  if (!reg) return;
+  try {
+    await api('/api/pilot/wing', { method: 'PUT', body: JSON.stringify({ wing_reg: reg }) });
+  } catch {}
+}
+
 function renderStats() {
   const flights = myFlights;
   if (flights.length === 0) {
@@ -1257,23 +1303,53 @@ function renderStats() {
   const t = todayStr();
   const ws = getWeekStart(t);
   const we = getWeekEnd(ws);
-
-  // Month bounds
   const monthStart = t.slice(0, 7) + '-01';
-  const today = new Date(t + 'T00:00:00');
-  const dayOfMonth = today.getDate();
+  const dayOfMonth = new Date(t + 'T12:00:00').getDate();
 
   const todayFlights = flights.filter(f => f.date === t);
   const weekFlights  = flights.filter(f => f.date >= ws && f.date <= we);
   const monthFlights = flights.filter(f => f.date >= monthStart && f.date <= t);
 
-  const avgWeight = flights.length
-    ? (flights.reduce((sum, f) => sum + Number(f.weight), 0) / flights.length).toFixed(1)
-    : '—';
+  const avgWeight = (flights.reduce((sum, f) => sum + Number(f.weight), 0) / flights.length).toFixed(1);
+  const avgPerDay = monthFlights.length ? (monthFlights.length / dayOfMonth).toFixed(1) : '0';
 
-  const avgPerDay = monthFlights.length
-    ? (monthFlights.length / dayOfMonth).toFixed(1)
-    : '0';
+  // Total kg + elephant equivalent
+  const totalKg = Math.round(flights.reduce((sum, f) => sum + Number(f.weight), 0));
+  const elephants = (totalKg / 6000).toFixed(1);
+
+  // Wing stats
+  const wingFlights = currentWing ? flights.filter(f => f.wing_reg === currentWing) : [];
+  const wingUsed = wingFlights.length;
+  const wingRemaining = 1000 - wingUsed;
+  const wingPct = Math.min(100, (wingUsed / 1000) * 100);
+  const wingBarClass = wingRemaining <= 50 ? 'wing-bar-danger' : wingRemaining <= 100 ? 'wing-bar-warn' : 'wing-bar-ok';
+
+  // Compliance: unique days worked in last 14
+  const last14 = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    last14.push(d.toLocaleDateString('en-CA', { timeZone: NZ_TZ }));
+  }
+  const daysWorked = last14.filter(d => flights.some(f => f.date === d)).length;
+  const daysRemaining = Math.max(0, 12 - daysWorked);
+  const compPct = (daysWorked / 12) * 100;
+  const compBarClass = daysWorked >= 12 ? 'wing-bar-danger' : daysWorked >= 10 ? 'wing-bar-warn' : 'wing-bar-ok';
+
+  // Site breakdown
+  const routeCounts = {};
+  flights.forEach(f => { const r = f.takeoff + ' → ' + f.landing; routeCounts[r] = (routeCounts[r] || 0) + 1; });
+  const topRoutes = Object.entries(routeCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  // Monthly chart — last 7 months
+  const months = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i);
+    const key = d.toLocaleDateString('en-CA', { timeZone: NZ_TZ }).slice(0, 7);
+    const label = d.toLocaleDateString('en-NZ', { month: 'short', timeZone: NZ_TZ });
+    const count = flights.filter(f => f.date.startsWith(key)).length;
+    months.push({ label, count });
+  }
+  const maxMonth = Math.max(...months.map(m => m.count), 1);
 
   document.getElementById('stats-grid').innerHTML = `
     <div class="stat-card"><div class="stat-number">${todayFlights.length}</div><div class="stat-label">Today</div></div>
@@ -1282,7 +1358,80 @@ function renderStats() {
     <div class="stat-card"><div class="stat-number">${avgWeight}<span style="font-size:16px;font-weight:500">kg</span></div><div class="stat-label">Avg Pax Weight</div></div>
     <div class="stat-card" style="grid-column:1/-1"><div class="stat-number">${avgPerDay}</div><div class="stat-label">Avg Flights / Day This Month</div></div>
   `;
-  document.getElementById('stats-breakdown').innerHTML = '';
+
+  // Wing card
+  const wingCard = currentWing ? `
+    <div class="card stat-section">
+      <div class="stat-section-title">Current Wing · ${currentWing}</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end">
+        <div>
+          <span style="font-size:32px;font-weight:700;color:${wingRemaining<=50?'#c0392b':wingRemaining<=100?'#c07000':'var(--text)'}">${wingRemaining}</span>
+          <span style="font-size:14px;color:var(--muted)"> flights remaining</span>
+        </div>
+        <div style="text-align:right;font-size:13px;color:var(--muted)">${wingUsed} / 1000</div>
+      </div>
+      <div class="wing-progress-wrap"><div class="wing-progress-bar ${wingBarClass}" style="width:${wingPct}%"></div></div>
+      ${wingRemaining <= 50 ? '<div style="margin-top:8px;font-size:13px;font-weight:600;color:#c0392b">⚠️ Under 50 flights — arrange replacement wing</div>'
+        : wingRemaining <= 100 ? '<div style="margin-top:8px;font-size:13px;font-weight:600;color:#c07000">⚡ Under 100 flights remaining</div>' : ''}
+    </div>` :
+    `<div class="card stat-section" style="color:var(--muted);font-size:13px">No wing set — enter registration in Log tab to track usage.</div>`;
+
+  // Compliance card
+  const compCard = `
+    <div class="card stat-section">
+      <div class="stat-section-title">Working Days — Last 14</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end">
+        <div>
+          <span style="font-size:32px;font-weight:700">${daysWorked}</span>
+          <span style="font-size:14px;color:var(--muted)"> / 12 max</span>
+        </div>
+        <div style="text-align:right">
+          <span style="font-size:24px;font-weight:700;color:${daysRemaining===0?'#c0392b':daysRemaining<=2?'#c07000':'#4a8f1e'}">${daysRemaining}</span>
+          <span style="font-size:13px;color:var(--muted)"> days left</span>
+        </div>
+      </div>
+      <div class="wing-progress-wrap"><div class="wing-progress-bar ${compBarClass}" style="width:${compPct}%"></div></div>
+      ${daysRemaining === 0 ? '<div style="margin-top:8px;font-size:13px;font-weight:600;color:#c0392b">⛔ Rest day required before next flight</div>'
+        : daysRemaining <= 2 ? '<div style="margin-top:8px;font-size:13px;font-weight:600;color:#c07000">⚡ Approaching 12-day limit</div>' : ''}
+    </div>`;
+
+  // Total kg card
+  const kgCard = `
+    <div class="card stat-section">
+      <div class="stat-section-title">Career Passengers</div>
+      <div style="font-size:32px;font-weight:700">${totalKg.toLocaleString()}<span style="font-size:16px;font-weight:500">kg</span></div>
+      <div style="margin-top:4px;font-size:13px;color:var(--muted)">🐘 ${elephants} African elephants across ${flights.length} flights</div>
+    </div>`;
+
+  // Site breakdown card
+  const siteCard = topRoutes.length ? `
+    <div class="card stat-section">
+      <div class="stat-section-title">Top Routes</div>
+      <div class="month-chart">
+        ${topRoutes.map(([route, cnt]) => `
+          <div class="month-row">
+            <div style="flex:0 0 90px;font-size:12px;font-weight:500;color:var(--text)">${route}</div>
+            <div class="month-bar-wrap"><div class="month-bar" style="width:${(cnt/topRoutes[0][1])*100}%"></div></div>
+            <div class="month-count">${cnt}</div>
+          </div>`).join('')}
+      </div>
+    </div>` : '';
+
+  // Monthly chart card
+  const chartCard = `
+    <div class="card stat-section">
+      <div class="stat-section-title">Monthly Flights</div>
+      <div class="month-chart">
+        ${months.map(m => `
+          <div class="month-row">
+            <div class="month-label">${m.label}</div>
+            <div class="month-bar-wrap"><div class="month-bar" style="width:${m.count?(m.count/maxMonth)*100:0}%"></div></div>
+            <div class="month-count">${m.count || ''}</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+
+  document.getElementById('stats-breakdown').innerHTML = wingCard + compCard + kgCard + siteCard + chartCard;
 }
 
 function showPage(name) {

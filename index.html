@@ -578,7 +578,9 @@
       </div>
     </div>
     <div class="status-right">
-      <span class="status-badge in-office" id="status-badge">In Office</span>
+      <button id="availability-btn" onclick="toggleAvailability()" title="Toggle your availability for office to send you away"
+        style="background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer;font-weight:600;transition:all 0.2s;">🔴 Not Available</button>
+      <span class="status-badge in-office" id="status-badge">Available</span>
       <span class="server-badge" id="server-badge">...</span>
       <button onclick="doLogout()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;padding:4px 10px;cursor:pointer">Logout</button>
     </div>
@@ -787,12 +789,27 @@ let myFlights = [];
 let myDrives = [];
 let statsMonthOffset = 0; // 0 = current month, -1 = last month, etc.
 let myStatus = { status: 'in_office', client_name: null, timer_expires_at: null };
+let pilotAvailable = false; // explicit availability toggle — off by default on login
+
+// ─── Audio Context (unlocked on first touch, reused) ─────────────────────────
+let _audioCtx = null;
+function ensureAudioCtx() {
+  try {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_audioCtx.state === 'suspended') _audioCtx.resume();
+  } catch (e) {}
+  return _audioCtx;
+}
+// Unlock audio on first user interaction (required for iOS)
+document.addEventListener('touchstart', () => { ensureAudioCtx(); }, { once: true, passive: true });
+document.addEventListener('click', () => { ensureAudioCtx(); }, { once: true });
 
 // ─── Office State ─────────────────────────────────────────────────────────────
 let officeToken = localStorage.getItem('gforce_office_token');
 let ws = null;
 let officePilots = [];
 let allFlights = [];
+let filteredFlights = [];
 let alertDismissed = new Set();
 let timerInterval;
 let todaySort = { col: 'time', dir: 'asc' }; // col: 'time'|'pilot'|'client', dir: 'asc'|'desc'
@@ -945,6 +962,7 @@ function startStatusPoll() {
       const prevStatus = myStatus.status;
       const prevGroupPilots = (myStatus.group_pilots || []).join(',');
       myStatus = { status: newStatus.status, client_name: newStatus.client_name, timer_expires_at: newStatus.timer_expires_at, group_name: newStatus.group_name || null, group_pilots: newStatus.group_pilots || [], group_id: newStatus.group_id || null, is_peak_trip: newStatus.is_peak_trip || false };
+      pilotAvailable = newStatus.available === true;
       if (newStatus.current_wing && newStatus.current_wing !== currentWing) {
         currentWing = newStatus.current_wing;
         const wingEl = document.getElementById('f-wing');
@@ -991,7 +1009,9 @@ async function loadMyData() {
       api('/api/drives')
     ]);
     if (statusRes.status === 401 || flightsRes.status === 401) { doLogout(); return; }
-    myStatus = await statusRes.json();
+    const statusData = await statusRes.json();
+    myStatus = statusData;
+    pilotAvailable = statusData.available === true;
     myFlights = flightsRes.ok ? await flightsRes.json() : [];
     myDrives = drivesRes.ok ? await drivesRes.json() : [];
     renderDashboard();
@@ -1010,14 +1030,54 @@ async function loadMyData() {
 function updateStatusBadge() {
   const badge = document.getElementById('status-badge');
   const sub = document.getElementById('header-dashboard-sub');
+  const availBtn = document.getElementById('availability-btn');
   if (myStatus.status === 'airborne') {
-    badge.textContent = 'Away';
+    badge.textContent = 'Flying';
     badge.className = 'status-badge airborne';
+    badge.style.background = ''; badge.style.color = '';
     sub.textContent = '';
-  } else {
-    badge.textContent = 'In Office';
+    if (availBtn) { availBtn.style.display = 'none'; } // hide toggle when flying
+  } else if (pilotAvailable) {
+    badge.textContent = 'Available';
     badge.className = 'status-badge in-office';
+    badge.style.background = ''; badge.style.color = '';
     sub.textContent = '';
+    if (availBtn) {
+      availBtn.textContent = '🟢 Available';
+      availBtn.style.background = 'rgba(74,143,30,0.2)';
+      availBtn.style.borderColor = '#4a8f1e';
+      availBtn.style.color = '#7bc950';
+      availBtn.style.display = '';
+    }
+  } else {
+    badge.textContent = 'Not Available';
+    badge.className = 'status-badge';
+    badge.style.background = 'var(--surface)';
+    badge.style.color = 'var(--muted)';
+    sub.textContent = '';
+    if (availBtn) {
+      availBtn.textContent = '🔴 Not Available';
+      availBtn.style.background = 'var(--surface)';
+      availBtn.style.borderColor = 'var(--border)';
+      availBtn.style.color = 'var(--muted)';
+      availBtn.style.display = '';
+    }
+  }
+}
+
+async function toggleAvailability() {
+  const newState = !pilotAvailable;
+  try {
+    const res = await api('/api/pilot/available', {
+      method: 'PUT',
+      body: JSON.stringify({ available: newState })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    pilotAvailable = newState;
+    updateStatusBadge();
+    toast(newState ? '🟢 You\'re now available — office can send you away' : '🔴 Signed out — you won\'t appear for office');
+  } catch (e) {
+    toast('Could not update availability: ' + e.message);
   }
 }
 
@@ -1186,7 +1246,8 @@ function togglePeakDrive() {
 
 // ─── Save Flight ──────────────────────────────────────────────────────────────
 async function saveFlight() {
-  if (myStatus.status !== 'airborne') {
+  // Editing existing flights is always allowed; only new flight saves require being away
+  if (myStatus.status !== 'airborne' && editingId === null) {
     toast('You must be sent away by office before logging a flight');
     return;
   }
@@ -1333,11 +1394,15 @@ function renderFlights() {
       <span class="duty-badge">${dayFlights.length} flights</span>
     </div>`;
     dayFlights.sort((a,b) => a.flight_num - b.flight_num).forEach(f => {
+      const loggedAt = f.landed_at
+        ? new Date(f.landed_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
+        : null;
       html += `<div class="flight-item">
         <div>
           <div style="font-size:14px;font-weight:600">Flight ${f.flight_num} · ${f.weight}kg · ${f.time}min</div>
           <div class="flight-meta">${f.takeoff} → ${f.landing}${f.notes ? ' · '+f.notes : ''}</div>
           ${f.client_name ? `<div class="flight-meta" style="color:#fff">👤 ${f.client_name}</div>` : ''}
+          ${loggedAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">⏱ Logged ${loggedAt}</div>` : ''}
         </div>
         <div style="display:flex;gap:6px;align-items:center">
           <button class="btn-edit" onclick="editFlight('${f.id}')">&#9998;</button>
@@ -1392,6 +1457,36 @@ async function updateWing(val) {
 function changeStatsMonth(delta) {
   statsMonthOffset = Math.min(0, statsMonthOffset + delta);
   renderStats();
+}
+
+function exportMonthCSV() {
+  const now = new Date();
+  const viewDate = new Date(now.getFullYear(), now.getMonth() + statsMonthOffset, 1);
+  const monthKey = viewDate.toLocaleDateString('en-CA', { timeZone: NZ_TZ }).slice(0, 7);
+  const monthEndDate = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0);
+  const monthStartStr = monthKey + '-01';
+  const monthEndStr = monthEndDate.toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+  const monthFlights = myFlights.filter(f => f.date >= monthStartStr && f.date <= monthEndStr);
+  const label = viewDate.toLocaleDateString('en-NZ', { month: 'long', year: 'numeric', timeZone: NZ_TZ });
+  const monthLabel = viewDate.toLocaleDateString('en-CA', { timeZone: NZ_TZ }).slice(0, 7); // YYYY-MM
+  if (!monthFlights.length) { toast('No flights this month'); return; }
+  const header = ['Date','Flight #','Client Name','Weight (kg)','Takeoff','Landing','Time (min)','Notes','Logged At'];
+  const rows = monthFlights.map(f => [
+    f.date, f.flight_num, f.client_name||'', f.weight, f.takeoff, f.landing, f.time, f.notes||'',
+    f.landed_at ? new Date(f.landed_at).toLocaleString('en-NZ') : ''
+  ]);
+  const csv = [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  downloadPilotCSV(csv, `my_flights_${monthLabel}.csv`);
+}
+
+function downloadPilotCSV(csv, filename) {
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  toast('Downloading...');
 }
 
 function renderStats() {
@@ -1579,7 +1674,14 @@ function renderStats() {
         </div>`).join('')}
     </div>` : '';
 
-  document.getElementById('stats-breakdown').innerHTML = wingCard + compCard + kgCard + siteCard + chartCard + drivesCard;
+  // Monthly export button
+  const monthExportCard = monthFlights.length ? `
+    <div class="card stat-section" style="text-align:center;">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px;">${monthFlights.length} flights in ${monthLabel}</div>
+      <button onclick="exportMonthCSV()" style="background:var(--accent);border:none;border-radius:9999px;color:#fff;padding:10px 24px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;letter-spacing:0.5px;">⬇ Export ${monthLabel} CSV</button>
+    </div>` : '';
+
+  document.getElementById('stats-breakdown').innerHTML = wingCard + compCard + kgCard + siteCard + chartCard + drivesCard + monthExportCard;
 }
 
 function showPage(name) {
@@ -1709,11 +1811,8 @@ async function loadOfficeData() {
 function renderGroupsTab() {
   _groupSelected.clear();
   const el = document.getElementById('groups-panel');
-  const now = Date.now();
-  const ACTIVE_MS = 3 * 60 * 1000; // signed in = seen in last 3 min
-  const isSignedIn = p => p.last_seen && (now - new Date(p.last_seen).getTime()) < ACTIVE_MS;
   const alpha = (a, b) => a.name.localeCompare(b.name);
-  const available = officePilots.filter(p => p.status !== 'airborne' && isSignedIn(p)).sort(alpha);
+  const available = officePilots.filter(p => p.status !== 'airborne' && Number(p.available) === 1).sort(alpha);
   const airborne = officePilots.filter(p => p.status === 'airborne').sort(alpha);
 
   let html = `
@@ -1732,7 +1831,7 @@ function renderGroupsTab() {
           <div id="group-pilot-checkboxes" style="display:flex;flex-direction:column;gap:8px;">`;
 
   if (available.length === 0) {
-    html += `<div style="color:var(--muted);font-size:14px;">No pilots signed in and available</div>`;
+    html += `<div style="color:var(--muted);font-size:14px;">No pilots have set themselves as available</div>`;
   } else {
     available.forEach(p => {
       html += `
@@ -1801,12 +1900,9 @@ async function submitGroupAway() {
   const name = document.getElementById('group-name-input').value.trim();
   if (!name) { toast('Enter a group name or booking number'); return; }
   if (_groupSelected.size === 0) { toast('Select at least one pilot'); return; }
-  const now = Date.now();
-  const ACTIVE_MS = 3 * 60 * 1000;
-  const isSignedIn = p => p.last_seen && (now - new Date(p.last_seen).getTime()) < ACTIVE_MS;
-  const available = officePilots.filter(p => p.status !== 'airborne' && isSignedIn(p));
-  const pilot_ids = available.filter(p => _groupSelected.has(p.id)).map(p => p.id);
-  const pilot_names = available.filter(p => _groupSelected.has(p.id)).map(p => p.name);
+  const availablePilots = officePilots.filter(p => p.status !== 'airborne' && Number(p.available) === 1);
+  const pilot_ids = availablePilots.filter(p => _groupSelected.has(p.id)).map(p => p.id);
+  const pilot_names = availablePilots.filter(p => _groupSelected.has(p.id)).map(p => p.name);
   try {
     const res = await officeApi('/api/office/group-leave', {
       method: 'POST',
@@ -1828,15 +1924,11 @@ async function submitGroupAway() {
 // ─── Office Tab ───────────────────────────────────────────────────────────────
 function renderOfficeTab() {
   const el = document.getElementById('pilots-list');
-  const now = Date.now();
-  const ACTIVE_MS = 2 * 60 * 1000; // 2 minutes — pilot app polls every 15s
-
-  const isSignedIn = p => p.last_seen && (now - new Date(p.last_seen).getTime()) < ACTIVE_MS;
   const alpha = (a, b) => a.name.localeCompare(b.name);
 
-  const flying    = officePilots.filter(p => p.status === 'airborne').sort(alpha);
-  const signedIn  = officePilots.filter(p => p.status !== 'airborne' && isSignedIn(p)).sort(alpha);
-  const signedOut = officePilots.filter(p => p.status !== 'airborne' && !isSignedIn(p)).sort(alpha);
+  const flying       = officePilots.filter(p => p.status === 'airborne').sort(alpha);
+  const signedIn     = officePilots.filter(p => p.status !== 'airborne' && Number(p.available) === 1).sort(alpha);
+  const notAvailable = officePilots.filter(p => p.status !== 'airborne' && Number(p.available) !== 1).sort(alpha);
 
   function pilotCard(p, disabled = false) {
     const isAirborne = p.status === 'airborne';
@@ -1848,8 +1940,8 @@ function renderOfficeTab() {
         <div class="pilot-info">
           <div class="pilot-name">${p.name}</div>
           <div class="pilot-status ${isAirborne ? 'airborne' : 'in-office'}">
-            ${isAirborne ? '🪂 Away' : '🏢 In office'}
-            ${!isAirborne && p.last_landed_at ? ' · Last landed ' + fmtRelative(p.last_landed_at) : ''}
+            ${isAirborne ? '🪂 Flying' : '✅ Available'}
+            ${!isAirborne && p.last_landed_at ? ' · Last flight ' + fmtRelative(p.last_landed_at) : ''}
           </div>
           ${isAirborne && clientName ? `<div class="pilot-client">👤 ${clientName}</div>` : ''}
         </div>
@@ -1879,8 +1971,8 @@ function renderOfficeTab() {
 
   el.innerHTML =
     section('🪂 Flying', flying) +
-    section('🟢 Signed In', signedIn) +
-    section('⚫ Signed Out', signedOut, true);
+    section('✅ Available', signedIn) +
+    section('🔴 Not Available', notAvailable, true);
 
   updateTimers();
 }
@@ -1946,7 +2038,7 @@ function renderTodayTab() {
 
   let html = `<table class="today-table">
     <thead><tr>
-      <th class="sortable sort-${todaySort.col === 'time' ? 'active' : 'inactive'}" onclick="sortToday('time')">Time${arrow('time')}</th>
+      <th class="sortable sort-${todaySort.col === 'time' ? 'active' : 'inactive'}" onclick="sortToday('time')">Logged At${arrow('time')}</th>
       <th class="sortable sort-${todaySort.col === 'pilot' ? 'active' : 'inactive'}" onclick="sortToday('pilot')">Pilot${arrow('pilot')}</th>
       <th class="sortable sort-${todaySort.col === 'client' ? 'active' : 'inactive'}" onclick="sortToday('client')">Client${arrow('client')}</th>
       <th>#</th>
@@ -1999,7 +2091,7 @@ function renderFlightsTab() {
     return;
   }
 
-  const filtered = term
+  filteredFlights = term
     ? allFlights.filter(f =>
         (f.pilot_name || '').toLowerCase().includes(term) ||
         (f.client_name || '').toLowerCase().includes(term) ||
@@ -2008,16 +2100,22 @@ function renderFlightsTab() {
       )
     : allFlights;
 
-  const countEl = document.getElementById('flights-result-count');
-  countEl.textContent = term ? `${filtered.length} of ${allFlights.length} flights` : '';
+  // Update export button label to reflect what will be exported
+  const exportBtn = document.querySelector('#office-tab-flights .btn-export-all');
+  if (exportBtn) {
+    exportBtn.textContent = term ? `Export Filtered CSV (${filteredFlights.length})` : 'Export All CSV';
+  }
 
-  if (filtered.length === 0) {
+  const countEl = document.getElementById('flights-result-count');
+  countEl.textContent = term ? `${filteredFlights.length} of ${allFlights.length} flights` : '';
+
+  if (filteredFlights.length === 0) {
     el.innerHTML = '<div class="empty-state">No flights match your search</div>';
     return;
   }
 
   const byDate = {};
-  filtered.forEach(f => {
+  filteredFlights.forEach(f => {
     if (!byDate[f.date]) byDate[f.date] = [];
     byDate[f.date].push(f);
   });
@@ -2025,11 +2123,14 @@ function renderFlightsTab() {
   let html = `<table class="flight-table">
     <thead><tr>
       <th>Date</th><th>Pilot</th><th>Client</th><th>#</th>
-      <th>Weight</th><th>Site</th><th>Time</th><th>Notes</th>
+      <th>Weight</th><th>Site</th><th>Time</th><th>Notes</th><th>Logged</th>
     </tr></thead><tbody>`;
 
   Object.keys(byDate).sort().reverse().forEach(date => {
     byDate[date].forEach(f => {
+      const loggedAt = f.landed_at
+        ? new Date(f.landed_at).toLocaleString('en-NZ', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
+        : '—';
       html += `<tr>
         <td>${officeFmtDate(date)}</td>
         <td class="pilot-col">${f.pilot_name}</td>
@@ -2039,6 +2140,7 @@ function renderFlightsTab() {
         <td>${f.takeoff} → ${f.landing}</td>
         <td>${f.time}min</td>
         <td class="time-col">${f.notes || ''}</td>
+        <td class="time-col">${loggedAt}</td>
       </tr>`;
     });
   });
@@ -2065,18 +2167,19 @@ function officeFmtDate(s) {
 }
 
 function exportAllCSV() {
-  downloadCSV(buildCSV(allFlights), 'gforce_flights_all.csv');
-}
-function exportPilotCSV(pilotId) {
-  const pilot = officePilots.find(p => p.id === pilotId);
-  const pilotFlights = allFlights.filter(f => f.pilot_id === pilotId);
-  downloadCSV(buildCSV(pilotFlights), `gforce_flights_${pilot?.name || pilotId}.csv`);
+  // Exports whatever is currently visible — filtered by pilot, text, or date if active; all flights otherwise
+  const toExport = filteredFlights.length > 0 || flightsSearch.trim() ? filteredFlights : allFlights;
+  const label = flightsSearch.trim()
+    ? `gforce_flights_${flightsSearch.trim().replace(/[^a-zA-Z0-9]/g, '_')}.csv`
+    : 'gforce_flights_all.csv';
+  downloadCSV(buildCSV(toExport), label);
 }
 function buildCSV(flights) {
-  const header = ['Date','Pilot','Client Name','Flight #','Weight (kg)','Takeoff','Landing','Time (min)','Notes'];
+  const header = ['Date','Pilot','Client Name','Flight #','Weight (kg)','Takeoff','Landing','Time (min)','Notes','Logged At'];
   const rows = flights.map(f => [
     f.date, f.pilot_name||'', f.client_name||'', f.flight_num, f.weight,
-    f.takeoff, f.landing, f.time, f.notes||''
+    f.takeoff, f.landing, f.time, f.notes||'',
+    f.landed_at ? new Date(f.landed_at).toLocaleString('en-NZ') : ''
   ]);
   return [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
 }
@@ -2217,25 +2320,40 @@ function toast(msg) {
 }
 
 // ─── Pilot Sent-Away Notification ───────────────────────────────────────────
-function notifyPilotSentAway() {
-  // Sound alert
+function playAlarmSound() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    [523, 659, 784].forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = freq;
-      osc.type = 'sine';
-      gain.gain.setValueAtTime(0.4, ctx.currentTime + i * 0.18);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 0.3);
-      osc.start(ctx.currentTime + i * 0.18);
-      osc.stop(ctx.currentTime + i * 0.18 + 0.35);
-    });
+    const ctx = ensureAudioCtx();
+    if (!ctx) return;
+    // Three repeats of an ascending alarm chord — loud sawtooth for maximum attention
+    const sequence = [440, 554, 659, 880]; // A4 C#5 E5 A5
+    let t = ctx.currentTime;
+    for (let rep = 0; rep < 3; rep++) {
+      sequence.forEach(freq => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sawtooth';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(1.0, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+        osc.start(t);
+        osc.stop(t + 0.25);
+        t += 0.18;
+      });
+      t += 0.35; // pause between repeats
+    }
   } catch (e) {}
+}
 
-  // Build group info for notification
+function notifyPilotSentAway() {
+  // Vibrate — works on Android (pattern: on-off-on-off-on ms)
+  try { navigator.vibrate && navigator.vibrate([600, 200, 600, 200, 1000]); } catch (e) {}
+
+  // Alarm sound
+  playAlarmSound();
+
+  // Build group info
   const groupInfo = myStatus.group_name ? `📋 ${myStatus.group_name}` : '';
   const groupPilotsList = (myStatus.group_pilots && myStatus.group_pilots.length)
     ? myStatus.group_pilots.join(', ')
@@ -2247,32 +2365,50 @@ function notifyPilotSentAway() {
       <div style="font-size:15px;font-weight:600;color:#f0f0f0;">${groupPilotsList}</div>` : ''}
     </div>` : '';
 
-  // In-app modal
+  // In-app modal — pulses orange border for visibility
   const existing = document.getElementById('sent-away-modal');
   if (existing) existing.remove();
   const modal = document.createElement('div');
   modal.id = 'sent-away-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;align-items:center;justify-content:center;';
   modal.innerHTML = `
-    <div style="background:#222;border:2px solid #f37329;border-radius:16px;padding:32px 28px;text-align:center;max-width:340px;width:90%;">
-      <div style="font-size:56px;margin-bottom:12px;">🪂</div>
-      <div style="font-size:22px;font-weight:700;color:#f37329;font-family:Montserrat,sans-serif;letter-spacing:1px;margin-bottom:8px;">YOU'RE AWAY!</div>
+    <style>@keyframes pulse-border{0%,100%{box-shadow:0 0 0 0 rgba(243,115,41,0.7)}50%{box-shadow:0 0 0 16px rgba(243,115,41,0)}}</style>
+    <div style="background:#222;border:3px solid #f37329;border-radius:16px;padding:32px 28px;text-align:center;max-width:340px;width:90%;animation:pulse-border 1.2s ease-in-out 4;">
+      <div style="font-size:64px;margin-bottom:12px;">🪂</div>
+      <div style="font-size:24px;font-weight:700;color:#f37329;font-family:Montserrat,sans-serif;letter-spacing:1px;margin-bottom:8px;">YOU'RE AWAY!</div>
       <div style="color:#ccc;font-size:14px;">Office has started your timer. Have a great flight!</div>
       ${groupSection}
-      <button onclick="document.getElementById('sent-away-modal').remove()" style="background:#f37329;border:none;border-radius:9999px;color:#fff;font-size:16px;font-weight:700;padding:14px 32px;cursor:pointer;font-family:Montserrat,sans-serif;">GOT IT</button>
+      <button onclick="document.getElementById('sent-away-modal').remove()" style="margin-top:16px;background:#f37329;border:none;border-radius:9999px;color:#fff;font-size:16px;font-weight:700;padding:14px 32px;cursor:pointer;font-family:Montserrat,sans-serif;width:100%;">GOT IT 👍</button>
     </div>`;
   document.body.appendChild(modal);
 
-  // Push notification (if permitted)
+  // System notification via service worker (works on iOS 16.4+ PWA, Android Chrome)
+  const pushTitle = '🪂 GForce — YOU\'RE AWAY!';
   const pushBody = groupPilotsList
     ? `You're away! Flying with ${groupPilotsList}.`
-    : "You've been sent away! Timer started.";
-  if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification('GForce Flight Log', { body: pushBody, icon: '/gforce-flight-log/icon-192.png' });
-  } else if ('Notification' in window && Notification.permission !== 'denied') {
-    Notification.requestPermission().then(p => {
-      if (p === 'granted') new Notification('GForce Flight Log', { body: pushBody, icon: '/gforce-flight-log/icon-192.png' });
+    : "Office has started your timer. Have a great flight!";
+
+  function showSystemNotif() {
+    navigator.serviceWorker.ready.then(reg => {
+      reg.showNotification(pushTitle, {
+        body: pushBody,
+        icon: '/gforce-flight-log/icon-192.png',
+        badge: '/gforce-flight-log/icon-192.png',
+        vibrate: [600, 200, 600, 200, 1000],
+        requireInteraction: true,
+        tag: 'pilot-sent-away'
+      });
+    }).catch(() => {
+      try { new Notification(pushTitle, { body: pushBody }); } catch (e) {}
     });
+  }
+
+  if ('Notification' in window) {
+    if (Notification.permission === 'granted') {
+      showSystemNotif();
+    } else if (Notification.permission !== 'denied') {
+      Notification.requestPermission().then(p => { if (p === 'granted') showSystemNotif(); });
+    }
   }
 }
 

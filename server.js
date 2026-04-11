@@ -54,6 +54,8 @@ async function createTables() {
     id TEXT PRIMARY KEY, pilot_id TEXT, event TEXT, created_at TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS active_timers (
     pilot_id TEXT PRIMARY KEY, client_name TEXT, started_at TEXT, expires_at TEXT, group_id TEXT)`);
+  await db.execute(`CREATE TABLE IF NOT EXISTS drives (
+    id TEXT PRIMARY KEY, pilot_id TEXT, date TEXT, notes TEXT, group_id TEXT, created_at TEXT)`);
   console.log('✅ Tables ready');
 }
 
@@ -347,6 +349,50 @@ app.put('/api/pilot/wing', verifyToken, async (req, res) => {
   }
 });
 
+// ─── Drives ───────────────────────────────────────────────────────────────────
+app.get('/api/drives', verifyToken, async (req, res) => {
+  try {
+    const drives = await queryAll(
+      'SELECT * FROM drives WHERE pilot_id = ? ORDER BY date DESC, created_at DESC',
+      [req.pilot.id]
+    );
+    res.json(drives);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/drives', verifyToken, async (req, res) => {
+  try {
+    const { date, notes, group_id } = req.body;
+    if (!date) return res.status(400).json({ error: 'date required' });
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    await run(
+      'INSERT INTO drives (id, pilot_id, date, notes, group_id, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, req.pilot.id, date, notes || '', group_id || null, now]
+    );
+    res.status(201).json({ id, message: 'Drive logged' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/drives/:id', verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = await queryOne('SELECT * FROM drives WHERE id = ? AND pilot_id = ?', [id, req.pilot.id]);
+    if (!existing) return res.status(404).json({ error: 'Drive not found' });
+    await run('DELETE FROM drives WHERE id = ? AND pilot_id = ?', [id, req.pilot.id]);
+    res.json({ message: 'Drive deleted' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Flight Following ─────────────────────────────────────────────────────────
 app.get('/api/flight-following', verifyToken, async (req, res) => {
   try {
@@ -396,7 +442,7 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
     if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
 
     const now = new Date();
-    const expires = new Date(now.getTime() + 90 * 60 * 1000);
+    const expires = new Date(now.getTime() + 60 * 60 * 1000);
 
     await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at) VALUES (?, ?, ?, ?)',
       [pilot_id, client_name || null, now.toISOString(), expires.toISOString()]);
@@ -425,7 +471,7 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
     if (!pilot_ids || !pilot_ids.length) return res.status(400).json({ error: 'pilot_ids required' });
 
     const now = new Date();
-    const duration = is_peak_trip ? 120 : 90; // peak trips get 2 hours
+    const duration = is_peak_trip ? 120 : 60; // peak trips get 2 hours, standard 1 hour
     const expires = new Date(now.getTime() + duration * 60 * 1000);
     const groupId = uuidv4();
 

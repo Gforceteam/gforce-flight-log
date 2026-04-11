@@ -986,14 +986,15 @@ function api(path, opts = {}) {
 
 async function loadMyData() {
   try {
-    const [statusRes, flightsRes] = await Promise.all([
+    const [statusRes, flightsRes, drivesRes] = await Promise.all([
       api('/api/my-status'),
-      api('/api/flights')
+      api('/api/flights'),
+      api('/api/drives')
     ]);
     if (statusRes.status === 401 || flightsRes.status === 401) { doLogout(); return; }
     myStatus = await statusRes.json();
     myFlights = flightsRes.ok ? await flightsRes.json() : [];
-    myDrives = [];
+    myDrives = drivesRes.ok ? await drivesRes.json() : [];
     renderDashboard();
     renderFlights();
     updateStatusBadge();
@@ -1195,18 +1196,16 @@ async function saveFlight() {
   const date = document.getElementById('f-date').value;
   const notes = document.getElementById('f-notes').value;
 
-  // Peak Drive mode — log as a flight with special markers
+  // Peak Drive mode — log to drives (separate from flights, no client data needed)
   if (isPeakDrive) {
     setServerStatus('syncing');
     try {
-      const flightNum = parseInt(document.getElementById('f-num-display').textContent);
-      const wingReg = (document.getElementById('f-wing')?.value || '').trim().toUpperCase() || null;
-      const res = await api('/api/flights', {
+      const res = await api('/api/drives', {
         method: 'POST',
-        body: JSON.stringify({ date, flight_num: flightNum, weight: 0, takeoff: 'CP', landing: 'CP', time: 0, notes: '🚗 PEAK DRIVE' + (notes ? ' — ' + notes : ''), wing_reg: wingReg })
+        body: JSON.stringify({ date, notes, group_id: myStatus.group_id || null })
       });
       if (!res.ok) throw new Error(await res.text());
-      toast('🚗 Peak drive logged!');
+      toast('🚗 Drive logged!');
       resetForm();
       await loadMyData();
     } catch (e) {
@@ -1364,6 +1363,19 @@ async function deleteFlight(id) {
     toast('Flight deleted');
     await loadMyData();
     updateFlightNumForDate(document.getElementById('f-date').value);
+  } catch (e) {
+    toast('Delete failed: ' + e.message);
+  }
+}
+
+async function deleteDrive(id) {
+  if (!confirm('Delete this drive? This cannot be undone.')) return;
+  try {
+    const res = await api(`/api/drives/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(await res.text());
+    toast('Drive deleted');
+    await loadMyData();
+    renderStats();
   } catch (e) {
     toast('Delete failed: ' + e.message);
   }
@@ -1549,17 +1561,24 @@ function renderStats() {
       </div>
     </div>`;
 
-  // Drives card
-  const drivesCard = monthDrives.length ? `
+  // Drives card — all drives (not filtered by month, so you can see history)
+  const allDrives = drives;
+  const drivesCard = allDrives.length ? `
     <div class="card stat-section">
-      <div class="stat-section-title">🚐 Peak Drives</div>
-      ${monthDrives.map(d => `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div class="stat-section-title" style="margin-bottom:0;">🚐 Peak Drives</div>
+        <div style="font-size:13px;color:var(--accent);font-weight:700;">${allDrives.length} total</div>
+      </div>
+      ${allDrives.map(d => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
           <div>
             <div style="font-size:14px;font-weight:600;">${fmtDate(d.date)}</div>
             ${d.notes ? `<div style="font-size:12px;color:var(--muted);margin-top:2px;">${d.notes}</div>` : ''}
           </div>
-          <div style="font-size:12px;color:var(--warning);font-weight:700;">PEAK</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="font-size:12px;color:var(--warning);font-weight:700;">PEAK</div>
+            <button class="btn-danger" onclick="deleteDrive('${d.id}')" style="font-size:11px;padding:4px 8px;">✕</button>
+          </div>
         </div>`).join('')}
     </div>` : '';
 

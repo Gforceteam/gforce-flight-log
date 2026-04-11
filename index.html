@@ -2048,12 +2048,12 @@ function showOfficeTab(name) {
   document.getElementById(`office-tab-${name}`).classList.add('active');
   document.getElementById(`office-tab-${name}-btn`).classList.add('active');
   if (name === 'ff') renderOfficeFF();
-  if (name === 'groups') renderGroupsTab();
+  if (name === 'groups') loadOfficeData();
 }
 
 // ─── WebSocket ────────────────────────────────────────────────────────────────
 function connectWS() {
-  ws = new WebSocket('wss://gforce-api-6jpm.onrender.com');
+  ws = new WebSocket('wss://gforce-api.fly.dev');
   ws.onopen = () => {
     document.getElementById('ws-indicator').classList.add('connected');
     document.getElementById('ws-indicator').title = 'Connected';

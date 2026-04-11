@@ -580,7 +580,6 @@
     <div class="status-right">
       <button id="availability-btn" onclick="toggleAvailability()" title="Toggle your availability for office to send you away"
         style="background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer;font-weight:600;transition:all 0.2s;">🔴 Not Available</button>
-      <span class="status-badge in-office" id="status-badge">Available</span>
       <span class="server-badge" id="server-badge">...</span>
       <button onclick="doLogout()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;padding:4px 10px;cursor:pointer">Logout</button>
     </div>
@@ -1028,40 +1027,24 @@ async function loadMyData() {
 }
 
 function updateStatusBadge() {
-  const badge = document.getElementById('status-badge');
   const sub = document.getElementById('header-dashboard-sub');
   const availBtn = document.getElementById('availability-btn');
+  if (sub) sub.textContent = '';
+  if (!availBtn) return;
   if (myStatus.status === 'airborne') {
-    badge.textContent = 'Flying';
-    badge.className = 'status-badge airborne';
-    badge.style.background = ''; badge.style.color = '';
-    sub.textContent = '';
-    if (availBtn) { availBtn.style.display = 'none'; } // hide toggle when flying
+    availBtn.style.display = 'none'; // hide toggle when flying
   } else if (pilotAvailable) {
-    badge.textContent = 'Available';
-    badge.className = 'status-badge in-office';
-    badge.style.background = ''; badge.style.color = '';
-    sub.textContent = '';
-    if (availBtn) {
-      availBtn.textContent = '🟢 Available';
-      availBtn.style.background = 'rgba(74,143,30,0.2)';
-      availBtn.style.borderColor = '#4a8f1e';
-      availBtn.style.color = '#7bc950';
-      availBtn.style.display = '';
-    }
+    availBtn.textContent = '🟢 Available';
+    availBtn.style.background = 'rgba(74,143,30,0.2)';
+    availBtn.style.borderColor = '#4a8f1e';
+    availBtn.style.color = '#7bc950';
+    availBtn.style.display = '';
   } else {
-    badge.textContent = 'Not Available';
-    badge.className = 'status-badge';
-    badge.style.background = 'var(--surface)';
-    badge.style.color = 'var(--muted)';
-    sub.textContent = '';
-    if (availBtn) {
-      availBtn.textContent = '🔴 Not Available';
-      availBtn.style.background = 'var(--surface)';
-      availBtn.style.borderColor = 'var(--border)';
-      availBtn.style.color = 'var(--muted)';
-      availBtn.style.display = '';
-    }
+    availBtn.textContent = '🔴 Not Available';
+    availBtn.style.background = 'var(--surface)';
+    availBtn.style.borderColor = 'var(--border)';
+    availBtn.style.color = 'var(--muted)';
+    availBtn.style.display = '';
   }
 }
 

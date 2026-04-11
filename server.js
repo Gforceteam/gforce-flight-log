@@ -197,22 +197,14 @@ app.get('/api/my-status', verifyToken, async (req, res) => {
     let groupPilots = [];
     let groupId = timer ? (timer.group_id || null) : null;
     if (timer && timer.group_id) {
-      const grp = await queryOne('SELECT * FROM flight_groups WHERE id = ?', [timer.group_id]);
-      if (grp) {
-        groupName = grp.name;
-        const members = await queryAll(
-          'SELECT p.id, p.name FROM group_members gm JOIN pilots p ON gm.pilot_id = p.id WHERE gm.group_id = ? AND gm.pilot_id != ?',
-          [timer.group_id, req.pilot.id]
-        );
-        if (members.length > 0) {
-          const memberTimers = await queryAll(
-            'SELECT pilot_id FROM active_timers WHERE pilot_id IN (' + members.map(() => '?').join(',') + ')',
-            members.map(m => m.id)
-          );
-          const activeIds = new Set(memberTimers.map(t => t.pilot_id));
-          groupPilots = members.filter(m => activeIds.has(m.id)).map(m => m.name);
-        }
-      }
+      // Group name is stored as client_name on the timer
+      groupName = timer.client_name || null;
+      // Find other pilots in the same group via active_timers
+      const otherTimers = await queryAll(
+        'SELECT at.pilot_id, p.name FROM active_timers at JOIN pilots p ON at.pilot_id = p.id WHERE at.group_id = ? AND at.pilot_id != ?',
+        [timer.group_id, req.pilot.id]
+      );
+      groupPilots = otherTimers.map(t => t.name);
     }
     res.json({
       status: timer ? 'airborne' : 'in_office',

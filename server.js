@@ -71,6 +71,84 @@ function sanitize(s, max = 200) {
   return String(s).trim().slice(0, max) || null;
 }
 
+// ─── Server-side timer watcher — runs every 30 s ──────────────────────────────
+// Sends push notifications at 10 min, 5 min, and 0 min remaining.
+// Uses atomic DB flag updates so duplicate sends don't happen across two instances.
+async function checkTimerNotifications() {
+  try {
+    const now = Date.now();
+    const timers = await queryAll(`
+      SELECT at.*, p.name as pilot_name
+      FROM active_timers at
+      JOIN pilots p ON at.pilot_id = p.id
+    `);
+    for (const timer of timers) {
+      const remainingMs = new Date(timer.expires_at).getTime() - now;
+      const remainingMins = remainingMs / 60000;
+
+      // 10-minute warning — send once when remaining is between 5 and 11 minutes
+      if (remainingMins > 5 && remainingMins <= 11 && !Number(timer.notif_10min)) {
+        const r = await db.execute({
+          sql: 'UPDATE active_timers SET notif_10min = 1 WHERE pilot_id = ? AND notif_10min = 0',
+          args: [timer.pilot_id]
+        });
+        if (r.rowsAffected > 0) {
+          await sendPushToPilot(timer.pilot_id, {
+            title: '⏱ 10 minutes left',
+            body: `Start heading back — ${Math.ceil(remainingMins)} min remaining on your timer.`,
+            tag: 'timer-10min'
+          });
+          console.log(`⏱ 10-min push → ${timer.pilot_name}`);
+        }
+      }
+
+      // 5-minute warning — send once when remaining is between 0 and 5.5 minutes
+      if (remainingMins > 0 && remainingMins <= 5.5 && !Number(timer.notif_5min)) {
+        const r = await db.execute({
+          sql: 'UPDATE active_timers SET notif_5min = 1 WHERE pilot_id = ? AND notif_5min = 0',
+          args: [timer.pilot_id]
+        });
+        if (r.rowsAffected > 0) {
+          await sendPushToPilot(timer.pilot_id, {
+            title: '🚨 5 minutes left!',
+            body: 'Land now — timer almost up.',
+            tag: 'timer-5min',
+            requireInteraction: true
+          });
+          console.log(`🚨 5-min push → ${timer.pilot_name}`);
+        }
+      }
+
+      // Expiry — send once when remaining hits 0 or below
+      if (remainingMins <= 0 && !Number(timer.notif_expired)) {
+        const r = await db.execute({
+          sql: 'UPDATE active_timers SET notif_expired = 1 WHERE pilot_id = ? AND notif_expired = 0',
+          args: [timer.pilot_id]
+        });
+        if (r.rowsAffected > 0) {
+          // Push to pilot
+          await sendPushToPilot(timer.pilot_id, {
+            title: '⏰ Timer expired!',
+            body: 'Your flight timer has expired. Please land and log your flight.',
+            tag: 'timer-expired',
+            requireInteraction: true
+          });
+          // Broadcast to office (shows alert banner + toast)
+          broadcast({ type: 'TIMER_EXPIRED', pilot_id: timer.pilot_id, pilot_name: timer.pilot_name });
+          // Audit log
+          await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)',
+            [uuidv4(), timer.pilot_id, 'timer_expired', new Date().toISOString()]);
+          console.log(`⏰ Expired push + broadcast → ${timer.pilot_name}`);
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Timer notification check failed:', e.message);
+  }
+}
+// Start after server is up (2 s delay so DB is ready)
+setTimeout(() => setInterval(checkTimerNotifications, 30 * 1000), 2000);
+
 // ─── Web Push (VAPID) ─────────────────────────────────────────────────────────
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(
@@ -123,7 +201,12 @@ async function createTables() {
   await db.execute(`CREATE TABLE IF NOT EXISTS office_logs (
     id TEXT PRIMARY KEY, pilot_id TEXT, event TEXT, created_at TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS active_timers (
-    pilot_id TEXT PRIMARY KEY, client_name TEXT, started_at TEXT, expires_at TEXT, group_id TEXT)`);
+    pilot_id TEXT PRIMARY KEY, client_name TEXT, started_at TEXT, expires_at TEXT, group_id TEXT,
+    notif_10min INTEGER DEFAULT 0, notif_5min INTEGER DEFAULT 0, notif_expired INTEGER DEFAULT 0)`);
+  // Add notification flag columns to existing DBs
+  try { await db.execute('ALTER TABLE active_timers ADD COLUMN notif_10min INTEGER DEFAULT 0'); } catch (_) {}
+  try { await db.execute('ALTER TABLE active_timers ADD COLUMN notif_5min INTEGER DEFAULT 0'); } catch (_) {}
+  try { await db.execute('ALTER TABLE active_timers ADD COLUMN notif_expired INTEGER DEFAULT 0'); } catch (_) {}
   await db.execute(`CREATE TABLE IF NOT EXISTS drives (
     id TEXT PRIMARY KEY, pilot_id TEXT, date TEXT, notes TEXT, group_id TEXT, created_at TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -333,7 +416,7 @@ app.post('/api/pilot/extend-timer', verifyToken, async (req, res) => {
     if (!timer) return res.status(404).json({ error: 'No active timer' });
 
     const newExpiry = new Date(new Date(timer.expires_at).getTime() + 30 * 60 * 1000);
-    await run('UPDATE active_timers SET expires_at = ? WHERE pilot_id = ?', [newExpiry.toISOString(), pilotId]);
+    await run('UPDATE active_timers SET expires_at = ?, notif_10min = 0, notif_5min = 0, notif_expired = 0 WHERE pilot_id = ?', [newExpiry.toISOString(), pilotId]);
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilotId, 'timer_extended_30min', new Date().toISOString()]);
 
     broadcast({

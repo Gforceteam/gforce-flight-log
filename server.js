@@ -232,7 +232,7 @@ app.post('/api/pilot/extend-timer', verifyToken, async (req, res) => {
 
     const newExpiry = new Date(new Date(timer.expires_at).getTime() + 30 * 60 * 1000);
     await run('UPDATE active_timers SET expires_at = ? WHERE pilot_id = ?', [newExpiry.toISOString(), pilotId]);
-    await run('INSERT INTO office_logs (id, pilot_id, event) VALUES (?, ?, ?)', [uuidv4(), pilotId, 'timer_extended_30min']);
+    await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilotId, 'timer_extended_30min', new Date().toISOString()]);
 
     broadcast({
       type: 'TIMER_EXTENDED',
@@ -278,7 +278,7 @@ app.post('/api/flights', verifyToken, async (req, res) => {
     const activeTimer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [pilotId]);
     if (activeTimer) {
       await run('DELETE FROM active_timers WHERE pilot_id = ?', [pilotId]);
-      await run('INSERT INTO office_logs (id, pilot_id, event) VALUES (?, ?, ?)', [uuidv4(), pilotId, 'landed']);
+      await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilotId, 'landed', new Date().toISOString()]);
       broadcast({ type: 'LANDED', pilot_id: pilotId, pilot_name: req.pilot.name, landed_at: now, flight_id: id });
     }
 
@@ -377,7 +377,7 @@ app.post('/api/drives', verifyToken, async (req, res) => {
     const activeTimer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
     if (activeTimer) {
       await run('DELETE FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
-      await run('INSERT INTO office_logs (id, pilot_id, event) VALUES (?, ?, ?)', [uuidv4(), req.pilot.id, 'drive_logged']);
+      await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), req.pilot.id, 'drive_logged', new Date().toISOString()]);
       broadcast({ type: 'LANDED', pilot_id: req.pilot.id, pilot_name: req.pilot.name, landed_at: now });
     }
     res.status(201).json({ id, message: 'Drive logged' });
@@ -453,7 +453,7 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
 
     await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at) VALUES (?, ?, ?, ?)',
       [pilot_id, client_name || null, now.toISOString(), expires.toISOString()]);
-    await run('INSERT INTO office_logs (id, pilot_id, event) VALUES (?, ?, ?)', [uuidv4(), pilot_id, 'left_office']);
+    await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'left_office', new Date().toISOString()]);
 
     broadcast({
       type: 'LEFT_OFFICE',
@@ -488,7 +488,7 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
       if (!pilot) continue;
       await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, group_id) VALUES (?, ?, ?, ?, ?)',
         [pid, group_name, now.toISOString(), expires.toISOString(), groupId]);
-      await run('INSERT INTO office_logs (id, pilot_id, event) VALUES (?, ?, ?)', [uuidv4(), pid, 'group_left_office']);
+      await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pid, 'group_left_office', new Date().toISOString()]);
       pilotNames.push(pilot.name);
     }
 
@@ -518,7 +518,7 @@ app.post('/api/office/landed-early', verifyOffice, async (req, res) => {
     if (!timer) return res.status(404).json({ error: 'No active timer for this pilot' });
 
     await run('DELETE FROM active_timers WHERE pilot_id = ?', [pilot_id]);
-    await run('INSERT INTO office_logs (id, pilot_id, event) VALUES (?, ?, ?)', [uuidv4(), pilot_id, 'landed_early']);
+    await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'landed_early', new Date().toISOString()]);
 
     const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [pilot_id]);
     broadcast({ type: 'LANDED_EARLY', pilot_id, pilot_name: pilot.name });
@@ -539,7 +539,7 @@ app.post('/api/office/extend', verifyOffice, async (req, res) => {
 
     const newExpiry = new Date(new Date(timer.expires_at).getTime() + 30 * 60 * 1000);
     await run('UPDATE active_timers SET expires_at = ? WHERE pilot_id = ?', [newExpiry.toISOString(), pilot_id]);
-    await run('INSERT INTO office_logs (id, pilot_id, event) VALUES (?, ?, ?)', [uuidv4(), pilot_id, 'timer_extended_30min']);
+    await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'timer_extended_30min', new Date().toISOString()]);
 
     const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [pilot_id]);
     broadcast({

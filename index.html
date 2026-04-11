@@ -724,20 +724,20 @@
   </div>
 
   <div class="office-tab-bar">
-    <button class="office-tab-btn active" onclick="showOfficeTab('pilots')" id="office-tab-pilots-btn">Office</button>
-    <button class="office-tab-btn" onclick="showOfficeTab('groups')" id="office-tab-groups-btn">Groups</button>
+    <button class="office-tab-btn active" onclick="showOfficeTab('groups')" id="office-tab-groups-btn">New FF</button>
+    <button class="office-tab-btn" onclick="showOfficeTab('pilots')" id="office-tab-pilots-btn">Flight Following</button>
     <button class="office-tab-btn" onclick="showOfficeTab('today')" id="office-tab-today-btn">Today</button>
-    <button class="office-tab-btn" onclick="showOfficeTab('flights')" id="office-tab-flights-btn">Flights</button>
-    <button class="office-tab-btn" onclick="showOfficeTab('ff')" id="office-tab-ff-btn">Following</button>
+    <button class="office-tab-btn" onclick="showOfficeTab('flights')" id="office-tab-flights-btn">Flight Log</button>
+    <button class="office-tab-btn" onclick="showOfficeTab('ff')" id="office-tab-ff-btn">Duty Sheet</button>
   </div>
 
   <div class="office-content">
-    <div class="office-tab-content active" id="office-tab-pilots">
+    <div class="office-tab-content" id="office-tab-pilots">
       <div class="section-title">Pilots</div>
       <div id="pilots-list"></div>
     </div>
 
-    <div class="office-tab-content" id="office-tab-groups">
+    <div class="office-tab-content active" id="office-tab-groups">
       <div id="groups-panel"></div>
     </div>
 
@@ -1582,6 +1582,7 @@ function showOfficeDashboard() {
   document.getElementById('office-dashboard').style.display = 'block';
   loadOfficeData();
   connectWS();
+  showOfficeTab('groups');
 }
 
 function officeDoLogout() {

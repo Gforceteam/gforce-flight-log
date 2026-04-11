@@ -53,7 +53,13 @@ async function createTables() {
   await db.execute(`CREATE TABLE IF NOT EXISTS office_logs (
     id TEXT PRIMARY KEY, pilot_id TEXT, event TEXT, created_at TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS active_timers (
-    pilot_id TEXT PRIMARY KEY, client_name TEXT, started_at TEXT, expires_at TEXT)`);
+    pilot_id TEXT PRIMARY KEY, client_name TEXT, started_at TEXT, expires_at TEXT, group_id TEXT)`);
+  await db.execute(`CREATE TABLE IF NOT EXISTS flight_groups (
+    id TEXT PRIMARY KEY, name TEXT, started_at TEXT)`);
+  await db.execute(`CREATE TABLE IF NOT EXISTS group_members (
+    group_id TEXT, pilot_id TEXT, PRIMARY KEY (group_id, pilot_id))`);
+  // Add group_id column to active_timers if it doesn't exist (migration)
+  try { await db.execute('ALTER TABLE active_timers ADD COLUMN group_id TEXT'); } catch {}
   console.log('✅ Tables ready');
 }
 
@@ -175,6 +181,7 @@ app.get('/api/pilots', verifyToken, async (req, res) => {
         client_name: timer ? timer.client_name : null,
         timer_started_at: timer ? timer.started_at : null,
         timer_expires_at: timer ? timer.expires_at : null,
+        group_id: timer ? (timer.group_id || null) : null,
         last_landed_at: lastL ? lastL.last_landed : null,
         last_seen: p.last_seen || null
       };
@@ -192,12 +199,33 @@ app.get('/api/my-status', verifyToken, async (req, res) => {
     await run('UPDATE pilots SET last_seen = ? WHERE id = ?', [new Date().toISOString(), req.pilot.id]);
     const timer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
     const pilot = await queryOne('SELECT current_wing FROM pilots WHERE id = ?', [req.pilot.id]);
+    let group = null;
+    let groupPilots = [];
+    if (timer && timer.group_id) {
+      const grp = await queryOne('SELECT * FROM flight_groups WHERE id = ?', [timer.group_id]);
+      if (grp) {
+        group = grp.name;
+        const members = await queryAll(
+          'SELECT p.id, p.name FROM group_members gm JOIN pilots p ON gm.pilot_id = p.id WHERE gm.group_id = ? AND gm.pilot_id != ?',
+          [timer.group_id, req.pilot.id]
+        );
+        // Only include members who are still airborne
+        const memberTimers = await queryAll(
+          'SELECT pilot_id FROM active_timers WHERE pilot_id IN (' + members.map(() => '?').join(',') + ')',
+          members.map(m => m.id)
+        );
+        const activeIds = new Set(memberTimers.map(t => t.pilot_id));
+        groupPilots = members.filter(m => activeIds.has(m.id)).map(m => m.name);
+      }
+    }
     res.json({
       status: timer ? 'airborne' : 'in_office',
       client_name: timer ? timer.client_name : null,
       timer_started_at: timer ? timer.started_at : null,
       timer_expires_at: timer ? timer.expires_at : null,
-      current_wing: pilot ? pilot.current_wing : null
+      current_wing: pilot ? pilot.current_wing : null,
+      group_name: group,
+      group_pilots: groupPilots
     });
   } catch (e) {
     console.error(e);
@@ -381,7 +409,7 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
     const now = new Date();
     const expires = new Date(now.getTime() + 60 * 60 * 1000);
 
-    await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at) VALUES (?, ?, ?, ?)',
+    await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, group_id) VALUES (?, ?, ?, ?, NULL)',
       [pilot_id, client_name || null, now.toISOString(), expires.toISOString()]);
     await run('INSERT INTO office_logs (id, pilot_id, event) VALUES (?, ?, ?)', [uuidv4(), pilot_id, 'left_office']);
 
@@ -395,6 +423,47 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
     });
 
     res.json({ message: `Timer started for ${pilot.name}`, expires_at: expires.toISOString() });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
+  try {
+    const { group_name, pilot_ids } = req.body;
+    if (!group_name || !pilot_ids || !pilot_ids.length) {
+      return res.status(400).json({ error: 'group_name and pilot_ids required' });
+    }
+    const groupId = uuidv4();
+    const now = new Date();
+    const expires = new Date(now.getTime() + 60 * 60 * 1000);
+
+    await run('INSERT INTO flight_groups (id, name, started_at) VALUES (?, ?, ?)',
+      [groupId, group_name, now.toISOString()]);
+
+    const pilotNames = [];
+    for (const pid of pilot_ids) {
+      const pilot = await queryOne('SELECT * FROM pilots WHERE id = ?', [pid]);
+      if (!pilot) continue;
+      await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, group_id) VALUES (?, ?, ?, ?, ?)',
+        [pid, group_name, now.toISOString(), expires.toISOString(), groupId]);
+      await run('INSERT INTO group_members (group_id, pilot_id) VALUES (?, ?)', [groupId, pid]);
+      await run('INSERT INTO office_logs (id, pilot_id, event) VALUES (?, ?, ?)', [uuidv4(), pid, 'left_office_group']);
+      pilotNames.push(pilot.name);
+    }
+
+    broadcast({
+      type: 'GROUP_LEFT_OFFICE',
+      group_id: groupId,
+      group_name,
+      pilot_ids,
+      pilot_names: pilotNames,
+      started_at: now.toISOString(),
+      expires_at: expires.toISOString()
+    });
+
+    res.json({ message: `Group "${group_name}" away with ${pilotNames.join(', ')}`, group_id: groupId, expires_at: expires.toISOString() });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: e.message });

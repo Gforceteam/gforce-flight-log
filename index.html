@@ -938,13 +938,15 @@ function startStatusPoll() {
       if (!res.ok) return;
       const newStatus = await res.json();
       const prevStatus = myStatus.status;
-      myStatus = { status: newStatus.status, client_name: newStatus.client_name, timer_expires_at: newStatus.timer_expires_at, group_name: newStatus.group_name, group_pilots: newStatus.group_pilots || [] };
+      const prevGroupPilots = (myStatus.group_pilots || []).join(',');
+      myStatus = { status: newStatus.status, client_name: newStatus.client_name, timer_expires_at: newStatus.timer_expires_at, group_name: newStatus.group_name || null, group_pilots: newStatus.group_pilots || [], group_id: newStatus.group_id || null, is_peak_trip: newStatus.is_peak_trip || false };
       if (newStatus.current_wing && newStatus.current_wing !== currentWing) {
         currentWing = newStatus.current_wing;
         const wingEl = document.getElementById('f-wing');
         if (wingEl) wingEl.value = currentWing;
       }
-      if (newStatus.status !== prevStatus) {
+      const groupPilotsChanged = (newStatus.group_pilots || []).join(',') !== prevGroupPilots;
+      if (newStatus.status !== prevStatus || groupPilotsChanged) {
         renderDashboard();
         updateStatusBadge();
         if (newStatus.status === 'airborne' && prevStatus === 'in_office') {
@@ -1022,8 +1024,12 @@ function renderDashboard() {
     el.innerHTML = `
       <div class="dashboard-status-icon">🪂</div>
       <div class="dashboard-status-label">Currently Away</div>
-      ${myStatus.group_name ? `<div class="dashboard-client" style="font-size:15px;">📋 ${myStatus.group_name}</div>` : ''}
-      ${myStatus.group_pilots && myStatus.group_pilots.length ? `<div style="color:#888;font-size:13px;margin-top:4px;">With: ${myStatus.group_pilots.join(', ')}</div>` : ''}
+      ${myStatus.group_name ? `<div class="dashboard-client" style="font-size:16px;">📋 ${myStatus.group_name}</div>` : ''}
+      ${myStatus.group_pilots && myStatus.group_pilots.length ? `
+        <div style="margin-top:10px;padding:10px 14px;background:var(--surface);border-radius:10px;border:1px solid var(--border);">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Flying with</div>
+          <div style="font-size:15px;font-weight:600;color:var(--text);">${myStatus.group_pilots.join(' · ')}</div>
+        </div>` : ''}
       <div class="dashboard-timer" id="dashboard-timer">--:--</div>
       <button class="btn-log-flight" onclick="goToLogFlight()">Log Flight</button>
       <button class="btn-extend" id="btn-extend" onclick="extendMyTimer()">+ 30 Minutes</button>

@@ -1461,7 +1461,7 @@ function buildFFTable(dates, pilots) {
   let html = `<table class="ff-table"><thead><tr>
     <th class="ff-pilot-name">Pilot</th>
     ${dates.map(d => `<th class="${d === today ? 'ff-today-col' : ''}">${ffFmtDate(d)}</th>`).join('')}
-    <th>Last 60 days</th>
+    <th>Last 14 days</th>
   </tr></thead><tbody>`;
 
   pilots.forEach(p => {

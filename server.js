@@ -40,7 +40,8 @@ async function initDb() {
       name TEXT NOT NULL,
       pin_hash TEXT NOT NULL,
       created_at TEXT,
-      last_seen TEXT
+      last_seen TEXT,
+      current_wing TEXT
     )
   `);
   execSql(`
@@ -57,7 +58,8 @@ async function initDb() {
       photos REAL,
       notes TEXT,
       landed_at TEXT,
-      created_at TEXT
+      created_at TEXT,
+      wing_reg TEXT
     )
   `);
   execSql(`
@@ -83,8 +85,8 @@ async function initDb() {
     // Restore pilots (preserve existing IDs)
     if (backup.pilots && backup.pilots.length > 0) {
       backup.pilots.forEach(p => {
-        execSql('INSERT OR IGNORE INTO pilots (id, name, pin_hash, created_at) VALUES (?, ?, ?, ?)',
-          [p.id, p.name, p.pin_hash, p.created_at]);
+        execSql('INSERT OR IGNORE INTO pilots (id, name, pin_hash, created_at, current_wing) VALUES (?, ?, ?, ?, ?)',
+          [p.id, p.name, p.pin_hash, p.created_at, p.current_wing || null]);
       });
       console.log(`✅ Restored ${backup.pilots.length} pilots from backup`);
     }
@@ -92,9 +94,9 @@ async function initDb() {
     if (backup.flights && backup.flights.length > 0) {
       backup.flights.forEach(f => {
         execSql(`INSERT OR IGNORE INTO flights
-          (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [f.id, f.pilot_id, f.client_name, f.date, f.flight_num, f.weight, f.takeoff, f.landing, f.time, f.photos, f.notes, f.landed_at, f.created_at]);
+          (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, created_at, wing_reg)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [f.id, f.pilot_id, f.client_name, f.date, f.flight_num, f.weight, f.takeoff, f.landing, f.time, f.photos, f.notes, f.landed_at, f.created_at, f.wing_reg || null]);
       });
       console.log(`✅ Restored ${backup.flights.length} flights from backup`);
     }
@@ -272,11 +274,13 @@ app.get('/api/my-status', verifyToken, (req, res) => {
   try {
     run('UPDATE pilots SET last_seen = ? WHERE id = ?', [new Date().toISOString(), req.pilot.id]);
     const timer = queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
+    const pilot = queryOne('SELECT current_wing FROM pilots WHERE id = ?', [req.pilot.id]);
     res.json({
       status: timer ? 'airborne' : 'in_office',
       client_name: timer ? timer.client_name : null,
       timer_started_at: timer ? timer.started_at : null,
-      timer_expires_at: timer ? timer.expires_at : null
+      timer_expires_at: timer ? timer.expires_at : null,
+      current_wing: pilot ? pilot.current_wing : null
     });
   } catch (e) {
     console.error(e);
@@ -314,7 +318,7 @@ app.post('/api/pilot/extend-timer', verifyToken, (req, res) => {
 
 app.post('/api/flights', verifyToken, (req, res) => {
   try {
-    const { date, flight_num, weight, takeoff, landing, time, photos, notes, client_name } = req.body;
+    const { date, flight_num, weight, takeoff, landing, time, photos, notes, client_name, wing_reg } = req.body;
     const pilotId = req.pilot.id;
 
     if (!date || !flight_num || !weight || !takeoff || !landing || !time) {
@@ -328,10 +332,15 @@ app.post('/api/flights', verifyToken, (req, res) => {
     const id = uuidv4();
     const now = new Date().toISOString();
 
+    // If pilot provided a new wing_reg, update their current_wing
+    if (wing_reg) {
+      run('UPDATE pilots SET current_wing = ? WHERE id = ?', [wing_reg, pilotId]);
+    }
+
     run(`
-      INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [id, pilotId, resolvedClientName, date, flight_num, weight, takeoff, landing, time, photos || 0, notes || '', now]);
+      INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, wing_reg)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [id, pilotId, resolvedClientName, date, flight_num, weight, takeoff, landing, time, photos || 0, notes || '', now, wing_reg || null]);
 
     // Stop any active timer
     const activeTimer = queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [pilotId]);
@@ -376,15 +385,15 @@ app.get('/api/flights', verifyToken, (req, res) => {
 
 app.put('/api/flights/:id', verifyToken, (req, res) => {
   try {
-    const { date, flight_num, weight, takeoff, landing, time, photos, notes } = req.body;
+    const { date, flight_num, weight, takeoff, landing, time, photos, notes, wing_reg } = req.body;
     const { id } = req.params;
     const pilotId = req.pilot.id;
 
     const existing = queryOne('SELECT * FROM flights WHERE id = ? AND pilot_id = ?', [id, pilotId]);
     if (!existing) return res.status(404).json({ error: 'Flight not found' });
 
-    run(`UPDATE flights SET date=?, flight_num=?, weight=?, takeoff=?, landing=?, time=?, photos=?, notes=? WHERE id=? AND pilot_id=?`,
-      [date, flight_num, weight, takeoff, landing, time, photos || 0, notes || '', id, pilotId]);
+    run(`UPDATE flights SET date=?, flight_num=?, weight=?, takeoff=?, landing=?, time=?, photos=?, notes=?, wing_reg=? WHERE id=? AND pilot_id=?`,
+      [date, flight_num, weight, takeoff, landing, time, photos || 0, notes || '', wing_reg || null, id, pilotId]);
 
     res.json({ id, message: 'Flight updated' });
   } catch (e) {
@@ -403,6 +412,18 @@ app.delete('/api/flights/:id', verifyToken, (req, res) => {
 
     run('DELETE FROM flights WHERE id = ? AND pilot_id = ?', [id, pilotId]);
     res.json({ id, message: 'Flight deleted' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Wing Registration ────────────────────────────────────────────────────────
+app.put('/api/pilot/wing', verifyToken, (req, res) => {
+  try {
+    const { wing_reg } = req.body;
+    run('UPDATE pilots SET current_wing = ? WHERE id = ?', [wing_reg || null, req.pilot.id]);
+    res.json({ message: 'Wing updated', wing_reg: wing_reg || null });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: e.message });

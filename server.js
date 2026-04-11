@@ -7,6 +7,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
+const webpush = require('web-push');
 
 const app = express();
 const server = http.createServer(app);
@@ -16,6 +17,18 @@ const wss = new WebSocket.Server({ server });
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'gforce-secret-change-in-production';
 const OFFICE_PASSWORD = process.env.OFFICE_PASSWORD || 'office123';
+
+// ─── Web Push (VAPID) ─────────────────────────────────────────────────────────
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    'mailto:admin@gforce.co.nz',
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+  console.log('✅ VAPID push notifications configured');
+} else {
+  console.warn('⚠️  VAPID keys not set — push notifications disabled');
+}
 
 // ─── Database ─────────────────────────────────────────────────────────────────
 const db = createClient({
@@ -58,6 +71,8 @@ async function createTables() {
     pilot_id TEXT PRIMARY KEY, client_name TEXT, started_at TEXT, expires_at TEXT, group_id TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS drives (
     id TEXT PRIMARY KEY, pilot_id TEXT, date TEXT, notes TEXT, group_id TEXT, created_at TEXT)`);
+  await db.execute(`CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id TEXT PRIMARY KEY, pilot_id TEXT NOT NULL, subscription TEXT NOT NULL, created_at TEXT)`);
   console.log('✅ Tables ready');
 }
 
@@ -352,6 +367,53 @@ app.put('/api/pilot/wing', verifyToken, async (req, res) => {
   }
 });
 
+// ─── Push Notifications ──────────────────────────────────────────────────────
+async function sendPushToPilot(pilotId, payload) {
+  if (!process.env.VAPID_PUBLIC_KEY) return;
+  const subs = await queryAll('SELECT id, subscription FROM push_subscriptions WHERE pilot_id = ?', [pilotId]);
+  for (const row of subs) {
+    try {
+      await webpush.sendNotification(JSON.parse(row.subscription), JSON.stringify(payload));
+    } catch (e) {
+      // 410 Gone / 404 = subscription expired, clean it up
+      if (e.statusCode === 410 || e.statusCode === 404) {
+        await run('DELETE FROM push_subscriptions WHERE id = ?', [row.id]);
+      } else {
+        console.error('Push send failed:', e.statusCode, e.message);
+      }
+    }
+  }
+}
+
+app.post('/api/pilot/push-subscription', verifyToken, async (req, res) => {
+  try {
+    const { subscription } = req.body;
+    if (!subscription || !subscription.endpoint) return res.status(400).json({ error: 'Invalid subscription' });
+    // Replace any existing subscription for this pilot (device may re-subscribe)
+    await run('DELETE FROM push_subscriptions WHERE pilot_id = ?', [req.pilot.id]);
+    await run('INSERT INTO push_subscriptions (id, pilot_id, subscription, created_at) VALUES (?, ?, ?, ?)',
+      [uuidv4(), req.pilot.id, JSON.stringify(subscription), new Date().toISOString()]);
+    res.json({ message: 'Push subscription saved' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/pilot/push-subscription', verifyToken, async (req, res) => {
+  try {
+    await run('DELETE FROM push_subscriptions WHERE pilot_id = ?', [req.pilot.id]);
+    res.json({ message: 'Push subscription removed' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/vapid-public-key', (req, res) => {
+  res.json({ key: process.env.VAPID_PUBLIC_KEY || null });
+});
+
 // ─── Pilot Availability ──────────────────────────────────────────────────────
 app.put('/api/pilot/available', verifyToken, async (req, res) => {
   try {
@@ -479,6 +541,13 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
       expires_at: expires.toISOString()
     });
 
+    // Push notification to pilot's device (works even when app is closed)
+    await sendPushToPilot(pilot_id, {
+      title: '🪂 GForce — YOU\'RE AWAY!',
+      body: client_name ? `Client: ${client_name}. Timer started — 60 minutes.` : 'Office has started your timer. Have a great flight!',
+      tag: 'pilot-sent-away'
+    });
+
     res.json({ message: `Timer started for ${pilot.name}`, expires_at: expires.toISOString() });
   } catch (e) {
     console.error(e);
@@ -498,6 +567,7 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
     const groupId = uuidv4();
 
     const pilotNames = [];
+    const pilotMap = []; // { id, name } for push after all names known
     for (const pid of pilot_ids) {
       const pilot = await queryOne('SELECT * FROM pilots WHERE id = ?', [pid]);
       if (!pilot) continue;
@@ -505,6 +575,19 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
         [pid, group_name, now.toISOString(), expires.toISOString(), groupId]);
       await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pid, 'group_left_office', new Date().toISOString()]);
       pilotNames.push(pilot.name);
+      pilotMap.push({ id: pid, name: pilot.name });
+    }
+    // Push notification to each pilot — tells them who else is in the group
+    for (const p of pilotMap) {
+      const others = pilotNames.filter(n => n !== p.name);
+      const body = others.length
+        ? `Flying with ${others.join(', ')} — ${duration} min timer started.`
+        : `Timer started — ${duration} minutes.`;
+      await sendPushToPilot(p.id, {
+        title: `🪂 GForce — YOU'RE AWAY!`,
+        body,
+        tag: 'pilot-sent-away'
+      });
     }
 
     broadcast({

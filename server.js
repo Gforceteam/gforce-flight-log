@@ -8,6 +8,7 @@ const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
 const webpush = require('web-push');
+const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
@@ -15,8 +16,60 @@ const wss = new WebSocket.Server({ server });
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'gforce-secret-change-in-production';
-const OFFICE_PASSWORD = process.env.OFFICE_PASSWORD || 'office123';
+const JWT_SECRET = process.env.JWT_SECRET;
+const OFFICE_PASSWORD = process.env.OFFICE_PASSWORD;
+
+if (!JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET env var not set. Set it with: fly secrets set JWT_SECRET=<long-random-string>');
+  process.exit(1);
+}
+if (!OFFICE_PASSWORD) {
+  console.error('FATAL: OFFICE_PASSWORD env var not set. Set it with: fly secrets set OFFICE_PASSWORD=<password>');
+  process.exit(1);
+}
+
+// ─── Security helpers ─────────────────────────────────────────────────────────
+// Constant-time string comparison (prevents timing attacks)
+function safeCompare(a, b) {
+  const bufA = Buffer.from(String(a));
+  const bufB = Buffer.from(String(b));
+  if (bufA.length !== bufB.length) {
+    // Still do a comparison to avoid timing leak on length
+    crypto.timingSafeEqual(bufA, bufA);
+    return false;
+  }
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+// In-memory rate limiter — 5 failed attempts per IP per 15 minutes on auth routes
+const _loginAttempts = new Map();
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const WINDOW = 15 * 60 * 1000; // 15 min
+  const MAX = 5;
+  let entry = _loginAttempts.get(ip);
+  if (!entry || now > entry.resetAt) {
+    entry = { count: 0, resetAt: now + WINDOW };
+  }
+  entry.count++;
+  _loginAttempts.set(ip, entry);
+  if (entry.count > MAX) {
+    return { blocked: true, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
+  }
+  return { blocked: false };
+}
+function clearRateLimit(ip) { _loginAttempts.delete(ip); }
+// Clean up old entries every 30 min to prevent unbounded memory growth
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, e] of _loginAttempts) { if (now > e.resetAt) _loginAttempts.delete(ip); }
+}, 30 * 60 * 1000);
+
+// Input sanitisation — trim and cap length
+function sanitize(s, max = 200) {
+  if (s == null) return null;
+  return String(s).trim().slice(0, max) || null;
+}
 
 // ─── Web Push (VAPID) ─────────────────────────────────────────────────────────
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
@@ -136,8 +189,22 @@ function broadcast(data) {
 }
 
 // ─── Middleware ────────────────────────────────────────────────────────────────
-app.use(cors());
-app.use(express.json());
+const ALLOWED_ORIGINS = [
+  'https://brookewhatnall.github.io',
+  'http://localhost:3000',
+  'http://localhost:8080',
+  ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : [])
+];
+app.use(cors({
+  origin: (origin, cb) => {
+    // Allow requests with no origin (native apps, curl, Postman)
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    cb(new Error(`Origin ${origin} not allowed`));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+app.use(express.json({ limit: '100kb' }));
 
 // ─── Public Routes ────────────────────────────────────────────────────────────
 app.get('/api/public/pilots', async (req, res) => {
@@ -152,31 +219,46 @@ app.get('/api/public/pilots', async (req, res) => {
 
 // ─── Auth Routes ──────────────────────────────────────────────────────────────
 app.post('/api/auth/pilot', async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  const rl = checkRateLimit(ip);
+  if (rl.blocked) {
+    return res.status(429).json({ error: `Too many attempts. Try again in ${Math.ceil(rl.retryAfter / 60)} minutes.` });
+  }
   try {
-    const { name, pin } = req.body;
-    if (!name || !pin) return res.status(400).json({ error: 'Name and PIN required' });
+    const { name, password, pin } = req.body; // accept both 'password' and legacy 'pin'
+    const credential = password || pin;
+    if (!name || !credential) return res.status(400).json({ error: 'Name and password required' });
     const pilot = await queryOne('SELECT * FROM pilots WHERE name = ?', [name]);
-    if (!pilot || !bcrypt.compareSync(pin, pilot.pin_hash)) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    if (!pilot || !bcrypt.compareSync(credential, pilot.pin_hash)) {
+      return res.status(401).json({ error: 'Invalid name or password' });
     }
+    clearRateLimit(ip); // reset on successful login
     const token = jwt.sign({ id: pilot.id, name: pilot.name, type: 'pilot' }, JWT_SECRET, { expiresIn: '24h' });
     res.json({ token, pilot: { id: pilot.id, name: pilot.name } });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Login failed' });
   }
 });
 
 app.post('/api/auth/office', async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  const rl = checkRateLimit(ip);
+  if (rl.blocked) {
+    return res.status(429).json({ error: `Too many attempts. Try again in ${Math.ceil(rl.retryAfter / 60)} minutes.` });
+  }
   try {
     const { password } = req.body;
     if (!password) return res.status(400).json({ error: 'Password required' });
-    if (password !== OFFICE_PASSWORD) return res.status(401).json({ error: 'Invalid password' });
+    if (!safeCompare(password, OFFICE_PASSWORD)) {
+      return res.status(401).json({ error: 'Invalid password' });
+    }
+    clearRateLimit(ip);
     const token = jwt.sign({ type: 'office' }, JWT_SECRET, { expiresIn: '8h' });
     res.json({ token });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Login failed' });
   }
 });
 
@@ -279,20 +361,26 @@ app.post('/api/flights', verifyToken, async (req, res) => {
     if (!date || !flight_num || !weight || !takeoff || !landing || !time) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
+    // Basic date format check
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Invalid date format' });
 
     const timer = await queryOne('SELECT client_name FROM active_timers WHERE pilot_id = ?', [pilotId]);
-    const resolvedClientName = client_name || (timer ? timer.client_name : null);
+    const resolvedClientName = sanitize(client_name || (timer ? timer.client_name : null), 100);
     const id = uuidv4();
     const now = new Date().toISOString();
+    const cleanNotes = sanitize(notes, 500);
+    const cleanWingReg = sanitize(wing_reg, 10);
+    const cleanTakeoff = sanitize(takeoff, 100);
+    const cleanLanding = sanitize(landing, 100);
 
-    if (wing_reg) {
-      await run('UPDATE pilots SET current_wing = ? WHERE id = ?', [wing_reg, pilotId]);
+    if (cleanWingReg) {
+      await run('UPDATE pilots SET current_wing = ? WHERE id = ?', [cleanWingReg, pilotId]);
     }
 
     await run(
       `INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, wing_reg)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, pilotId, resolvedClientName, date, flight_num, weight, takeoff, landing, time, photos || 0, notes || '', now, wing_reg || null]
+      [id, pilotId, resolvedClientName, date, flight_num, weight, cleanTakeoff, cleanLanding, time, photos || 0, cleanNotes || '', now, cleanWingReg || null]
     );
 
     const activeTimer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [pilotId]);
@@ -311,9 +399,10 @@ app.post('/api/flights', verifyToken, async (req, res) => {
 
 app.get('/api/flights', verifyToken, async (req, res) => {
   try {
-    const { date_from, date_to, pilot_id } = req.query;
+    const { date_from, date_to } = req.query;
+    // Always use the authenticated pilot's own ID — never allow cross-pilot reads
     let sql = 'SELECT * FROM flights WHERE pilot_id = ?';
-    const params = [pilot_id || req.pilot.id];
+    const params = [req.pilot.id];
     if (date_from) { sql += ' AND date >= ?'; params.push(date_from); }
     if (date_to) { sql += ' AND date <= ?'; params.push(date_to); }
     sql += ' ORDER BY date DESC, flight_num ASC';
@@ -321,7 +410,7 @@ app.get('/api/flights', verifyToken, async (req, res) => {
     res.json(flights);
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Failed to fetch flights' });
   }
 });
 
@@ -425,6 +514,48 @@ app.put('/api/pilot/available', verifyToken, async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Pilot changes their own password ────────────────────────────────────────
+app.put('/api/pilot/password', verifyToken, async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  const rl = checkRateLimit(ip);
+  if (rl.blocked) return res.status(429).json({ error: 'Too many attempts. Try again later.' });
+  try {
+    const { current_password, new_password } = req.body;
+    if (!current_password || !new_password) return res.status(400).json({ error: 'current_password and new_password required' });
+    if (new_password.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    if (new_password.length > 128) return res.status(400).json({ error: 'Password too long' });
+    const pilot = await queryOne('SELECT * FROM pilots WHERE id = ?', [req.pilot.id]);
+    if (!pilot || !bcrypt.compareSync(current_password, pilot.pin_hash)) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+    clearRateLimit(ip);
+    const newHash = bcrypt.hashSync(new_password, 10);
+    await run('UPDATE pilots SET pin_hash = ? WHERE id = ?', [newHash, req.pilot.id]);
+    res.json({ message: 'Password changed successfully' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Password change failed' });
+  }
+});
+
+// ─── Office: reset a pilot's password ────────────────────────────────────────
+app.put('/api/office/pilot-password', verifyOffice, async (req, res) => {
+  try {
+    const { pilot_id, new_password } = req.body;
+    if (!pilot_id || !new_password) return res.status(400).json({ error: 'pilot_id and new_password required' });
+    if (new_password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    if (new_password.length > 128) return res.status(400).json({ error: 'Password too long' });
+    const pilot = await queryOne('SELECT id, name FROM pilots WHERE id = ?', [pilot_id]);
+    if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
+    const newHash = bcrypt.hashSync(new_password, 10);
+    await run('UPDATE pilots SET pin_hash = ? WHERE id = ?', [newHash, pilot_id]);
+    res.json({ message: `Password reset for ${pilot.name}` });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Password reset failed' });
   }
 });
 
@@ -581,9 +712,10 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
 
     const now = new Date();
     const expires = new Date(now.getTime() + 60 * 60 * 1000);
+    const cleanClientName = sanitize(client_name, 100);
 
     await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at) VALUES (?, ?, ?, ?)',
-      [pilot_id, client_name || null, now.toISOString(), expires.toISOString()]);
+      [pilot_id, cleanClientName || null, now.toISOString(), expires.toISOString()]);
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'left_office', new Date().toISOString()]);
 
     broadcast({

@@ -740,7 +740,10 @@
 
   <div class="office-content">
     <div class="office-tab-content" id="office-tab-pilots">
-      <div class="section-title">Pilots</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div class="section-title" style="margin-bottom:0;">Pilots</div>
+        <button onclick="loadOfficeData()" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:12px;padding:4px 10px;cursor:pointer;">↻ Refresh</button>
+      </div>
       <div id="pilots-list"></div>
     </div>
 
@@ -787,6 +790,7 @@ let pilotName = localStorage.getItem('gforce_pilot_name');
 let editingId = null;
 let myFlights = [];
 let myDrives = [];
+let flyingPilots = []; // pilots currently airborne — shown on dashboard
 let statsMonthOffset = 0; // 0 = current month, -1 = last month, etc.
 let myStatus = { status: 'in_office', client_name: null, timer_expires_at: null };
 let pilotAvailable = false; // explicit availability toggle — off by default on login
@@ -965,14 +969,19 @@ function startStatusPoll() {
         const wingEl = document.getElementById('f-wing');
         if (wingEl) wingEl.value = currentWing;
       }
+      // Also refresh who's flying (lightweight — runs every poll)
+      const flyingRes = await api('/api/flying');
+      if (flyingRes.ok) flyingPilots = await flyingRes.json();
+
       const groupPilotsChanged = (newStatus.group_pilots || []).join(',') !== prevGroupPilots;
       if (newStatus.status !== prevStatus || groupPilotsChanged) {
-        renderDashboard();
         updateStatusBadge();
         if (newStatus.status === 'airborne' && prevStatus === 'in_office') {
           notifyPilotSentAway();
         }
       }
+      // Always re-render dashboard to keep flying list current
+      renderDashboard();
     } catch {}
   }, 15000);
 }
@@ -1000,10 +1009,11 @@ function api(path, opts = {}) {
 
 async function loadMyData() {
   try {
-    const [statusRes, flightsRes, drivesRes] = await Promise.all([
+    const [statusRes, flightsRes, drivesRes, flyingRes] = await Promise.all([
       api('/api/my-status'),
       api('/api/flights'),
-      api('/api/drives')
+      api('/api/drives'),
+      api('/api/flying')
     ]);
     if (statusRes.status === 401 || flightsRes.status === 401) { doLogout(); return; }
     const statusData = await statusRes.json();
@@ -1011,6 +1021,7 @@ async function loadMyData() {
     pilotAvailable = statusData.available === true;
     myFlights = flightsRes.ok ? await flightsRes.json() : [];
     myDrives = drivesRes.ok ? await drivesRes.json() : [];
+    flyingPilots = flyingRes.ok ? await flyingRes.json() : [];
     renderDashboard();
     renderFlights();
     updateStatusBadge();
@@ -1069,13 +1080,38 @@ async function toggleAvailability() {
   }
 }
 
+function renderFlyingList(excludeSelf = false) {
+  const list = excludeSelf
+    ? flyingPilots.filter(p => p.name !== pilotName)
+    : flyingPilots;
+  if (!list.length) return '';
+  const now = Date.now();
+  const rows = list.map(p => {
+    const remaining = p.expires_at ? new Date(p.expires_at).getTime() - now : 0;
+    const mins = remaining > 0 ? Math.ceil(remaining / 60000) : 0;
+    const timeStr = mins > 0 ? `${mins}m left` : 'timer expired';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
+      <div>
+        <span style="font-weight:600;font-size:14px;">${p.name}</span>
+        ${p.client_name ? `<span style="font-size:12px;color:var(--muted);margin-left:6px;">· ${p.client_name}</span>` : ''}
+      </div>
+      <span style="font-size:12px;color:${mins <= 10 && mins > 0 ? 'var(--warning)' : 'var(--muted)'};">${timeStr}</span>
+    </div>`;
+  }).join('');
+  return `
+    <div style="margin-top:20px;padding:12px 14px;background:var(--surface);border-radius:12px;border:1px solid var(--border);text-align:left;">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">🪂 Currently Flying (${list.length})</div>
+      ${rows}
+    </div>`;
+}
+
 function renderDashboard() {
   const el = document.getElementById('dashboard-content');
   if (myStatus.status === 'airborne') {
     const expires = myStatus.timer_expires_at ? new Date(myStatus.timer_expires_at).getTime() : 0;
     el.innerHTML = `
       <div class="dashboard-status-icon">🪂</div>
-      <div class="dashboard-status-label">Currently Away</div>
+      <div class="dashboard-status-label">Currently Flying</div>
       ${myStatus.group_name ? `<div class="dashboard-client" style="font-size:16px;">📋 ${myStatus.group_name}</div>` : ''}
       ${myStatus.group_pilots && myStatus.group_pilots.length ? `
         <div style="margin-top:10px;padding:10px 14px;background:var(--surface);border-radius:10px;border:1px solid var(--border);">
@@ -1085,11 +1121,11 @@ function renderDashboard() {
       <div class="dashboard-timer" id="dashboard-timer">--:--</div>
       <button class="btn-log-flight" onclick="goToLogFlight()">Log Flight</button>
       <button class="btn-extend" id="btn-extend" onclick="extendMyTimer()">+ 30 Minutes</button>
+      ${renderFlyingList(true)}
     `;
     startDashboardCountdown(myStatus.timer_expires_at);
   } else {
     clearInterval(window._dashboardTimer);
-    // Show notification setup prompt if permission not yet granted — must be a real button tap for iOS
     const notifPrompt = ('Notification' in window && Notification.permission !== 'granted') ? `
       <div style="margin-top:20px;padding:14px 16px;background:rgba(243,115,41,0.12);border:1px solid rgba(243,115,41,0.4);border-radius:12px;text-align:center;">
         <div style="font-size:15px;font-weight:700;color:var(--accent);margin-bottom:6px;">🔔 Enable Push Notifications</div>
@@ -1102,6 +1138,7 @@ function renderDashboard() {
       <div class="dashboard-status-value">${pilotAvailable ? 'Available' : 'Not Available'}</div>
       <p style="color:var(--muted);font-size:14px;margin-top:8px">${pilotAvailable ? 'Office can send you away' : 'Toggle Available to appear for office'}</p>
       ${notifPrompt}
+      ${renderFlyingList(false)}
     `;
   }
 }

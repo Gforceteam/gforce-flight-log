@@ -1442,12 +1442,28 @@ function renderFlights() {
   });
   let html = '';
   Object.keys(byDate).sort().reverse().forEach(date => {
-    const dayFlights = byDate[date];
-    html += `<div class="date-group-header">
-      ${fmtDate(date)}
-      <span class="duty-badge">${dayFlights.length} flights</span>
+    const dayFlights = byDate[date].slice().sort((a,b) => a.flight_num - b.flight_num);
+    // hours_worked lives on the last flight of the day
+    const lastFlight = dayFlights[dayFlights.length - 1];
+    const hoursVal = (lastFlight && lastFlight.hours_worked != null) ? lastFlight.hours_worked : '';
+    html += `<div class="date-group-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <div style="display:flex;align-items:center;gap:8px;flex:1;">
+        <span>${fmtDate(date)}</span>
+        <span class="duty-badge">${dayFlights.length} flight${dayFlights.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+        <span style="font-size:11px;color:var(--muted);">🕐</span>
+        <input type="number" min="0" max="16" step="0.5"
+          value="${hoursVal}"
+          placeholder="hrs"
+          title="Hours worked today"
+          style="width:52px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:3px 6px;text-align:center;"
+          onchange="saveHours('${date}', this.value)"
+          onblur="saveHours('${date}', this.value)"
+        />
+      </div>
     </div>`;
-    dayFlights.sort((a,b) => a.flight_num - b.flight_num).forEach(f => {
+    dayFlights.forEach(f => {
       const loggedAt = f.landed_at
         ? new Date(f.landed_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
         : null;
@@ -1469,6 +1485,32 @@ function renderFlights() {
   const today = myFlights.filter(f => f.date === todayStr());
   document.getElementById('header-flights-sub').textContent =
     `${myFlights.length} total · ${today.length} today`;
+}
+
+let _hoursSaveTimers = {};
+async function saveHours(date, value) {
+  clearTimeout(_hoursSaveTimers[date]);
+  _hoursSaveTimers[date] = setTimeout(async () => {
+    const hours = value === '' ? null : parseFloat(value);
+    if (hours !== null && (isNaN(hours) || hours < 0)) return;
+    try {
+      const res = await api('/api/pilot/hours', {
+        method: 'PUT',
+        body: JSON.stringify({ date, hours })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      // Update local state so re-renders show the saved value
+      const data = await res.json();
+      if (data.flight_id) {
+        const f = myFlights.find(f => f.id === data.flight_id);
+        if (f) f.hours_worked = data.hours;
+      }
+      setServerStatus('synced');
+    } catch (e) {
+      toast('Hours save failed: ' + e.message);
+      setServerStatus('error');
+    }
+  }, 600);
 }
 
 async function deleteFlight(id) {

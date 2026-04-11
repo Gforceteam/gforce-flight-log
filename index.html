@@ -549,11 +549,8 @@
 
 <!-- ── LOGIN PAGE ──────────────────────────────────────────────────────────── -->
 <div id="login-page">
-  <div class="login-logo">
-    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M20 4L6 34H12L20 16L28 34H34L20 4Z" fill="white"/>
-      <path d="M20 10L10 32H15L20 18L25 32H30L20 10Z" fill="#f37329"/>
-    </svg>
+  <div class="login-logo" style="background:none;width:100px;height:100px;">
+    <img src="https://www.nzgforce.com/wp-content/uploads/2019/11/gforce-logo.png" alt="GForce" style="width:100%;height:100%;object-fit:contain;" onerror="this.parentElement.innerHTML='<svg width=40 height=40 viewBox=\'0 0 40 40\' fill=none xmlns=\'http://www.w3.org/2000/svg\'><path d=\'M20 4L6 34H12L20 16L28 34H34L20 4Z\' fill=white/><path d=\'M20 10L10 32H15L20 18L25 32H30L20 10Z\' fill=#f37329/></svg>'" />
   </div>
   <h1>GFORCE</h1>
   <p class="subtitle">Flight Log</p>
@@ -653,11 +650,8 @@
         <label>Flight Time (min)</label>
         <div class="btn-group" id="fg-time">
           <button data-val="5">5</button>
-          <button data-val="8">8</button>
           <button data-val="10" class="selected">10</button>
-          <button data-val="12">12</button>
           <button data-val="15">15</button>
-          <button data-val="20">20</button>
         </div>
       </div>
 
@@ -921,6 +915,10 @@ function showApp(name) {
   setupForm();
   loadMyData();
   startStatusPoll();
+  // Request notification permission early so it's ready when sent away
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
 }
 
 function startStatusPoll() {
@@ -931,15 +929,19 @@ function startStatusPoll() {
       const res = await api('/api/my-status');
       if (!res.ok) return;
       const newStatus = await res.json();
+      const prevStatus = myStatus.status;
       myStatus = { status: newStatus.status, client_name: newStatus.client_name, timer_expires_at: newStatus.timer_expires_at };
       if (newStatus.current_wing && newStatus.current_wing !== currentWing) {
         currentWing = newStatus.current_wing;
         const wingEl = document.getElementById('f-wing');
         if (wingEl) wingEl.value = currentWing;
       }
-      if (newStatus.client_name !== myStatus.client_name || newStatus.status !== myStatus.status) {
+      if (newStatus.status !== prevStatus) {
         renderDashboard();
         updateStatusBadge();
+        if (newStatus.status === 'airborne' && prevStatus === 'in_office') {
+          notifyPilotSentAway();
+        }
       }
     } catch {}
   }, 15000);
@@ -995,7 +997,7 @@ function updateStatusBadge() {
   if (myStatus.status === 'airborne') {
     badge.textContent = 'Away';
     badge.className = 'status-badge airborne';
-    sub.textContent = myStatus.client_name ? `Client: ${myStatus.client_name}` : '';
+    sub.textContent = '';
   } else {
     badge.textContent = 'In Office';
     badge.className = 'status-badge in-office';
@@ -1010,7 +1012,6 @@ function renderDashboard() {
     el.innerHTML = `
       <div class="dashboard-status-icon">🪂</div>
       <div class="dashboard-status-label">Currently Away</div>
-      ${myStatus.client_name ? `<div class="dashboard-client">👤 ${myStatus.client_name}</div>` : ''}
       <div class="dashboard-timer" id="dashboard-timer">--:--</div>
       <button class="btn-log-flight" onclick="goToLogFlight()">Log Flight</button>
       <button class="btn-extend" id="btn-extend" onclick="extendMyTimer()">+ 30 Minutes</button>
@@ -1133,6 +1134,10 @@ function onDateChange() {
 
 // ─── Save Flight ──────────────────────────────────────────────────────────────
 async function saveFlight() {
+  if (myStatus.status !== 'airborne') {
+    toast('You must be sent away by office before logging a flight');
+    return;
+  }
   const date = document.getElementById('f-date').value;
   const flightNum = parseInt(document.getElementById('f-num-display').textContent);
   const weight = document.getElementById('f-weight').value;
@@ -1456,7 +1461,7 @@ function buildFFTable(dates, pilots) {
   let html = `<table class="ff-table"><thead><tr>
     <th class="ff-pilot-name">Pilot</th>
     ${dates.map(d => `<th class="${d === today ? 'ff-today-col' : ''}">${ffFmtDate(d)}</th>`).join('')}
-    <th>Last 14 days</th>
+    <th>Last 60 days</th>
   </tr></thead><tbody>`;
 
   pilots.forEach(p => {
@@ -1882,6 +1887,14 @@ function connectWS() {
       case 'LEFT_OFFICE':
         toast(`${data.pilot_name} left office`);
         loadOfficeData();
+        // If this is us, trigger pilot notification too
+        if (pilotId && data.pilot_id === pilotId) {
+          myStatus.status = 'airborne';
+          myStatus.timer_expires_at = data.expires_at;
+          renderDashboard();
+          updateStatusBadge();
+          notifyPilotSentAway();
+        }
         break;
       case 'LANDED':
       case 'LANDED_EARLY':
@@ -1916,6 +1929,50 @@ function toast(msg) {
   el.textContent = msg;
   el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ─── Pilot Sent-Away Notification ───────────────────────────────────────────
+function notifyPilotSentAway() {
+  // Sound alert
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [523, 659, 784].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.4, ctx.currentTime + i * 0.18);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 0.3);
+      osc.start(ctx.currentTime + i * 0.18);
+      osc.stop(ctx.currentTime + i * 0.18 + 0.35);
+    });
+  } catch (e) {}
+
+  // In-app modal
+  const existing = document.getElementById('sent-away-modal');
+  if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'sent-away-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML = `
+    <div style="background:#222;border:2px solid #f37329;border-radius:16px;padding:32px 28px;text-align:center;max-width:320px;width:90%;">
+      <div style="font-size:56px;margin-bottom:12px;">🪂</div>
+      <div style="font-size:22px;font-weight:700;color:#f37329;font-family:Montserrat,sans-serif;letter-spacing:1px;margin-bottom:8px;">YOU'RE AWAY!</div>
+      <div style="color:#ccc;font-size:14px;margin-bottom:24px;">Office has started your timer. Have a great flight!</div>
+      <button onclick="document.getElementById('sent-away-modal').remove()" style="background:#f37329;border:none;border-radius:9999px;color:#fff;font-size:16px;font-weight:700;padding:14px 32px;cursor:pointer;font-family:Montserrat,sans-serif;">GOT IT</button>
+    </div>`;
+  document.body.appendChild(modal);
+
+  // Push notification (if permitted)
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('GForce Flight Log', { body: "You've been sent away! Timer started.", icon: '/gforce-flight-log/icon-192.png' });
+  } else if ('Notification' in window && Notification.permission !== 'denied') {
+    Notification.requestPermission().then(p => {
+      if (p === 'granted') new Notification('GForce Flight Log', { body: "You've been sent away! Timer started.", icon: '/gforce-flight-log/icon-192.png' });
+    });
+  }
 }
 
 // ─── Service Worker ───────────────────────────────────────────────────────────

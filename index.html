@@ -1722,7 +1722,7 @@ function renderGroupsTab() {
   let html = `
     <div style="padding:16px 0 8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <div class="section-title" style="margin-top:0;margin-bottom:0;">Send Group Away</div>
+        <div class="section-title" style="margin-top:0;margin-bottom:0;">Send Pilot(s) Away</div>
         <button onclick="loadOfficeData()" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:12px;padding:4px 10px;cursor:pointer;">↻ Refresh</button>
       </div>
       <div class="card" style="margin-bottom:16px;">
@@ -1751,7 +1751,7 @@ function renderGroupsTab() {
   html += `
         </div>
       </div>
-      <button onclick="submitGroupAway()" style="width:100%;padding:14px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;font-family:Montserrat,sans-serif;text-transform:uppercase;letter-spacing:1px;">Send Group Away</button>
+      <button onclick="submitGroupAway()" style="width:100%;padding:14px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;font-family:Montserrat,sans-serif;text-transform:uppercase;letter-spacing:1px;">Send Pilot(s) Away</button>
     </div>`;
 
   if (airborne.length > 0) {

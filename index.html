@@ -1969,10 +1969,10 @@ function renderOfficeTab() {
         <div class="pilot-avatar">${initial}</div>
         <div class="pilot-info">
           <div class="pilot-name">${p.name}</div>
-          <div class="pilot-status ${isAirborne ? 'airborne' : 'in-office'}">
+          ${!disabled ? `<div class="pilot-status ${isAirborne ? 'airborne' : 'in-office'}">
             ${isAirborne ? '🪂 Flying' : '✅ Available'}
             ${!isAirborne && p.last_landed_at ? ' · Last flight ' + fmtRelative(p.last_landed_at) : ''}
-          </div>
+          </div>` : ''}
           ${isAirborne && clientName ? `<div class="pilot-client">👤 ${clientName}</div>` : ''}
         </div>
         ${!disabled ? `<div class="pilot-actions">
@@ -1984,13 +1984,12 @@ function renderOfficeTab() {
         </div>` : ''}
       </div>
       ${isAirborne && p.timer_expires_at ? `<div class="timer-display" id="timer-${p.id}" data-expires="${p.timer_expires_at}">Timer: --:--</div>` : ''}
-      <div class="pilot-client-row">
+      ${!disabled ? `<div class="pilot-client-row">
         <label>Client / Booking:</label>
         <input type="text" id="client-${p.id}" value="${clientName}"
           placeholder="e.g. Jan Kowalski or BKG-1234"
-          ${disabled ? 'disabled style="opacity:0.4;cursor:not-allowed"' : ''}
-          ${isAirborne && !disabled ? `onchange="updateClientName('${p.id}', this.value)"` : ''} />
-      </div>
+          ${isAirborne ? `onchange="updateClientName('${p.id}', this.value)"` : ''} />
+      </div>` : ''}
     </div>`;
   }
 

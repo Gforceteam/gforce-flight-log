@@ -44,7 +44,9 @@ async function run(sql, params = []) {
 async function createTables() {
   await db.execute(`CREATE TABLE IF NOT EXISTS pilots (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, pin_hash TEXT NOT NULL,
-    created_at TEXT, last_seen TEXT, current_wing TEXT)`);
+    created_at TEXT, last_seen TEXT, current_wing TEXT, available INTEGER DEFAULT 0)`);
+  // Add available column to existing DBs that predate this column
+  try { await db.execute('ALTER TABLE pilots ADD COLUMN available INTEGER DEFAULT 0'); } catch (_) {}
   await db.execute(`CREATE TABLE IF NOT EXISTS flights (
     id TEXT PRIMARY KEY, pilot_id TEXT, client_name TEXT, date TEXT,
     flight_num INTEGER, weight REAL, takeoff TEXT, landing TEXT,
@@ -164,7 +166,7 @@ app.post('/api/auth/office', async (req, res) => {
 // ─── Pilot Routes ─────────────────────────────────────────────────────────────
 app.get('/api/pilots', verifyToken, async (req, res) => {
   try {
-    const pilots = await queryAll('SELECT id, name, last_seen, current_wing FROM pilots ORDER BY name');
+    const pilots = await queryAll('SELECT id, name, last_seen, current_wing, available FROM pilots ORDER BY name');
     const timers = await queryAll('SELECT * FROM active_timers');
     const lastLanded = await queryAll('SELECT pilot_id, MAX(landed_at) as last_landed FROM flights WHERE landed_at IS NOT NULL GROUP BY pilot_id');
 
@@ -194,7 +196,7 @@ app.get('/api/my-status', verifyToken, async (req, res) => {
   try {
     await run('UPDATE pilots SET last_seen = ? WHERE id = ?', [new Date().toISOString(), req.pilot.id]);
     const timer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
-    const pilot = await queryOne('SELECT current_wing FROM pilots WHERE id = ?', [req.pilot.id]);
+    const pilot = await queryOne('SELECT current_wing, available FROM pilots WHERE id = ?', [req.pilot.id]);
     let groupName = null;
     let groupPilots = [];
     let groupId = timer ? (timer.group_id || null) : null;
@@ -214,6 +216,7 @@ app.get('/api/my-status', verifyToken, async (req, res) => {
       timer_started_at: timer ? timer.started_at : null,
       timer_expires_at: timer ? timer.expires_at : null,
       current_wing: pilot ? pilot.current_wing : null,
+      available: pilot ? (Number(pilot.available) === 1) : false,
       group_name: groupName,
       group_pilots: groupPilots,
       group_id: groupId
@@ -343,6 +346,18 @@ app.put('/api/pilot/wing', verifyToken, async (req, res) => {
     const { wing_reg } = req.body;
     await run('UPDATE pilots SET current_wing = ? WHERE id = ?', [wing_reg || null, req.pilot.id]);
     res.json({ message: 'Wing updated', wing_reg: wing_reg || null });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Pilot Availability ──────────────────────────────────────────────────────
+app.put('/api/pilot/available', verifyToken, async (req, res) => {
+  try {
+    const { available } = req.body;
+    await run('UPDATE pilots SET available = ? WHERE id = ?', [available ? 1 : 0, req.pilot.id]);
+    res.json({ message: 'Availability updated', available: !!available });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: e.message });

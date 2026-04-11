@@ -1,4 +1,4 @@
-const CACHE = 'gforce-v2';
+const CACHE = 'gforce-v3';
 const APP = '/gforce-flight-log/';
 
 self.addEventListener('install', e => {
@@ -40,6 +40,23 @@ self.addEventListener('fetch', e => {
         }
         return new Response('', { status: 503 });
       });
+    })
+  );
+});
+
+// Receive server-sent push and show system notification (works when app is closed/backgrounded)
+self.addEventListener('push', e => {
+  let data = { title: '🪂 GForce — YOU\'RE AWAY!', body: 'Office has started your timer.' };
+  try { if (e.data) data = { ...data, ...e.data.json() }; } catch (_) {}
+  e.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/gforce-flight-log/icon-192.png',
+      badge: '/gforce-flight-log/icon-192.png',
+      vibrate: [600, 200, 600, 200, 1000],
+      requireInteraction: true,
+      tag: data.tag || 'pilot-sent-away',
+      data: { url: APP }
     })
   );
 });

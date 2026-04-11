@@ -560,9 +560,9 @@
       <option value="">Select...</option>
       <option value="__office__" class="office-option">— Office —</option>
     </select>
-    <input type="password" id="pilot-pin" placeholder="Enter PIN" maxlength="32" inputmode="numeric" onkeydown="if(event.key==='Enter')doLogin()" />
+    <input type="password" id="pilot-pin" placeholder="Enter password" maxlength="128" onkeydown="if(event.key==='Enter')doLogin()" />
     <button onclick="doLogin()">Sign In</button>
-    <div id="login-error" class="login-error">Invalid PIN. Try again.</div>
+    <div id="login-error" class="login-error">Incorrect password. Try again.</div>
     <div id="login-error2" class="login-error">Cannot reach server. Check your connection.</div>
   </div>
 </div>
@@ -581,6 +581,7 @@
       <button id="availability-btn" onclick="toggleAvailability()" title="Toggle your availability for office to send you away"
         style="background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer;font-weight:600;transition:all 0.2s;">🔴 Not Available</button>
       <span class="server-badge" id="server-badge">...</span>
+      <button onclick="showChangePwModal()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;padding:4px 10px;cursor:pointer" title="Change password">🔑</button>
       <button onclick="doLogout()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;padding:4px 10px;cursor:pointer">Logout</button>
     </div>
   </div>
@@ -832,13 +833,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('pilot-select').addEventListener('change', function() {
     const pinInput = document.getElementById('pilot-pin');
-    if (this.value === '__office__') {
-      pinInput.placeholder = 'Office password';
-      pinInput.removeAttribute('inputmode');
-    } else {
-      pinInput.placeholder = 'Enter PIN';
-      pinInput.setAttribute('inputmode', 'numeric');
-    }
+    pinInput.placeholder = this.value === '__office__' ? 'Office password' : 'Enter password';
   });
 });
 
@@ -863,13 +858,13 @@ async function loadPilotList() {
 async function doLogin() {
   const select = document.getElementById('pilot-select');
   const selectedVal = select.value;
-  const pin = document.getElementById('pilot-pin').value;
+  const password = document.getElementById('pilot-pin').value;
 
   document.getElementById('login-error').style.display = 'none';
   document.getElementById('login-error2').style.display = 'none';
 
-  if (!selectedVal || !pin) {
-    document.getElementById('login-error').textContent = 'Select a pilot or office, then enter your PIN / password';
+  if (!selectedVal || !password) {
+    document.getElementById('login-error').textContent = 'Select a name and enter your password';
     document.getElementById('login-error').style.display = 'block';
     return;
   }
@@ -879,7 +874,7 @@ async function doLogin() {
       const res = await fetch(`${API_BASE}/api/auth/office`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pin })
+        body: JSON.stringify({ password })
       });
       const data = await res.json();
       if (data.token) {
@@ -887,7 +882,7 @@ async function doLogin() {
         localStorage.setItem('gforce_office_token', officeToken);
         showOfficeDashboard();
       } else {
-        document.getElementById('login-error').textContent = 'Incorrect office password';
+        document.getElementById('login-error').textContent = res.status === 429 ? data.error : 'Incorrect office password';
         document.getElementById('login-error').style.display = 'block';
       }
     } catch {
@@ -903,7 +898,7 @@ async function doLogin() {
     const res = await fetch(`${API_BASE}/api/auth/pilot`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, pin })
+      body: JSON.stringify({ name, password })
     });
     const data = await res.json();
     if (data.token) {
@@ -915,7 +910,7 @@ async function doLogin() {
       localStorage.setItem('gforce_pilot_name', pilotName);
       showApp(pilotName);
     } else {
-      document.getElementById('login-error').textContent = 'Invalid PIN. Try again.';
+      document.getElementById('login-error').textContent = res.status === 429 ? data.error : 'Incorrect password. Try again.';
       document.getElementById('login-error').style.display = 'block';
     }
   } catch {
@@ -2634,6 +2629,64 @@ function notifyPilotSentAway() {
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/gforce-flight-log/sw.js').catch(() => {});
 }
+
+// ─── Change Password ──────────────────────────────────────────────────────────
+function showChangePwModal() {
+  document.getElementById('change-pw-modal').style.display = 'flex';
+  document.getElementById('cpw-current').value = '';
+  document.getElementById('cpw-new').value = '';
+  document.getElementById('cpw-confirm').value = '';
+  document.getElementById('cpw-error').textContent = '';
+  document.getElementById('cpw-current').focus();
+}
+function hideChangePwModal() {
+  document.getElementById('change-pw-modal').style.display = 'none';
+}
+async function submitChangePassword() {
+  const current = document.getElementById('cpw-current').value;
+  const newPw = document.getElementById('cpw-new').value;
+  const confirm = document.getElementById('cpw-confirm').value;
+  const errEl = document.getElementById('cpw-error');
+  errEl.textContent = '';
+  if (!current || !newPw || !confirm) { errEl.textContent = 'All fields required'; return; }
+  if (newPw !== confirm) { errEl.textContent = 'New passwords do not match'; return; }
+  if (newPw.length < 6) { errEl.textContent = 'New password must be at least 6 characters'; return; }
+  const btn = document.getElementById('cpw-submit');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    const res = await api('/api/pilot/password', {
+      method: 'PUT',
+      body: JSON.stringify({ current_password: current, new_password: newPw })
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error || 'Failed'; btn.disabled = false; btn.textContent = 'Change Password'; return; }
+    hideChangePwModal();
+    toast('✅ Password changed successfully');
+  } catch (e) {
+    errEl.textContent = 'Network error';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Change Password';
+  }
+}
 </script>
+
+<!-- Change Password Modal -->
+<div id="change-pw-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:var(--card);border-radius:16px;padding:24px;width:100%;max-width:340px;border:1px solid var(--border);">
+    <div style="font-size:17px;font-weight:700;margin-bottom:16px;">🔑 Change Password</div>
+    <input id="cpw-current" type="password" placeholder="Current password" maxlength="128"
+      style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:15px;margin-bottom:10px;" />
+    <input id="cpw-new" type="password" placeholder="New password (min 6 chars)" maxlength="128"
+      style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:15px;margin-bottom:10px;" />
+    <input id="cpw-confirm" type="password" placeholder="Confirm new password" maxlength="128"
+      style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:15px;margin-bottom:12px;"
+      onkeydown="if(event.key==='Enter')submitChangePassword()" />
+    <div id="cpw-error" style="color:var(--danger);font-size:13px;margin-bottom:10px;min-height:18px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button onclick="hideChangePwModal()" style="flex:1;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
+      <button id="cpw-submit" onclick="submitChangePassword()" style="flex:2;padding:12px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">Change Password</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

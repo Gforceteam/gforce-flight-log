@@ -965,7 +965,6 @@ function startStatusPoll() {
 function setupForm() {
   const dateEl = document.getElementById('f-date');
   dateEl.value = todayStr();
-  const hd1 = document.getElementById('header-date'); if (hd1) hd1.textContent = fmtDate(todayStr());
   const wingEl = document.getElementById('f-wing');
   if (wingEl) wingEl.value = currentWing;
   updateWeightDisplay();
@@ -1151,7 +1150,6 @@ function adjustFlightNum(delta) {
 }
 function onDateChange() {
   const date = document.getElementById('f-date').value;
-  const hd2 = document.getElementById('header-date'); if (hd2) hd2.textContent = fmtDate(date);
   updateFlightNumForDate(date);
 }
 
@@ -1276,7 +1274,6 @@ function resetForm() {
   document.querySelector('#fg-time button[data-val="10"]').classList.add('selected');
   const dateEl = document.getElementById('f-date');
   dateEl.value = todayStr();
-  const hd3 = document.getElementById('header-date'); if (hd3) hd3.textContent = fmtDate(todayStr());
 }
 
 function cancelEdit() {
@@ -1300,7 +1297,6 @@ function editFlight(id) {
   if (!f) return;
   editingId = id;
   document.getElementById('f-date').value = f.date;
-  const hd4 = document.getElementById('header-date'); if (hd4) hd4.textContent = fmtDate(f.date);
   document.getElementById('f-num-display').textContent = f.flight_num;
   document.getElementById('f-weight').value = f.weight;
   updateWeightDisplay();

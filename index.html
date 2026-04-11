@@ -1531,9 +1531,33 @@ function renderStats() {
   const avgWeight = flights.length ? (flights.reduce((sum, f) => sum + Number(f.weight), 0) / flights.length).toFixed(1) : '0';
   const avgPerDay = monthFlights.length ? (monthFlights.length / daysElapsed).toFixed(1) : '0';
 
-  // Total kg + elephant equivalent
-  const totalKg = Math.round(flights.reduce((sum, f) => sum + Number(f.weight), 0));
-  const elephants = (totalKg / 6000).toFixed(1);
+  // Gondola time: each flight = 6 min gondola ride back up
+  const gondolaMins = flights.length * 6;
+  function fmtGondola(mins) {
+    if (mins < 60) return { val: mins, unit: mins === 1 ? 'minute' : 'minutes', sub: '' };
+    const hrs = mins / 60;
+    if (hrs < 24) return { val: hrs.toFixed(1), unit: hrs < 2 ? 'hour' : 'hours', sub: `${mins} minutes total` };
+    const days = hrs / 24;
+    if (days < 7) return { val: days.toFixed(1), unit: days < 2 ? 'day' : 'days', sub: `${Math.round(hrs)} hours total` };
+    const weeks = days / 7;
+    if (weeks < 4.33) return { val: weeks.toFixed(1), unit: weeks < 2 ? 'week' : 'weeks', sub: `${Math.round(days)} days total` };
+    const months = days / 30.44;
+    if (months < 12) return { val: months.toFixed(1), unit: months < 2 ? 'month' : 'months', sub: `${Math.round(weeks)} weeks total` };
+    const years = days / 365.25;
+    return { val: years.toFixed(2), unit: years < 2 ? 'year' : 'years', sub: `${Math.round(months)} months total` };
+  }
+  const gondola = fmtGondola(gondolaMins);
+
+  // Vertical climb: each flight = 100m walk to eastern takeoff
+  const totalMeters = flights.length * 100;
+  function fmtClimb(m) {
+    if (m < 1000) return { val: m, unit: 'm', sub: 'vertical climbed' };
+    const km = m / 1000;
+    if (km < 8.849) return { val: km.toFixed(2), unit: 'km', sub: `${m.toLocaleString()}m vertical climbed` };
+    const everests = m / 8849;
+    return { val: everests.toFixed(2), unit: 'Everests', sub: `${(m/1000).toFixed(1)}km — you've climbed Everest ${everests.toFixed(2)}×` };
+  }
+  const climb = fmtClimb(totalMeters);
 
   // Wing stats
   const wingFlights = currentWing ? flights.filter(f => f.wing_reg === currentWing) : [];
@@ -1617,13 +1641,23 @@ function renderStats() {
         : daysLeft <= 5 ? '<div style="margin-top:8px;font-size:13px;font-weight:600;color:#c07000">⚡ Getting close — 2 rest days needed in 14</div>' : ''}
     </div>`;
 
-  // Total kg card
-  const kgCard = `
+  // Gondola time card
+  const gondolaCard = flights.length ? `
     <div class="card stat-section">
-      <div class="stat-section-title">Career Passengers</div>
-      <div style="font-size:32px;font-weight:700">${totalKg.toLocaleString()}<span style="font-size:16px;font-weight:500">kg</span></div>
-      <div style="margin-top:4px;font-size:13px;color:var(--muted)">🐘 ${elephants} African elephants across ${flights.length} flights</div>
-    </div>`;
+      <div class="stat-section-title">🚡 Gondola Time</div>
+      <div style="font-size:32px;font-weight:700">${gondola.val}<span style="font-size:16px;font-weight:500;margin-left:6px;">${gondola.unit}</span></div>
+      <div style="margin-top:4px;font-size:13px;color:var(--muted);">${gondola.sub || `${flights.length} flights × 6 min per ride`}</div>
+      ${gondola.sub ? `<div style="margin-top:2px;font-size:12px;color:var(--border);">${flights.length} flights × 6 min per ride</div>` : ''}
+    </div>` : '';
+
+  // Vertical climb card
+  const climbCard = flights.length ? `
+    <div class="card stat-section">
+      <div class="stat-section-title">🥾 Vertical Climbed</div>
+      <div style="font-size:32px;font-weight:700">${typeof climb.val === 'number' ? climb.val.toLocaleString() : climb.val}<span style="font-size:16px;font-weight:500;margin-left:6px;">${climb.unit}</span></div>
+      <div style="margin-top:4px;font-size:13px;color:var(--muted);">${climb.sub}</div>
+      ${totalMeters >= 8849 ? '' : `<div style="margin-top:2px;font-size:12px;color:var(--border);">${flights.length} flights × 100m to eastern takeoff</div>`}
+    </div>` : '';
 
   // Site breakdown card
   const siteCard = topRoutes.length ? `
@@ -1681,7 +1715,7 @@ function renderStats() {
       <button onclick="exportMonthCSV()" style="background:var(--accent);border:none;border-radius:9999px;color:#fff;padding:10px 24px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;letter-spacing:0.5px;">⬇ Export ${monthLabel} CSV</button>
     </div>` : '';
 
-  document.getElementById('stats-breakdown').innerHTML = wingCard + compCard + kgCard + siteCard + chartCard + drivesCard + monthExportCard;
+  document.getElementById('stats-breakdown').innerHTML = wingCard + compCard + gondolaCard + climbCard + siteCard + chartCard + drivesCard + monthExportCard;
 }
 
 function showPage(name) {

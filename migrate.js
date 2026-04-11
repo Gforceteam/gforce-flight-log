@@ -24,20 +24,18 @@ function fetchBackup() {
 }
 
 async function createTables() {
-  await db.batch([
-    { sql: `CREATE TABLE IF NOT EXISTS pilots (
-      id TEXT PRIMARY KEY, name TEXT NOT NULL, pin_hash TEXT NOT NULL,
-      created_at TEXT, last_seen TEXT, current_wing TEXT)` },
-    { sql: `CREATE TABLE IF NOT EXISTS flights (
-      id TEXT PRIMARY KEY, pilot_id TEXT, client_name TEXT, date TEXT,
-      flight_num INTEGER, weight REAL, takeoff TEXT, landing TEXT,
-      time INTEGER, photos REAL, notes TEXT, landed_at TEXT,
-      created_at TEXT, wing_reg TEXT)` },
-    { sql: `CREATE TABLE IF NOT EXISTS office_logs (
-      id TEXT PRIMARY KEY, pilot_id TEXT, event TEXT, created_at TEXT)` },
-    { sql: `CREATE TABLE IF NOT EXISTS active_timers (
-      pilot_id TEXT PRIMARY KEY, client_name TEXT, started_at TEXT, expires_at TEXT)` }
-  ], 'write');
+  await db.execute(`CREATE TABLE IF NOT EXISTS pilots (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, pin_hash TEXT NOT NULL,
+    created_at TEXT, last_seen TEXT, current_wing TEXT)`);
+  await db.execute(`CREATE TABLE IF NOT EXISTS flights (
+    id TEXT PRIMARY KEY, pilot_id TEXT, client_name TEXT, date TEXT,
+    flight_num INTEGER, weight REAL, takeoff TEXT, landing TEXT,
+    time INTEGER, photos REAL, notes TEXT, landed_at TEXT,
+    created_at TEXT, wing_reg TEXT)`);
+  await db.execute(`CREATE TABLE IF NOT EXISTS office_logs (
+    id TEXT PRIMARY KEY, pilot_id TEXT, event TEXT, created_at TEXT)`);
+  await db.execute(`CREATE TABLE IF NOT EXISTS active_timers (
+    pilot_id TEXT PRIMARY KEY, client_name TEXT, started_at TEXT, expires_at TEXT)`);
   console.log('✅ Tables created');
 }
 
@@ -49,33 +47,24 @@ async function migrate() {
 
   // Pilots
   if (backup.pilots?.length) {
-    const batches = [];
-    for (let i = 0; i < backup.pilots.length; i += 50) {
-      batches.push(backup.pilots.slice(i, i + 50));
-    }
-    for (const batch of batches) {
-      await db.batch(batch.map(p => ({
+    for (const p of backup.pilots) {
+      await db.execute({
         sql: 'INSERT OR IGNORE INTO pilots (id, name, pin_hash, created_at, current_wing) VALUES (?, ?, ?, ?, ?)',
         args: [p.id, p.name, p.pin_hash, p.created_at, p.current_wing || null]
-      })), 'write');
+      });
     }
     console.log(`✅ ${backup.pilots.length} pilots migrated`);
   }
 
-  // Flights — batch in groups of 50 to stay within limits
   if (backup.flights?.length) {
-    const batches = [];
-    for (let i = 0; i < backup.flights.length; i += 50) {
-      batches.push(backup.flights.slice(i, i + 50));
-    }
-    for (const batch of batches) {
-      await db.batch(batch.map(f => ({
+    for (const f of backup.flights) {
+      await db.execute({
         sql: `INSERT OR IGNORE INTO flights
           (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, created_at, wing_reg)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [f.id, f.pilot_id, f.client_name, f.date, f.flight_num, f.weight,
                f.takeoff, f.landing, f.time, f.photos, f.notes, f.landed_at, f.created_at, f.wing_reg || null]
-      })), 'write');
+      });
     }
     console.log(`✅ ${backup.flights.length} flights migrated`);
   }

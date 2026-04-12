@@ -607,9 +607,10 @@ app.put('/api/pilot/available', verifyToken, async (req, res) => {
   try {
     const { available } = req.body;
     await run('UPDATE pilots SET available = ? WHERE id = ?', [available ? 1 : 0, req.pilot.id]);
+    const eventType = available ? 'PILOT_SIGNED_IN' : 'PILOT_SIGNED_OUT';
+    broadcast({ type: eventType, pilot_id: req.pilot.id });
     res.json({ message: 'Availability updated', available: !!available });
   } catch (e) {
-    console.error(e);
     console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });

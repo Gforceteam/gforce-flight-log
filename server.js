@@ -449,10 +449,10 @@ app.post('/api/flights', verifyToken, async (req, res) => {
     // Basic date format check
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Invalid date format' });
 
-    const timer = await queryOne('SELECT client_name, created_at FROM active_timers WHERE pilot_id = ?', [pilotId]);
+    const timer = await queryOne('SELECT client_name, started_at FROM active_timers WHERE pilot_id = ?', [pilotId]);
     const resolvedClientName = sanitize(client_name || (timer ? timer.client_name : null), 100);
     // Capture sent_away_at from active timer if pilot is currently airborne
-    const sentAwayAt = timer ? timer.created_at : null;
+    const sentAwayAt = timer ? timer.started_at : null;
     const id = uuidv4();
     const now = new Date().toISOString();
     const cleanNotes = sanitize(notes, 500);

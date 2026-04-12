@@ -1,26 +1,26 @@
-const CACHE = 'gforce-v4';
+const CACHE = 'gforce-v5';
 const APP = '/gforce-flight-log/';
 
 // Static assets that change rarely and are safe to cache long-term
 const STATIC = [
+  APP + 'index.html',
   APP + 'manifest.json',
   APP + 'icon-192.png',
   APP + 'icon-512.png',
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(STATIC)));
-  self.skipWaiting();
+  e.waitUntil(
+    caches.open(CACHE).then(c => c.addAll(STATIC)).then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', e => {
-  // Delete old caches (v1, v2, v3, etc.)
   e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    )
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', e => {
@@ -42,7 +42,9 @@ self.addEventListener('fetch', e => {
           return resp;
         })
         .catch(() =>
-          caches.match(e.request).then(c => c || caches.match(APP + 'index.html'))
+          caches.match(e.request)
+            .then(c => c || caches.match(APP + 'index.html'))
+            .then(c => c || new Response('<h1>Offline</h1><p>Please reconnect to use GForce.</p>', { headers: { 'Content-Type': 'text/html' } }))
         )
     );
     return;

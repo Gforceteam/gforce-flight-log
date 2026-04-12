@@ -164,7 +164,7 @@
       z-index: 100;
     }
     nav button {
-      flex: 1; padding: 10px 0 16px; background: none; border: none;
+      flex: 1; padding: 10px 0 max(16px, env(safe-area-inset-bottom)); background: none; border: none;
       color: var(--muted); font-size: 10px; font-weight: 500; display: flex;
       flex-direction: column; align-items: center; gap: 5px;
       cursor: pointer; transition: color 0.15s; letter-spacing: 0.3px;
@@ -636,6 +636,23 @@
       <span class="server-badge" id="server-badge">...</span>
       <button onclick="doLogout()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;padding:4px 10px;cursor:pointer">Logout</button>
     </div>
+  </div>
+
+  <div class="page-header" id="header-dashboard">
+    <h1>Dashboard</h1>
+    <p id="header-dashboard-sub"></p>
+  </div>
+  <div class="page-header" id="header-flights" style="display:none">
+    <h1>My Flights</h1>
+    <p id="header-flights-sub"></p>
+  </div>
+  <div class="page-header" id="header-settings" style="display:none">
+    <h1>Settings</h1>
+    <p>App &amp; account</p>
+  </div>
+  <div class="page-header" id="header-stats" style="display:none">
+    <h1>Stats</h1>
+    <p>Season overview</p>
   </div>
 
   <div class="page active" id="page-dashboard">
@@ -1663,8 +1680,8 @@ function renderFlights() {
   });
   el.innerHTML = html;
   const today = myFlights.filter(f => f.date === todayStr());
-  document.getElementById('header-flights-sub').textContent =
-    `${myFlights.length} total · ${today.length} today`;
+  const flightsSub = document.getElementById('header-flights-sub');
+  if (flightsSub) flightsSub.textContent = `${myFlights.length} total · ${today.length} today`;
 }
 
 let _hoursSaveTimers = {};
@@ -1688,7 +1705,7 @@ async function saveHours(date, value) {
       setServerStatus('synced');
     } catch (e) {
       toast('Hours save failed: ' + e.message);
-      setServerStatus('error');
+      setServerStatus('offline');
     }
   }, 600);
 }
@@ -2021,8 +2038,11 @@ function renderStats() {
 function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.page-header').forEach(h => h.style.display = 'none');
   document.getElementById('page-'+name).classList.add('active');
   document.getElementById('nav-'+name).classList.add('active');
+  const hdr = document.getElementById('header-'+name);
+  if (hdr) hdr.style.display = 'block';
   if (name === 'stats') { statsMonthOffset = 0; renderStats(); }
   if (name === 'ff') renderPilotFF();
   if (name === 'settings') renderSettingsPage();

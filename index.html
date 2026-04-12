@@ -711,12 +711,10 @@
       </div>
 
       <div id="field-time" class="field">
-        <label>Flight Time (min)</label>
-        <div class="btn-group" id="fg-time">
-          <button data-val="5">5</button>
-          <button data-val="10" class="selected">10</button>
-          <button data-val="15">15</button>
-        </div>
+        <label>Flight Time (min): <span id="time-val">10</span></label>
+        <input type="range" id="fg-time" min="5" max="15" step="1" value="10"
+          style="width:100%;accent-color:var(--accent);cursor:pointer;"
+          oninput="document.getElementById('time-val').textContent=this.value" />
       </div>
 
       <div class="field">
@@ -1440,16 +1438,13 @@ function setupBtnGroups() {
     });
   });
 }
-function getGroupVal(id) {
-  const sel = document.querySelector(`#${id} button.selected`);
-  return sel ? sel.dataset.val : null;
+function getTimeVal() {
+  return document.getElementById('fg-time').value;
 }
-function setGroupVal(id, val) {
-  const btn = document.querySelector(`#${id} button[data-val="${val}"]`);
-  if (btn) {
-    document.querySelectorAll(`#${id} button`).forEach(b => b.classList.remove('selected'));
-    btn.classList.add('selected');
-  }
+function setTimeVal(val) {
+  const el = document.getElementById('fg-time');
+  el.value = val;
+  document.getElementById('time-val').textContent = val;
 }
 
 function updateWeightDisplay() {
@@ -1530,7 +1525,7 @@ async function saveFlight() {
   const weight = document.getElementById('f-weight').value;
   const takeoff = getGroupVal('fg-takeoff');
   const landing = getGroupVal('fg-landing');
-  const time = getGroupVal('fg-time');
+  const time = getTimeVal();
 
   if (!date || !flightNum || !weight || !takeoff || !landing || !time) {
     toast('Fill in all required fields');
@@ -1582,8 +1577,8 @@ function resetForm() {
   document.getElementById('f-weight').value = 72;
   document.getElementById('f-notes').value = '';
   updateWeightDisplay();
-  document.querySelector('#fg-time button.selected')?.classList.remove('selected');
-  document.querySelector('#fg-time button[data-val="10"]').classList.add('selected');
+  document.getElementById('fg-time').value = 10;
+document.getElementById('time-val').textContent = '10';
   const dateEl = document.getElementById('f-date');
   dateEl.value = todayStr();
 }
@@ -1614,7 +1609,7 @@ function editFlight(id) {
   updateWeightDisplay();
   setGroupVal('fg-takeoff', f.takeoff);
   setGroupVal('fg-landing', f.landing);
-  setGroupVal('fg-time', String(f.time));
+  setTimeVal(f.time);
   document.getElementById('f-notes').value = f.notes || '';
   const wingEl = document.getElementById('f-wing');
   if (wingEl) wingEl.value = f.wing_reg || currentWing;

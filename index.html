@@ -603,8 +603,8 @@
 
 <!-- ── LOGIN PAGE ──────────────────────────────────────────────────────────── -->
 <div id="login-page">
-  <div class="login-logo" style="background:none;width:100px;height:100px;">
-    <img src="https://www.nzgforce.com/wp-content/uploads/2019/11/gforce-logo.png" alt="GForce" style="width:100%;height:100%;object-fit:contain;" onerror="this.parentElement.innerHTML='<svg width=40 height=40 viewBox=\'0 0 40 40\' fill=none xmlns=\'http://www.w3.org/2000/svg\'><path d=\'M20 4L6 34H12L20 16L28 34H34L20 4Z\' fill=white/><path d=\'M20 10L10 32H15L20 18L25 32H30L20 10Z\' fill=#f37329/></svg>'" />
+  <div class="login-logo" style="background:none;width:110px;height:110px;">
+    <img src="/gforce-flight-log/icon-512.png" alt="GForce" style="width:100%;height:100%;object-fit:contain;" />
   </div>
   <h1>GFORCE</h1>
   <p class="subtitle">Flight Log</p>
@@ -2426,6 +2426,16 @@ async function officeUpdateFlight() {
   }
 }
 
+async function officeDeleteFlight(flightId, pilotName) {
+  if (!confirm(`Delete this flight for ${pilotName}? This cannot be undone.`)) return;
+  try {
+    const res = await officeApi(`/api/office/flights/${flightId}`, { method: 'DELETE' });
+    if (!res.ok) { const d = await res.json(); toast('Delete failed: ' + (d.error || 'unknown error')); return; }
+    toast('Flight deleted');
+    await loadOfficeData();
+  } catch (e) { toast('Network error: ' + e.message); }
+}
+
 async function updateClientName(pilotId, clientName) {
   await officeApi('/api/office/leave', {
     method: 'POST',
@@ -2488,7 +2498,7 @@ function renderTodayTab() {
       <td>${f.client_name || '—'}</td>
       <td>${f.flight_num}</td>
       <td>${f.weight}</td>
-      <td><button class="btn-edit" onclick="officeEditFlight('${f.id}')">Edit</button></td>
+      <td style="white-space:nowrap"><button class="btn-edit" onclick="officeEditFlight('${f.id}')" style="margin-right:4px;">✏️ Edit</button><button class="btn-danger" onclick="officeDeleteFlight('${f.id}', '${f.pilot_name}')">🗑</button></td>
     </tr>`;
   });
 
@@ -2566,7 +2576,7 @@ function renderFlightsTab() {
         <td style="white-space:nowrap">${f.takeoff}→${f.landing}</td>
         <td>${f.time}</td>
         <td class="time-col" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.notes || ''}</td>
-        <td><button class="btn-edit" onclick="officeEditFlight('${f.id}')">Edit</button></td>
+        <td style="white-space:nowrap"><button class="btn-edit" onclick="officeEditFlight('${f.id}')" style="margin-right:4px;">✏️ Edit</button><button class="btn-danger" onclick="officeDeleteFlight('${f.id}', '${f.pilot_name}')">🗑</button></td>
       </tr>`;
     });
   });

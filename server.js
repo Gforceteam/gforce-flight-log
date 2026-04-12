@@ -1013,6 +1013,16 @@ app.put('/api/office/flights/:id', verifyOffice, async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
 });
 
+app.delete('/api/office/flights/:id', verifyOffice, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = await queryOne('SELECT * FROM flights WHERE id = ?', [id]);
+    if (!existing) return res.status(404).json({ error: 'Flight not found' });
+    await run('DELETE FROM flights WHERE id = ?', [id]);
+    res.json({ id, message: 'Flight deleted by office' });
+  } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
+});
+
 // ─── Health ───────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 app.get('/', (req, res) => res.json({ name: 'GForce API', status: 'running', time: new Date().toISOString() }));

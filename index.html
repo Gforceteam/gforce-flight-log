@@ -2273,61 +2273,124 @@ async function submitGroupAway() {
   } catch (e) { toast('Error: ' + e.message); }
 }
 
-// ─── Office Tab ───────────────────────────────────────────────────────────────
+// ─── Office Tab (Flight Following) ───────────────────────────────────────────
 function renderOfficeTab() {
   const el = document.getElementById('pilots-list');
-  const alpha = (a, b) => a.name.localeCompare(b.name);
 
-  const flying       = officePilots.filter(p => p.status === 'airborne').sort(alpha);
-  const signedIn     = officePilots.filter(p => p.status !== 'airborne' && Number(p.available) === 1).sort(alpha);
-  const notAvailable = officePilots.filter(p => p.status !== 'airborne' && Number(p.available) !== 1).sort(alpha);
+  const flying       = officePilots.filter(p => p.status === 'airborne');
+  // Sort available by last_landed_at ascending — longest wait first (null = never flown, top priority)
+  const signedIn     = officePilots.filter(p => p.status !== 'airborne' && Number(p.available) === 1)
+    .sort((a, b) => {
+      if (!a.last_landed_at && !b.last_landed_at) return a.name.localeCompare(b.name);
+      if (!a.last_landed_at) return -1;
+      if (!b.last_landed_at) return -1;
+      return new Date(a.last_landed_at) - new Date(b.last_landed_at);
+    });
+  const notAvailable = officePilots.filter(p => p.status !== 'airborne' && Number(p.available) !== 1)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
-  function pilotCard(p, disabled = false) {
-    const isAirborne = p.status === 'airborne';
-    const clientName = p.client_name || '';
-    const initial = p.name.charAt(0).toUpperCase();
-    return `<div class="pilot-card ${isAirborne ? 'airborne' : ''}" id="pilot-card-${p.id}">
-      <div class="pilot-card-top">
-        <div class="pilot-avatar">${initial}</div>
-        <div class="pilot-info">
-          <div class="pilot-name">${p.name}</div>
-          ${!disabled ? `<div class="pilot-status ${isAirborne ? 'airborne' : 'in-office'}">
-            ${isAirborne ? '🪂 Flying' : '✅ Available'}
-            ${!isAirborne && p.last_landed_at ? ' · Last flight ' + fmtRelative(p.last_landed_at) : ''}
-          </div>` : ''}
-          ${isAirborne && clientName ? `<div class="pilot-client">👤 ${clientName}</div>` : ''}
+  // ── Flying section: group by group_id ──
+  let flyingHtml = '';
+  if (flying.length > 0) {
+    const grouped = {};
+    const ungrouped = [];
+    flying.forEach(p => {
+      if (p.group_id) {
+        if (!grouped[p.group_id]) grouped[p.group_id] = { name: p.client_name || p.group_id, pilots: [] };
+        grouped[p.group_id].pilots.push(p);
+      } else {
+        ungrouped.push(p);
+      }
+    });
+
+    flyingHtml += `<div class="section-title">🪂 Flying (${flying.length})</div>`;
+    flyingHtml += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">`;
+
+    // Grouped flights — one card per group
+    Object.values(grouped).forEach(g => {
+      flyingHtml += `<div class="pilot-card airborne" style="margin-bottom:0;">
+        <div style="font-weight:700;color:var(--accent);font-size:14px;margin-bottom:6px;">📋 ${g.name}</div>`;
+      g.pilots.forEach(p => {
+        flyingHtml += `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);">
+          <div>
+            <span style="font-weight:600;font-size:13px;">${p.name}</span>
+            <div class="timer-display" id="timer-${p.id}" data-expires="${p.timer_expires_at || ''}" style="font-size:13px;margin:0;">--:--</div>
+          </div>
+          <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name}')" style="font-size:11px;padding:4px 10px;">Cancel</button>
+        </div>`;
+      });
+      flyingHtml += `</div>`;
+    });
+
+    // Ungrouped solo flights
+    ungrouped.forEach(p => {
+      flyingHtml += `<div class="pilot-card airborne" style="margin-bottom:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-weight:600;font-size:14px;">${p.name}</div>
+            ${p.client_name ? `<div style="color:var(--accent);font-size:12px;">👤 ${p.client_name}</div>` : ''}
+            <div class="timer-display" id="timer-${p.id}" data-expires="${p.timer_expires_at || ''}" style="font-size:13px;margin:2px 0 0;">--:--</div>
+          </div>
+          <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name}')" style="font-size:11px;padding:4px 10px;">Cancel</button>
         </div>
-        <div class="pilot-actions">
-          ${isAirborne
-            ? `<button class="btn-landed" style="cursor:default;opacity:1;background:var(--warning);color:#1a1200;">🪂 Flying</button>
-               <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name}')">Cancel</button>`
-            : disabled
-              ? `<button class="btn-leave" style="background:var(--surface);border:1px solid var(--accent);color:var(--accent);" onclick="officeSignIn('${p.id}', '${p.name}')">Sign In</button>`
-              : `<button class="btn-leave" onclick="doLeaveOffice('${p.id}')">Away</button>
-                 <button class="btn-danger" onclick="officeSignOut('${p.id}', '${p.name}')">Sign Out</button>`
-          }
-        </div>
-      </div>
-      ${isAirborne && p.timer_expires_at ? `<div class="timer-display" id="timer-${p.id}" data-expires="${p.timer_expires_at}">Timer: --:--</div>` : ''}
-      ${!disabled ? `<div class="pilot-client-row">
-        <label>Client / Booking:</label>
-        <input type="text" id="client-${p.id}" value="${clientName}"
-          placeholder="e.g. Jan Kowalski or BKG-1234"
-          ${isAirborne ? `onchange="updateClientName('${p.id}', this.value)"` : ''} />
-      </div>` : ''}
-    </div>`;
+      </div>`;
+    });
+
+    flyingHtml += `</div>`; // close grid
+  } else {
+    flyingHtml += `<div class="section-title">🪂 Flying <span style="color:var(--border);font-weight:400">— none</span></div>`;
   }
 
-  function section(label, pilots, disabled = false) {
-    if (pilots.length === 0) return `<div class="section-title">${label} <span style="color:var(--border);font-weight:400">— none</span></div>`;
-    return `<div class="section-title">${label}</div>` + pilots.map(p => pilotCard(p, disabled)).join('');
+  // ── Available section: 2 columns, compact cards ──
+  let availHtml = '';
+  if (signedIn.length > 0) {
+    availHtml += `<div class="section-title">✅ Available (${signedIn.length})</div>`;
+    availHtml += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">`;
+    signedIn.forEach(p => {
+      const lastFlight = p.last_landed_at ? fmtRelative(p.last_landed_at) : 'no flights';
+      availHtml += `<div class="pilot-card" style="margin-bottom:0;padding:12px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <div class="pilot-avatar" style="width:36px;height:36px;font-size:15px;">${p.name.charAt(0)}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;font-size:14px;">${p.name}</div>
+            <div style="font-size:11px;color:var(--muted);">${lastFlight}</div>
+          </div>
+        </div>
+        <input type="text" id="client-${p.id}" value="${p.client_name || ''}" placeholder="Client name"
+          style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-size:13px;outline:none;margin-bottom:8px;" />
+        <div style="display:flex;gap:6px;">
+          <button class="btn-leave" onclick="doLeaveOffice('${p.id}')" style="flex:1;font-size:12px;padding:7px 6px;">Away</button>
+          <button class="btn-danger" onclick="officeSignOut('${p.id}', '${p.name}')" style="font-size:11px;padding:6px 10px;">Sign Out</button>
+        </div>
+      </div>`;
+    });
+    availHtml += `</div>`;
+  } else {
+    availHtml += `<div class="section-title">✅ Available <span style="color:var(--border);font-weight:400">— none</span></div>`;
   }
 
-  el.innerHTML =
-    section('🪂 Flying', flying) +
-    section('✅ Available', signedIn) +
-    section('🔴 Not Available', notAvailable, true);
+  // ── Not Available section: 2 columns, minimal ──
+  let naHtml = '';
+  if (notAvailable.length > 0) {
+    naHtml += `<div class="section-title">🔴 Not Available (${notAvailable.length})</div>`;
+    naHtml += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">`;
+    notAvailable.forEach(p => {
+      naHtml += `<div class="pilot-card" style="margin-bottom:0;padding:10px 12px;opacity:0.6;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div class="pilot-avatar" style="width:30px;height:30px;font-size:13px;border-color:var(--border);">${p.name.charAt(0)}</div>
+            <span style="font-weight:500;font-size:13px;">${p.name}</span>
+          </div>
+          <button class="btn-leave" style="background:var(--surface);border:1px solid var(--accent);color:var(--accent);font-size:11px;padding:5px 10px;" onclick="officeSignIn('${p.id}', '${p.name}')">Sign In</button>
+        </div>
+      </div>`;
+    });
+    naHtml += `</div>`;
+  } else {
+    naHtml += `<div class="section-title">🔴 Not Available <span style="color:var(--border);font-weight:400">— none</span></div>`;
+  }
 
+  el.innerHTML = flyingHtml + availHtml + naHtml;
   updateTimers();
 }
 

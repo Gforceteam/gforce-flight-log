@@ -1160,6 +1160,7 @@ function startStatusPoll() {
       }
       // Always re-render dashboard to keep flying list current
       renderDashboard();
+      setServerStatus('synced');
     } catch {}
   }, 15000);
 }

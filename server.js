@@ -998,6 +998,21 @@ app.post('/api/office/pilot-signin', verifyOffice, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── Office: Edit / Delete Flight ────────────────────────────────────────────
+app.put('/api/office/flights/:id', verifyOffice, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { date, flight_num, weight, takeoff, landing, time, notes, client_name, wing_reg } = req.body;
+    const existing = await queryOne('SELECT * FROM flights WHERE id = ?', [id]);
+    if (!existing) return res.status(404).json({ error: 'Flight not found' });
+    await run(
+      `UPDATE flights SET date=?, flight_num=?, weight=?, takeoff=?, landing=?, time=?, notes=?, client_name=?, wing_reg=? WHERE id=?`,
+      [date, flight_num, weight, takeoff, landing, time, notes || '', client_name || null, wing_reg || null, id]
+    );
+    res.json({ id, message: 'Flight updated by office' });
+  } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
+});
+
 // ─── Health ───────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 app.get('/', (req, res) => res.json({ name: 'GForce API', status: 'running', time: new Date().toISOString() }));

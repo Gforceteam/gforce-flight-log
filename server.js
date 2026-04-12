@@ -198,6 +198,8 @@ async function createTables() {
     created_at TEXT, wing_reg TEXT, hours_worked REAL)`);
   // Add hours_worked column to existing DBs that predate this column
   try { await db.execute('ALTER TABLE flights ADD COLUMN hours_worked REAL'); } catch (_) {}
+  // Add sent_away_at column to existing DBs
+  try { await db.execute('ALTER TABLE flights ADD COLUMN sent_away_at TEXT'); } catch (_) {}
   await db.execute(`CREATE TABLE IF NOT EXISTS office_logs (
     id TEXT PRIMARY KEY, pilot_id TEXT, event TEXT, created_at TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS active_timers (
@@ -447,8 +449,10 @@ app.post('/api/flights', verifyToken, async (req, res) => {
     // Basic date format check
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Invalid date format' });
 
-    const timer = await queryOne('SELECT client_name FROM active_timers WHERE pilot_id = ?', [pilotId]);
+    const timer = await queryOne('SELECT client_name, created_at FROM active_timers WHERE pilot_id = ?', [pilotId]);
     const resolvedClientName = sanitize(client_name || (timer ? timer.client_name : null), 100);
+    // Capture sent_away_at from active timer if pilot is currently airborne
+    const sentAwayAt = timer ? timer.created_at : null;
     const id = uuidv4();
     const now = new Date().toISOString();
     const cleanNotes = sanitize(notes, 500);
@@ -461,9 +465,9 @@ app.post('/api/flights', verifyToken, async (req, res) => {
     }
 
     await run(
-      `INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, wing_reg)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, pilotId, resolvedClientName, date, flight_num, weight, cleanTakeoff, cleanLanding, time, photos || 0, cleanNotes || '', now, cleanWingReg || null]
+      `INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, wing_reg, sent_away_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, pilotId, resolvedClientName, date, flight_num, weight, cleanTakeoff, cleanLanding, time, photos || 0, cleanNotes || '', now, cleanWingReg || null, sentAwayAt]
     );
 
     const activeTimer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [pilotId]);
@@ -974,9 +978,165 @@ app.get('/api/export/flights', verifyOffice, async (req, res) => {
   }
 });
 
+app.post('/api/office/pilot-signout', verifyOffice, async (req, res) => {
+  try {
+    const { pilot_id } = req.body;
+    if (!pilot_id) return res.status(400).json({ error: 'pilot_id required' });
+    await run('UPDATE pilots SET available = 0 WHERE id = ?', [pilot_id]);
+    wss.clients.forEach(c => { if (c.readyState === 1) c.send(JSON.stringify({ type: 'PILOT_SIGNED_OUT', pilot_id })); });
+    res.json({ message: 'Pilot signed out' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/office/pilot-signin', verifyOffice, async (req, res) => {
+  try {
+    const { pilot_id } = req.body;
+    if (!pilot_id) return res.status(400).json({ error: 'pilot_id required' });
+    await run('UPDATE pilots SET available = 1 WHERE id = ?', [pilot_id]);
+    wss.clients.forEach(c => { if (c.readyState === 1) c.send(JSON.stringify({ type: 'PILOT_SIGNED_IN', pilot_id })); });
+    res.json({ message: 'Pilot signed in' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── Health ───────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 app.get('/', (req, res) => res.json({ name: 'GForce API', status: 'running', time: new Date().toISOString() }));
+
+// ─── Civil Twilight Notification ────────────────────────────────────────────
+function eveningCivilTwilightUTC(dateStr) {
+  // Returns UTC ms for evening civil twilight in Queenstown, NZ
+  // Lat: -45.0312, Lng: 168.6626
+  const lat = -45.0312 * Math.PI / 180;
+  const date = new Date(dateStr + 'T12:00:00Z');
+  const JD = date.getTime() / 86400000 + 2440587.5;
+  const n = Math.floor(JD - 2451545 + 0.5);
+  const M = ((357.5291 + 0.98560028 * n) % 360 + 360) % 360;
+  const Mrad = M * Math.PI / 180;
+  const C = 1.9148 * Math.sin(Mrad) + 0.02 * Math.sin(2 * Mrad) + 0.0003 * Math.sin(3 * Mrad);
+  const lam = ((M + C + 180 + 102.9372) % 360 + 360) % 360;
+  const lamRad = lam * Math.PI / 180;
+  const Jtransit = 2451545 + 0.0009 + (168.6626) / 360 + n + 0.0053 * Math.sin(Mrad) - 0.0069 * Math.sin(2 * lamRad);
+  const sinDec = Math.sin(lamRad) * Math.sin(23.4397 * Math.PI / 180);
+  const dec = Math.asin(sinDec);
+  const cosOmega = (Math.sin(-6 * Math.PI / 180) - Math.sin(lat) * sinDec) / (Math.cos(lat) * Math.cos(dec));
+  if (cosOmega < -1 || cosOmega > 1) return null;
+  const omega = Math.acos(cosOmega) * 180 / Math.PI;
+  const Jset = Jtransit + omega / 360;
+  return (Jset - 2440587.5) * 86400 * 1000;
+}
+
+async function scheduleCivilTwilightAlert() {
+  const NZ_TZ = 'Pacific/Auckland';
+  const todayNZ = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+  const twilightMs = eveningCivilTwilightUTC(todayNZ);
+  if (!twilightMs) return;
+  const delay = twilightMs - Date.now();
+  if (delay < -60000) {
+    // Already passed today — schedule for tomorrow
+    const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+    const tomorrowMs = eveningCivilTwilightUTC(tomorrow);
+    if (tomorrowMs) setTimeout(() => sendCivilTwilightAlerts(), tomorrowMs - Date.now());
+    return;
+  }
+  console.log(`[twilight] Alert scheduled for ${new Date(twilightMs).toISOString()} NZ civil twilight`);
+  setTimeout(async () => {
+    await sendCivilTwilightAlerts();
+    // Reschedule for next day
+    setTimeout(() => scheduleCivilTwilightAlert(), 2 * 60 * 1000); // 2min after to reschedule next day
+  }, Math.max(0, delay));
+}
+
+async function sendCivilTwilightAlerts() {
+  try {
+    const availablePilots = await queryAll(
+      `SELECT p.id FROM pilots p WHERE p.available = 1 AND p.id NOT IN (SELECT pilot_id FROM active_timers)`
+    );
+    console.log(`[twilight] Sending sign-out reminder to ${availablePilots.length} available pilots`);
+    for (const p of availablePilots) {
+      await sendPushToPilot(p.id, {
+        title: '🌆 End of day reminder',
+        body: "You're still signed in. Don't forget to sign out before you head home!",
+        tag: 'civil-twilight'
+      });
+    }
+  } catch (e) { console.error('[twilight] Error:', e.message); }
+}
+
+// Start civil twilight scheduler
+scheduleCivilTwilightAlert();
+
+// ─── Daily Data Backup ────────────────────────────────────────────────────────
+async function pushDailyBackup() {
+  try {
+    const flights = await queryAll(`
+      SELECT f.*, p.name as pilot_name
+      FROM flights f JOIN pilots p ON f.pilot_id = p.id
+      ORDER BY f.date DESC, f.created_at DESC
+    `);
+    if (!flights.length) return;
+
+    const headers = ['Date','Pilot','Client','Flight #','Weight (kg)','Takeoff','Landing','Time (min)','Notes','Wing','Sent Away','Pilot Landed','Hours Worked'];
+    const rows = flights.map(f => [
+      f.date, f.pilot_name||'', f.client_name||'', f.flight_num, f.weight,
+      f.takeoff, f.landing, f.time, (f.notes||'').replace(/,/g,''), f.wing_reg||'',
+      f.sent_away_at ? new Date(f.sent_away_at).toISOString() : '',
+      f.landed_at ? new Date(f.landed_at).toISOString() : '',
+      f.hours_worked||''
+    ].map(v => `"${v}"`).join(','));
+    const csv = [headers.join(','), ...rows].join('\n');
+
+    const NZ_TZ = 'Pacific/Auckland';
+    const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+    const filename = `backups/flights-${dateStr}.csv`;
+    const token = process.env.GITHUB_TOKEN;
+    if (!token) { console.log('[backup] No GITHUB_TOKEN, skipping'); return; }
+
+    const repo = 'brookewhatnall/gforce-flight-log';
+    const apiUrl = `https://api.github.com/repos/${repo}/contents/${filename}`;
+
+    // Check for existing file to get SHA
+    const existingRes = await fetch(apiUrl, { headers: { Authorization: `token ${token}`, 'User-Agent': 'gforce-api' } });
+    const existing = existingRes.ok ? await existingRes.json() : null;
+
+    const body = {
+      message: `Daily backup ${dateStr}`,
+      content: Buffer.from(csv).toString('base64'),
+      ...(existing?.sha ? { sha: existing.sha } : {})
+    };
+
+    const putRes = await fetch(apiUrl, {
+      method: 'PUT',
+      headers: { Authorization: `token ${token}`, 'Content-Type': 'application/json', 'User-Agent': 'gforce-api' },
+      body: JSON.stringify(body)
+    });
+
+    if (putRes.ok) console.log(`[backup] ✓ Pushed ${flights.length} flights to ${filename}`);
+    else console.error('[backup] Failed:', await putRes.text());
+  } catch (e) { console.error('[backup] Error:', e.message); }
+}
+
+function scheduleDailyBackup() {
+  // Run at 2 AM NZ time each day
+  const NZ_TZ = 'Pacific/Auckland';
+  const now = new Date();
+  const nzNow = new Date(now.toLocaleString('en-US', { timeZone: NZ_TZ }));
+  const nzHour = nzNow.getHours();
+  let msUntil2am;
+  if (nzHour < 2) {
+    msUntil2am = (2 - nzHour) * 3600000 - nzNow.getMinutes() * 60000 - nzNow.getSeconds() * 1000;
+  } else {
+    msUntil2am = (26 - nzHour) * 3600000 - nzNow.getMinutes() * 60000 - nzNow.getSeconds() * 1000;
+  }
+  console.log(`[backup] Next backup in ${Math.round(msUntil2am / 3600000 * 10) / 10}h`);
+  setTimeout(async () => {
+    await pushDailyBackup();
+    setInterval(pushDailyBackup, 24 * 60 * 60 * 1000); // then every 24h
+  }, msUntil2am);
+}
+
+scheduleDailyBackup();
+// Also run immediately on startup to ensure we have a current backup
+setTimeout(pushDailyBackup, 10000);
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 async function start() {

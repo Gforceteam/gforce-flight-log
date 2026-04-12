@@ -16,17 +16,27 @@
   <title>Gforce Flight Log</title>
   <style>
     :root {
-      --bg: #121212;
-      --surface: #1c1c1c;
-      --card: #222222;
-      --border: #333333;
+      --bg: #0b0d12;
+      --surface: #12151d;
+      --card: #181c26;
+      --card-hi: #1e2334;
+      --border: #242838;
+      --border-hi: #303548;
       --accent: #f37329;
-      --accent2: rgba(243,115,41,0.15);
-      --danger: #ef5350;
-      --warning: #ffb74d;
-      --text: #f0f0f0;
-      --muted: #888;
-      --radius: 12px;
+      --accent-dim: rgba(243,115,41,0.12);
+      --accent-glow: rgba(243,115,41,0.28);
+      --danger: #f04438;
+      --danger-dim: rgba(240,68,56,0.12);
+      --warning: #f5a623;
+      --warning-dim: rgba(245,166,35,0.15);
+      --success: #22c55e;
+      --text: #f1f2f6;
+      --text-2: #c5cbd8;
+      --muted: #8b929f;
+      --radius: 16px;
+      --radius-sm: 10px;
+      --shadow: 0 4px 24px rgba(0,0,0,0.4);
+      --shadow-sm: 0 2px 8px rgba(0,0,0,0.3);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -45,60 +55,63 @@
       justify-content: center;
       min-height: 100vh;
       padding: 20px;
-      background: var(--card);
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(243,115,41,0.18) 0%, transparent 70%), var(--bg);
     }
     #login-page .login-logo {
-      width: 72px;
-      height: 72px;
-      background: var(--accent);
+      width: 100px;
+      height: 100px;
+      background: none;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       margin-bottom: 16px;
-      font-size: 32px;
+      filter: drop-shadow(0 0 24px rgba(243,115,41,0.5));
     }
-    #login-page h1 { font-size: 28px; font-weight: 700; margin-bottom: 4px; color: var(--accent); letter-spacing: 2px; font-family: 'Montserrat', sans-serif; }
-    #login-page .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+    #login-page h1 { font-size: 30px; font-weight: 800; margin-bottom: 4px; color: #fff; letter-spacing: 4px; font-family: 'Montserrat', sans-serif; }
+    #login-page .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 32px; letter-spacing: 1px; text-transform: uppercase; }
     .login-card {
       width: 100%;
-      max-width: 380px;
+      max-width: 360px;
       background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 24px;
+      border: 1px solid var(--border-hi);
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: var(--shadow);
     }
     .login-card select, .login-card input {
       width: 100%;
       background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
+      border: 1px solid var(--border-hi);
+      border-radius: var(--radius-sm);
       color: var(--text);
-      padding: 12px 14px;
-      font-size: 16px;
+      padding: 13px 16px;
+      font-size: 15px;
       outline: none;
       margin-bottom: 12px;
       appearance: none;
       -webkit-appearance: none;
+      transition: border-color 0.15s;
     }
-    .login-card select:focus, .login-card input:focus { border-color: var(--accent); }
+    .login-card select:focus, .login-card input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
     .login-card button {
       width: 100%;
-      padding: 14px;
+      padding: 15px;
       background: var(--accent);
       border: none;
       border-radius: 9999px;
       color: #fff;
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 700;
       cursor: pointer;
-      margin-top: 4px;
+      margin-top: 6px;
       font-family: 'Montserrat', sans-serif;
       text-transform: uppercase;
-      letter-spacing: 1px;
+      letter-spacing: 1.5px;
+      transition: background 0.15s, transform 0.1s;
     }
     .login-card button:hover { background: #e5681f; }
-    .login-card button:active { opacity: 0.9; }
+    .login-card button:active { transform: scale(0.98); opacity: 0.9; }
     .login-error { color: var(--danger); font-size: 13px; margin-top: 10px; text-align: center; display: none; }
     .login-card select option.office-option { color: var(--accent); font-weight: 600; }
 
@@ -106,9 +119,10 @@
     #app-page { display: none; }
 
     .status-bar {
-      background: var(--surface);
-      border-bottom: 3px solid var(--accent);
-      padding: 12px 16px;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      box-shadow: 0 1px 0 var(--border), var(--shadow-sm);
+      padding: 11px 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -118,39 +132,42 @@
     }
     .pilot-left { display: flex; align-items: center; gap: 10px; }
     .pilot-avatar-sm {
-      width: 32px; height: 32px; border-radius: 50%;
-      background: var(--accent); border: 1px solid var(--accent);
+      width: 34px; height: 34px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), #c95f1a);
       display: flex; align-items: center; justify-content: center;
       font-size: 14px; font-weight: 700; color: #fff;
+      box-shadow: 0 2px 8px var(--accent-glow);
     }
-    .pilot-greeting { font-size: 12px; color: var(--muted); }
-    .pilot-name-sm { font-size: 14px; font-weight: 600; }
+    .pilot-greeting { font-size: 11px; color: var(--muted); letter-spacing: 0.3px; }
+    .pilot-name-sm { font-size: 14px; font-weight: 600; color: var(--text); }
     .status-right { display: flex; align-items: center; gap: 8px; }
     .status-badge {
       font-size: 12px; font-weight: 700; padding: 4px 10px;
       border-radius: 20px;
     }
     .status-badge.in-office { background: var(--accent); color: #fff; }
-    .status-badge.airborne { background: var(--warning); color: #292f36; }
+    .status-badge.airborne { background: var(--warning); color: #1a1200; }
     .server-badge {
       font-size: 11px; padding: 3px 8px; border-radius: 10px; font-weight: 600;
     }
-    .server-badge.synced { background: var(--accent); color: #fff; }
-    .server-badge.offline { background: var(--danger); color: #fff; }
+    .server-badge.synced { background: rgba(34,197,94,0.15); color: var(--success); border: 1px solid rgba(34,197,94,0.3); }
+    .server-badge.offline { background: var(--danger-dim); color: var(--danger); border: 1px solid rgba(240,68,56,0.3); }
 
     nav {
       position: fixed;
       bottom: 0; left: 0; right: 0;
-      background: #292f36;
-      border-top: 1px solid rgba(255,255,255,0.1);
+      background: rgba(18,21,29,0.96);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid var(--border-hi);
       display: flex;
       z-index: 100;
     }
     nav button {
-      flex: 1; padding: 12px 0 16px; background: none; border: none;
-      color: var(--muted); font-size: 11px; display: flex;
-      flex-direction: column; align-items: center; gap: 4px;
-      cursor: pointer; transition: color 0.15s;
+      flex: 1; padding: 10px 0 16px; background: none; border: none;
+      color: var(--muted); font-size: 10px; font-weight: 500; display: flex;
+      flex-direction: column; align-items: center; gap: 5px;
+      cursor: pointer; transition: color 0.15s; letter-spacing: 0.3px;
     }
     nav button.active { color: var(--accent); }
     nav button svg { width: 22px; height: 22px; }
@@ -159,182 +176,203 @@
     .page.active { display: block; }
 
     .page-header {
-      padding: 16px 16px 0;
+      padding: 20px 16px 4px;
       max-width: 500px;
       margin: 0 auto;
     }
-    .page-header h1 { font-size: 28px; font-weight: 700; padding-top: env(safe-area-inset-top, 16px); color: var(--accent); font-family: 'Montserrat', sans-serif; letter-spacing: 1px; }
-    .page-header p { color: var(--muted); font-size: 13px; margin-top: 2px; }
+    .page-header h1 { font-size: 26px; font-weight: 800; color: var(--text); font-family: 'Montserrat', sans-serif; letter-spacing: 0.5px; }
+    .page-header p { color: var(--muted); font-size: 13px; margin-top: 3px; }
 
-    .dashboard-status { text-align: center; padding: 30px 20px; }
-    .dashboard-status-icon { font-size: 64px; margin-bottom: 12px; }
-    .dashboard-status-label { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
-    .dashboard-status-value { font-size: 24px; font-weight: 700; }
-    .dashboard-client { font-size: 18px; color: var(--accent); margin-top: 6px; }
+    .dashboard-status { text-align: center; padding: 28px 20px; }
+    .dashboard-status-icon { font-size: 62px; margin-bottom: 16px; line-height: 1; }
+    .dashboard-status-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px; font-weight: 600; }
+    .dashboard-status-value { font-size: 26px; font-weight: 800; color: var(--text); font-family: 'Montserrat', sans-serif; }
+    .dashboard-client { font-size: 17px; color: var(--accent); margin-top: 8px; font-weight: 600; }
     .dashboard-timer {
-      font-size: 48px; font-weight: 700; color: var(--warning);
+      font-size: 52px; font-weight: 800; color: var(--warning);
       font-variant-numeric: tabular-nums; margin: 20px 0;
+      font-family: 'Montserrat', sans-serif;
+      text-shadow: 0 0 32px rgba(245,166,35,0.4);
     }
-    .dashboard-timer.urgent { color: var(--danger); }
+    .dashboard-timer.urgent { color: var(--danger); text-shadow: 0 0 32px rgba(240,68,56,0.5); }
     .btn-log-flight {
       width: 100%; padding: 18px; background: var(--accent);
       border: none; border-radius: 9999px; color: #fff;
-      font-size: 18px; font-weight: 700; cursor: pointer;
+      font-size: 17px; font-weight: 800; cursor: pointer;
       margin-top: 16px;
       font-family: 'Montserrat', sans-serif;
       text-transform: uppercase;
-      letter-spacing: 1px;
+      letter-spacing: 1.5px;
+      box-shadow: 0 4px 20px var(--accent-glow);
+      transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
     }
-    .btn-log-flight:hover { background: #e5681f; }
-    .btn-log-flight:active { opacity: 0.9; }
+    .btn-log-flight:hover { background: #e5681f; box-shadow: 0 6px 28px var(--accent-glow); }
+    .btn-log-flight:active { transform: scale(0.98); opacity: 0.9; }
 
     .btn-extend {
       width: 100%; padding: 12px; background: transparent;
-      border: 1px solid var(--accent); border-radius: 9999px; color: var(--accent);
-      font-size: 14px; font-weight: 600; cursor: pointer;
-      margin-top: 8px;
+      border: 1.5px solid var(--accent); border-radius: 9999px; color: var(--accent);
+      font-size: 14px; font-weight: 700; cursor: pointer;
+      margin-top: 10px;
       font-family: 'Montserrat', sans-serif;
       text-transform: uppercase;
       letter-spacing: 0.5px;
+      transition: all 0.15s;
     }
     .btn-extend:hover { background: var(--accent); color: #fff; }
     .btn-extend:active { opacity: 0.8; }
-    .btn-extend:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-extend:disabled { opacity: 0.35; cursor: not-allowed; }
 
     .card {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 16px;
-      margin-bottom: 12px;
+      padding: 18px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow-sm);
     }
-    .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: var(--accent); font-family: 'Montserrat', sans-serif; text-transform: uppercase; letter-spacing: 0.5px; }
-    .card.editing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .card h2 { font-size: 13px; font-weight: 700; margin-bottom: 14px; color: var(--accent); font-family: 'Montserrat', sans-serif; text-transform: uppercase; letter-spacing: 1px; }
+    .card.editing { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
 
-    .field { margin-bottom: 14px; }
+    .field { margin-bottom: 16px; }
     .field label {
-      display: block; font-size: 12px; font-weight: 600; color: var(--muted);
-      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
+      display: block; font-size: 11px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px;
     }
     .field input, .field select, .field textarea {
-      width: 100%; background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; color: var(--text); padding: 10px 12px;
-      font-size: 16px; outline: none; appearance: none; -webkit-appearance: none;
+      width: 100%; background: var(--surface); border: 1px solid var(--border-hi);
+      border-radius: var(--radius-sm); color: var(--text); padding: 11px 14px;
+      font-size: 15px; outline: none; appearance: none; -webkit-appearance: none;
+      transition: border-color 0.15s;
     }
-    .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); }
-    .field textarea { resize: vertical; min-height: 70px; font-size: 14px; }
+    .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+    .field textarea { resize: vertical; min-height: 70px; font-size: 14px; color: var(--text-2); }
 
-    .flight-num-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
-    .flight-num-row label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; min-width: 90px; }
-    .flight-num-controls { display: flex; align-items: center; flex: 1; gap: 6px; }
+    .flight-num-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .flight-num-row label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; min-width: 80px; }
+    .flight-num-controls { display: flex; align-items: center; flex: 1; gap: 8px; }
     .flight-num-btn {
-      width: 40px; height: 40px; background: var(--surface);
-      border: 1px solid var(--border); border-radius: 8px; color: var(--text);
-      font-size: 20px; font-weight: 600; cursor: pointer;
+      width: 44px; height: 44px; background: var(--surface);
+      border: 1px solid var(--border-hi); border-radius: var(--radius-sm); color: var(--text);
+      font-size: 22px; font-weight: 600; cursor: pointer;
       display: flex; align-items: center; justify-content: center; line-height: 1; padding: 0;
+      transition: background 0.1s;
     }
     .flight-num-btn:active { background: var(--border); }
     .flight-num-display {
       flex: 1; text-align: center; background: var(--surface);
-      border: 1px solid var(--border); border-radius: 8px;
-      color: var(--accent); font-size: 18px; font-weight: 700;
+      border: 1.5px solid var(--accent); border-radius: var(--radius-sm);
+      color: var(--accent); font-size: 20px; font-weight: 800;
       padding: 8px; min-width: 48px;
+      font-family: 'Montserrat', sans-serif;
     }
 
-    .weight-slider-row { display: flex; align-items: center; gap: 12px; }
+    .weight-slider-row { display: flex; align-items: center; gap: 14px; }
     .weight-slider {
       flex: 1; -webkit-appearance: none; appearance: none;
-      height: 6px; background: var(--border); border-radius: 3px;
+      height: 5px; background: var(--border-hi); border-radius: 3px;
       outline: none; cursor: pointer;
     }
     .weight-slider::-webkit-slider-thumb {
       -webkit-appearance: none; appearance: none;
-      width: 24px; height: 24px; background: var(--accent); border-radius: 50%; cursor: pointer;
+      width: 26px; height: 26px; background: var(--accent); border-radius: 50%; cursor: pointer;
+      box-shadow: 0 2px 8px var(--accent-glow);
     }
     .weight-slider::-moz-range-thumb {
-      width: 24px; height: 24px; background: var(--accent);
+      width: 26px; height: 26px; background: var(--accent);
       border-radius: 50%; cursor: pointer; border: none;
     }
     .weight-value {
-      min-width: 52px; background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; color: var(--text); font-size: 16px; font-weight: 600;
+      min-width: 60px; background: var(--surface); border: 1px solid var(--border-hi);
+      border-radius: var(--radius-sm); color: var(--text); font-size: 16px; font-weight: 700;
       padding: 8px 10px; text-align: center;
     }
 
     .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
     .btn-group button {
-      flex: 1; min-width: 48px; padding: 10px 8px;
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; color: var(--text);
-      font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s;
+      flex: 1; min-width: 48px; padding: 11px 8px;
+      background: var(--surface); border: 1px solid var(--border-hi);
+      border-radius: var(--radius-sm); color: var(--text-2);
+      font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s;
     }
-    .btn-group button.selected { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 700; }
+    .btn-group button.selected { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 800; box-shadow: 0 2px 10px var(--accent-glow); }
     .btn-group.site button { font-size: 13px; }
 
     .btn-primary {
-      width: 100%; padding: 14px; background: var(--accent); border: none;
-      border-radius: var(--radius); color: #000; font-size: 16px;
-      font-weight: 700; cursor: pointer; margin-top: 4px;
+      width: 100%; padding: 15px; background: var(--accent); border: none;
+      border-radius: 9999px; color: #fff; font-size: 16px;
+      font-weight: 800; cursor: pointer; margin-top: 6px;
+      font-family: 'Montserrat', sans-serif;
+      letter-spacing: 0.5px;
+      box-shadow: 0 4px 16px var(--accent-glow);
+      transition: background 0.15s, transform 0.1s;
     }
-    .btn-primary:active { opacity: 0.8; }
+    .btn-primary:hover { background: #e5681f; }
+    .btn-primary:active { transform: scale(0.98); opacity: 0.9; }
     .btn-secondary {
-      width: 100%; padding: 12px; background: var(--surface);
-      border: 1px solid var(--border); border-radius: var(--radius);
-      color: var(--text); font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px;
+      width: 100%; padding: 13px; background: var(--surface);
+      border: 1px solid var(--border-hi); border-radius: 9999px;
+      color: var(--text-2); font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px;
+      transition: border-color 0.15s;
     }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
     .btn-cancel {
-      width: 100%; padding: 12px; background: transparent;
-      border: 1px solid var(--danger); border-radius: var(--radius);
+      width: 100%; padding: 13px; background: transparent;
+      border: 1px solid rgba(240,68,56,0.4); border-radius: 9999px;
       color: var(--danger); font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px;
     }
     .btn-danger {
-      background: var(--surface); border: 1px solid var(--danger);
-      border-radius: 8px; color: var(--danger);
-      font-size: 13px; padding: 6px 12px; cursor: pointer;
+      background: var(--danger-dim); border: 1px solid rgba(240,68,56,0.35);
+      border-radius: 9999px; color: var(--danger);
+      font-size: 13px; padding: 6px 14px; cursor: pointer; font-weight: 600;
     }
     .btn-edit {
-      background: var(--surface); border: 1px solid var(--accent);
-      border-radius: 8px; color: var(--accent);
-      font-size: 13px; padding: 6px 10px; cursor: pointer;
+      background: var(--accent-dim); border: 1px solid rgba(243,115,41,0.35);
+      border-radius: 9999px; color: var(--accent);
+      font-size: 13px; padding: 6px 12px; cursor: pointer; font-weight: 600;
     }
 
     .flight-item {
       background: var(--card); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px;
+      border-radius: var(--radius); padding: 13px 16px; margin-bottom: 8px;
       display: flex; justify-content: space-between; align-items: center;
+      transition: border-color 0.15s;
     }
-    .flight-meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .flight-item:hover { border-color: var(--border-hi); }
+    .flight-meta { font-size: 13px; color: var(--text-2); margin-top: 3px; }
     .flight-badge {
-      background: var(--accent); color: #000; border-radius: 20px;
-      padding: 2px 10px; font-size: 12px; font-weight: 700;
+      background: var(--accent); color: #fff; border-radius: 9999px;
+      padding: 3px 10px; font-size: 11px; font-weight: 700;
     }
-    .flight-badge.green { background: var(--accent2); }
-    .flight-badge.client { background: var(--accent2); }
+    .flight-badge.green { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(243,115,41,0.3); }
+    .flight-badge.client { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(243,115,41,0.3); }
 
     .date-group-header {
-      font-size: 13px; font-weight: 700; color: var(--muted);
-      text-transform: uppercase; letter-spacing: 0.8px;
-      padding: 12px 0 6px; display: flex; justify-content: space-between; align-items: center;
+      font-size: 12px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 1px;
+      padding: 14px 0 8px; display: flex; justify-content: space-between; align-items: center;
     }
     .duty-badge {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 6px; font-size: 11px; color: var(--accent2); padding: 2px 8px;
+      background: var(--accent-dim); border: 1px solid rgba(243,115,41,0.25);
+      border-radius: 9999px; font-size: 11px; color: var(--accent); padding: 2px 10px; font-weight: 600;
     }
 
-    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
     .stat-card {
       background: var(--card); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 14px; text-align: center;
+      border-radius: var(--radius); padding: 16px; text-align: center;
+      box-shadow: var(--shadow-sm);
     }
-    .stat-number { font-size: 28px; font-weight: 700; color: var(--accent); }
-    .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+    .stat-number { font-size: 30px; font-weight: 800; color: var(--accent); font-family: 'Montserrat', sans-serif; }
+    .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 4px; font-weight: 600; }
 
     /* ── OFFICE DASHBOARD ──────────────────────────────────────────────── */
     #office-dashboard { display: none; padding-bottom: 0; }
 
     .office-header {
-      background: #292f36;
-      border-bottom: 3px solid var(--accent);
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
       padding: 16px 20px;
       display: flex;
       justify-content: space-between;
@@ -343,13 +381,13 @@
       top: 0;
       z-index: 10;
     }
-    .office-header h1 { font-size: 22px; font-weight: 700; color: var(--accent); font-family: 'Montserrat', sans-serif; letter-spacing: 1px; }
+    .office-header h1 { font-size: 20px; font-weight: 800; color: var(--accent); font-family: 'Montserrat', sans-serif; letter-spacing: 1px; }
     .office-header-right { display: flex; align-items: center; gap: 12px; }
-    .ws-indicator { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); }
-    .ws-indicator.connected { background: var(--accent); }
+    .ws-indicator { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 6px var(--danger); transition: all 0.3s; }
+    .ws-indicator.connected { background: var(--success); box-shadow: 0 0 8px rgba(34,197,94,0.6); }
     .office-logout-btn {
-      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-      color: var(--muted); font-size: 13px; padding: 6px 12px; cursor: pointer;
+      background: var(--surface); border: 1px solid var(--border-hi); border-radius: 9999px;
+      color: var(--text-2); font-size: 13px; padding: 6px 14px; cursor: pointer; font-weight: 500;
     }
 
     .office-tab-bar {
@@ -358,194 +396,207 @@
       border-bottom: 1px solid var(--border);
     }
     .office-tab-btn {
-      flex: 1; padding: 12px; background: none; border: none;
-      color: var(--muted); font-size: 14px; font-weight: 600;
+      flex: 1; padding: 13px 4px; background: none; border: none;
+      color: var(--muted); font-size: 13px; font-weight: 600;
       cursor: pointer; border-bottom: 2px solid transparent;
       transition: all 0.15s;
     }
     .office-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .office-tab-btn:hover:not(.active) { color: var(--text-2); }
 
     #office-alert-banner {
       display: none;
-      background: var(--danger);
+      background: linear-gradient(90deg, #b01c1c, #c0392b);
       color: #fff;
       padding: 14px 20px;
       font-size: 15px;
       font-weight: 700;
       text-align: center;
-      animation: pulse 1s infinite;
+      animation: pulse 1.2s infinite;
     }
-    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.75; } }
     #office-alert-banner.show { display: block; }
 
-    .office-content { padding: 20px; max-width: 900px; margin: 0 auto; }
+    .office-content { padding: 18px 20px; max-width: 900px; margin: 0 auto; }
     .office-tab-content { display: none; }
     .office-tab-content.active { display: block; }
 
-    .section-title { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; margin-top: 20px; }
+    .section-title {
+      font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase;
+      letter-spacing: 1px; margin-bottom: 10px; margin-top: 22px;
+    }
     .section-title:first-child { margin-top: 0; }
 
     .pilot-card {
       background: var(--card);
       border: 1px solid var(--border);
+      border-left: 3px solid var(--border);
       border-radius: var(--radius);
       padding: 14px 16px;
       margin-bottom: 10px;
+      box-shadow: var(--shadow-sm);
+      transition: border-color 0.2s;
     }
-    .pilot-card.airborne { border-color: var(--warning); }
-    .pilot-card.alert { border-color: var(--danger); }
+    .pilot-card.airborne { border-left-color: var(--warning); border-color: var(--border); background: linear-gradient(90deg, rgba(245,166,35,0.05) 0%, var(--card) 40%); }
+    .pilot-card.alert { border-left-color: var(--danger); border-color: var(--border); }
 
     .pilot-card-top { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
     .pilot-avatar {
-      width: 44px; height: 44px; border-radius: 50%;
-      background: var(--surface);
+      width: 46px; height: 46px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--card-hi), var(--surface));
+      border: 1.5px solid var(--border-hi);
       display: flex; align-items: center; justify-content: center;
-      font-size: 18px; font-weight: 700; color: var(--accent); flex-shrink: 0;
+      font-size: 19px; font-weight: 800; color: var(--accent); flex-shrink: 0;
+      font-family: 'Montserrat', sans-serif;
     }
     .pilot-info { flex: 1; min-width: 0; }
-    .pilot-name { font-size: 16px; font-weight: 600; }
-    .pilot-status { font-size: 13px; margin-top: 2px; }
+    .pilot-name { font-size: 16px; font-weight: 700; color: var(--text); }
+    .pilot-status { font-size: 13px; margin-top: 3px; font-weight: 500; color: var(--text-2); }
     .pilot-status.in-office { color: var(--accent); font-weight: 600; }
-    .pilot-status.airborne { color: var(--warning); }
-    .pilot-client { font-size: 13px; color: var(--accent); margin-top: 2px; font-weight: 600; }
+    .pilot-status.airborne { color: var(--warning); font-weight: 600; }
+    .pilot-client { font-size: 13px; color: var(--accent); margin-top: 3px; font-weight: 600; }
 
     .timer-display {
-      font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums;
+      font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums;
       color: var(--warning); margin-bottom: 10px;
+      font-family: 'Montserrat', sans-serif;
     }
     .timer-display.urgent { color: var(--danger); }
 
     .pilot-client-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-    .pilot-client-row label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .pilot-client-row label { font-size: 11px; font-weight: 700; color: var(--muted); white-space: nowrap; text-transform: uppercase; letter-spacing: 0.5px; }
     .pilot-client-row input {
-      flex: 1; background: var(--surface); border: 1px solid var(--border);
-      border-radius: 6px; color: var(--text); padding: 7px 10px;
-      font-size: 14px; outline: none;
+      flex: 1; background: var(--surface); border: 1px solid var(--border-hi);
+      border-radius: var(--radius-sm); color: var(--text); padding: 7px 10px;
+      font-size: 14px; outline: none; transition: border-color 0.15s;
     }
-    .pilot-client-row input:focus { border-color: var(--accent); }
+    .pilot-client-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
 
-    .pilot-actions { display: flex; gap: 8px; }
+    .pilot-actions { display: flex; gap: 8px; flex-shrink: 0; }
     .btn-leave {
-      padding: 8px 14px; background: var(--warning); border: none;
-      border-radius: 8px; color: #000; font-size: 13px; font-weight: 700; cursor: pointer;
+      padding: 8px 16px; background: var(--warning); border: none;
+      border-radius: 9999px; color: #1a1200; font-size: 13px; font-weight: 700; cursor: pointer;
     }
     .btn-landed {
-      padding: 8px 14px; background: var(--accent); border: none;
-      border-radius: 8px; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer;
+      padding: 8px 16px; background: var(--accent); border: none;
+      border-radius: 9999px; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer;
     }
 
     .flight-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .flight-table th {
-      text-align: left; padding: 8px 10px; background: var(--surface);
+      text-align: left; padding: 9px 12px; background: var(--surface);
       color: var(--muted); font-size: 11px; text-transform: uppercase;
-      letter-spacing: 0.5px; border-bottom: 1px solid var(--border);
+      letter-spacing: 0.8px; border-bottom: 1px solid var(--border); font-weight: 700;
     }
-    .flight-table td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .flight-table td { padding: 11px 12px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--text-2); }
     .flight-table tr:last-child td { border-bottom: none; }
-    .flight-table .pilot-col { font-weight: 600; color: var(--accent); }
-    .flight-table .client-col { color: var(--muted); font-size: 12px; }
+    .flight-table tr:hover td { background: var(--card-hi); }
+    .flight-table .pilot-col { font-weight: 700; color: var(--accent); }
+    .flight-table .client-col { color: var(--text-2); font-size: 12px; }
     .flight-table .time-col { color: var(--muted); font-size: 12px; }
     .flight-table .badge {
-      display: inline-block; background: var(--surface); border: 1px solid var(--border);
-      border-radius: 10px; padding: 2px 8px; font-size: 11px; color: var(--text);
+      display: inline-block; background: var(--surface); border: 1px solid var(--border-hi);
+      border-radius: 9999px; padding: 2px 9px; font-size: 11px; color: var(--text-2); font-weight: 600;
     }
 
-    .export-bar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+    .export-bar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
     .flights-search-bar { margin-bottom: 14px; position: relative; }
     .flights-search-bar input {
-      width: 100%; padding: 10px 14px 10px 36px; background: var(--surface);
-      border: 1px solid var(--border); border-radius: 10px;
+      width: 100%; padding: 11px 14px 11px 38px; background: var(--surface);
+      border: 1px solid var(--border-hi); border-radius: var(--radius-sm);
       color: var(--text); font-size: 14px; box-sizing: border-box;
+      transition: border-color 0.15s;
     }
     .flights-search-bar input::placeholder { color: var(--muted); }
-    .flights-search-bar input:focus { outline: none; border-color: var(--accent); }
+    .flights-search-bar input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
     .flights-search-bar .search-icon {
-      position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
       color: var(--muted); font-size: 15px; pointer-events: none;
     }
-    .flights-result-count { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+    .flights-result-count { font-size: 12px; color: var(--muted); margin-bottom: 10px; font-weight: 500; }
     .btn-export-all {
-      padding: 8px 16px; background: var(--accent); border: none;
-      border-radius: 8px; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer;
+      padding: 8px 18px; background: var(--accent); border: none;
+      border-radius: 9999px; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer;
     }
     .btn-export-pilot {
-      padding: 8px 14px; background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; color: var(--text); font-size: 13px; cursor: pointer;
+      padding: 8px 14px; background: var(--surface); border: 1px solid var(--border-hi);
+      border-radius: 9999px; color: var(--text-2); font-size: 13px; cursor: pointer; font-weight: 500;
     }
     .btn-export-pilot:hover { border-color: var(--accent); color: var(--accent); }
     .btn-export-pilot.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
 
     /* ── TODAY TAB ─────────────────────────────────────────────────────── */
     .today-summary {
-      font-size: 13px; color: var(--muted); margin-bottom: 14px;
+      font-size: 13px; color: var(--text-2); margin-bottom: 14px; font-weight: 500;
     }
     .today-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .today-table th {
-      text-align: left; padding: 8px 10px; background: var(--surface);
+      text-align: left; padding: 9px 10px; background: var(--surface);
       color: var(--muted); font-size: 11px; text-transform: uppercase;
-      letter-spacing: 0.5px; border-bottom: 1px solid var(--border);
+      letter-spacing: 0.8px; border-bottom: 1px solid var(--border); font-weight: 700;
     }
-    .today-table th.sortable {
-      cursor: pointer; user-select: none;
-    }
-    .today-table th.sortable:hover { color: var(--accent); }
+    .today-table th.sortable { cursor: pointer; user-select: none; }
+    .today-table th.sortable:hover { color: var(--text-2); }
     .today-table th.sort-active { color: var(--accent); }
     .today-table th .sort-arrow { margin-left: 4px; font-size: 9px; }
     .today-table td {
-      padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: top;
+      padding: 11px 10px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--text-2);
     }
     .today-table tr:last-child td { border-bottom: none; }
-    .today-table .col-pilot { font-weight: 600; color: var(--accent); }
-    .today-table .col-time { color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .today-table tr:hover td { background: var(--card-hi); }
+    .today-table .col-pilot { font-weight: 700; color: var(--text); }
+    .today-table .col-time { color: var(--muted); font-size: 12px; white-space: nowrap; font-weight: 600; }
 
     /* ── STATS EXTRAS ──────────────────────────────────────────────────── */
-    .stat-section { margin-bottom: 12px; }
-    .stat-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 10px; }
+    .stat-section { margin-bottom: 14px; }
+    .stat-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 10px; font-weight: 700; }
     .wing-progress-wrap { margin-top: 10px; background: var(--surface); border-radius: 6px; height: 8px; overflow: hidden; }
-    .wing-progress-bar { height: 100%; border-radius: 6px; transition: width 0.5s; }
-    .wing-bar-ok   { background: #4a8f1e; }
-    .wing-bar-warn { background: #c07000; }
-    .wing-bar-danger { background: #c0392b; }
+    .wing-progress-bar { height: 100%; border-radius: 6px; transition: width 0.6s; }
+    .wing-bar-ok   { background: var(--success); }
+    .wing-bar-warn { background: var(--warning); }
+    .wing-bar-danger { background: var(--danger); }
     .month-chart { margin-top: 4px; }
-    .month-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
-    .month-label { width: 28px; color: var(--muted); font-size: 11px; text-align: right; flex-shrink: 0; }
+    .month-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .month-label { width: 28px; color: var(--muted); font-size: 11px; text-align: right; flex-shrink: 0; font-weight: 600; }
     .month-bar-wrap { flex: 1; background: var(--surface); border-radius: 4px; height: 18px; overflow: hidden; }
-    .month-bar { background: var(--accent); height: 100%; border-radius: 4px; transition: width 0.4s; min-width: 0; }
-    .month-count { width: 22px; font-size: 12px; font-weight: 600; color: var(--text); text-align: right; flex-shrink: 0; }
+    .month-bar { background: linear-gradient(90deg, var(--accent), #e5681f); height: 100%; border-radius: 4px; transition: width 0.5s; min-width: 0; }
+    .month-count { width: 24px; font-size: 12px; font-weight: 700; color: var(--text); text-align: right; flex-shrink: 0; }
     #f-wing { text-transform: uppercase; }
 
     /* ── FLIGHT FOLLOWING ──────────────────────────────────────────────── */
     .ff-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .ff-table { border-collapse: collapse; font-size: 12px; min-width: 600px; }
     .ff-table th, .ff-table td {
-      padding: 5px 8px; border: 1px solid var(--border); text-align: center; white-space: nowrap;
+      padding: 6px 8px; border: 1px solid var(--border); text-align: center; white-space: nowrap;
     }
     .ff-table th {
       background: var(--surface); color: var(--muted); font-size: 11px;
-      font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;
+      font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
     }
     .ff-table th.ff-today-col { color: var(--accent); }
-    .ff-table td.ff-today-col { background: rgba(243,115,41,0.08); }
-    .ff-pilot-name { text-align: left !important; font-weight: 600; min-width: 70px; }
-    .ff-day-val { font-weight: 600; color: var(--text); }
-    .ff-total { font-weight: 700; color: #fff; min-width: 52px; }
-    .ff-ok        { background: #4a8f1e; }  /* 6–14 days left: green */
-    .ff-warn      { background: #c07000; }  /* 5 days left: yellow/amber */
-    .ff-warn-hard { background: #c05800; }  /* 3 days left: orange */
-    .ff-limit     { background: #c0392b; }  /* ≤2 days left: red */
+    .ff-table td.ff-today-col { background: var(--accent-dim); }
+    .ff-pilot-name { text-align: left !important; font-weight: 700; min-width: 70px; color: var(--text); }
+    .ff-day-val { font-weight: 600; color: var(--text-2); }
+    .ff-total { font-weight: 800; color: #fff; min-width: 52px; }
+    .ff-ok        { background: #166534; color: #bbf7d0; }
+    .ff-warn      { background: #78350f; color: #fde68a; }
+    .ff-warn-hard { background: #7c2d12; color: #fed7aa; }
+    .ff-limit     { background: #7f1d1d; color: #fecaca; }
     #page-ff { padding: 0; }
     #ff-content { padding: 12px 16px; }
 
     /* ── SHARED ────────────────────────────────────────────────────────── */
     #toast {
-      position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
-      background: #333; color: #fff; padding: 10px 20px;
-      border-radius: 20px; font-size: 14px; opacity: 0;
-      pointer-events: none; transition: opacity 0.3s; z-index: 999; white-space: nowrap;
+      position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%);
+      background: var(--card-hi); color: var(--text); padding: 11px 22px;
+      border-radius: 9999px; font-size: 14px; font-weight: 500; opacity: 0;
+      pointer-events: none; transition: opacity 0.25s; z-index: 999; white-space: nowrap;
+      border: 1px solid var(--border-hi);
+      box-shadow: var(--shadow);
     }
     #toast.show { opacity: 1; }
     .hidden { display: none !important; }
-    .empty-state { text-align: center; color: var(--muted); padding: 40px 20px; font-size: 15px; }
+    .empty-state { text-align: center; color: var(--muted); padding: 44px 20px; font-size: 15px; }
   </style>
 </head>
 <body>
@@ -1356,7 +1407,7 @@ function togglePeakDrive() {
   if (isPeakDrive) {
     btn.style.background = 'var(--warning)';
     btn.style.borderColor = 'var(--warning)';
-    btn.style.color = '#292f36';
+    btn.style.color = '#1a1200';
     document.getElementById('card-title').textContent = 'Peak Drive';
     document.getElementById('save-btn').textContent = '🚗 Log Drive';
     greyFields.forEach(id => {
@@ -2174,7 +2225,7 @@ function renderOfficeTab() {
         </div>
         <div class="pilot-actions">
           ${isAirborne
-            ? `<button class="btn-landed" style="cursor:default;opacity:1;background:var(--warning);color:#292f36;">🪂 Flying</button>
+            ? `<button class="btn-landed" style="cursor:default;opacity:1;background:var(--warning);color:#1a1200;">🪂 Flying</button>
                <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name}')">Cancel</button>`
             : disabled
               ? `<button class="btn-leave" style="background:var(--surface);border:1px solid var(--accent);color:var(--accent);" onclick="officeSignIn('${p.id}', '${p.name}')">Sign In</button>`

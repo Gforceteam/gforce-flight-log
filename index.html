@@ -580,8 +580,8 @@
       </div>
     </div>
     <div class="status-right">
-      <button id="availability-btn" onclick="toggleAvailability()" title="Toggle your availability for office to send you away"
-        style="background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;cursor:pointer;font-weight:600;transition:all 0.2s;">🔴 Not Available</button>
+      <span id="availability-btn"
+        style="background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;font-weight:600;">🔴 Not Available</span>
       <span class="server-badge" id="server-badge">...</span>
       <button onclick="doLogout()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;padding:4px 10px;cursor:pointer">Logout</button>
     </div>
@@ -1112,7 +1112,11 @@ function updateStatusBadge() {
   if (sub) sub.textContent = '';
   if (!availBtn) return;
   if (myStatus.status === 'airborne') {
-    availBtn.style.display = 'none'; // hide toggle when flying
+    availBtn.textContent = '🪂 Flying';
+    availBtn.style.background = 'rgba(255,183,77,0.2)';
+    availBtn.style.borderColor = 'var(--warning)';
+    availBtn.style.color = 'var(--warning)';
+    availBtn.style.display = '';
   } else if (pilotAvailable) {
     availBtn.textContent = '🟢 Available';
     availBtn.style.background = 'rgba(74,143,30,0.2)';
@@ -1143,7 +1147,7 @@ async function toggleAvailability() {
     // Piggyback on this user gesture to request push permission if not yet done
     if (newState && 'Notification' in window && Notification.permission === 'default') {
       requestAndSubscribePush(null);
-    } else if (newState && Notification.permission === 'granted') {
+    } else if (newState && 'Notification' in window && Notification.permission === 'granted') {
       subscribeToPush(); // re-subscribe silently if already permitted
     }
   } catch (e) {
@@ -1208,7 +1212,10 @@ function renderDashboard() {
       <div class="dashboard-status-icon">🏢</div>
       <div class="dashboard-status-label">Status</div>
       <div class="dashboard-status-value">${pilotAvailable ? 'Available' : 'Not Available'}</div>
-      <p style="color:var(--muted);font-size:14px;margin-top:8px">${pilotAvailable ? 'Office can send you away' : 'Toggle Available to appear for office'}</p>
+      <p style="color:var(--muted);font-size:14px;margin-top:8px">${pilotAvailable ? 'Office can send you away' : 'Sign in to appear for office'}</p>
+      <button onclick="toggleAvailability()" style="margin-top:16px;padding:12px 32px;background:${pilotAvailable ? 'rgba(239,83,80,0.15)' : 'rgba(74,143,30,0.2)'};border:1px solid ${pilotAvailable ? 'var(--danger)' : '#4a8f1e'};border-radius:9999px;color:${pilotAvailable ? 'var(--danger)' : '#7bc950'};font-size:15px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;letter-spacing:0.5px;">
+        ${pilotAvailable ? 'Sign Out' : 'Sign In'}
+      </button>
       ${notifPrompt}
       ${renderFlyingList(false)}
     `;
@@ -2582,13 +2589,27 @@ function connectWS() {
         break;
       case 'PILOT_SIGNED_OUT': {
         const p = officePilots.find(p => p.id === data.pilot_id);
-        toast(`${p ? p.name : 'Pilot'} signed out`);
+        if (pilotId && data.pilot_id === pilotId) {
+          pilotAvailable = false;
+          renderDashboard();
+          updateStatusBadge();
+          toast('Office signed you out');
+        } else {
+          toast(`${p ? p.name : 'Pilot'} signed out`);
+        }
         loadOfficeData();
         break;
       }
       case 'PILOT_SIGNED_IN': {
         const p = officePilots.find(p => p.id === data.pilot_id);
-        toast(`${p ? p.name : 'Pilot'} signed in`);
+        if (pilotId && data.pilot_id === pilotId) {
+          pilotAvailable = true;
+          renderDashboard();
+          updateStatusBadge();
+          toast('Office signed you in');
+        } else {
+          toast(`${p ? p.name : 'Pilot'} signed in`);
+        }
         loadOfficeData();
         break;
       }

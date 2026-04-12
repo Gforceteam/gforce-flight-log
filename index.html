@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Flight Log" />
+  <meta name="apple-mobile-web-app-title" content="GForce" />
+  <meta name="theme-color" content="#f37329" />
+  <meta name="msapplication-TileColor" content="#000000" />
   <link rel="apple-touch-icon" href="/gforce-flight-log/icon-192.png" />
   <link rel="manifest" href="/gforce-flight-log/manifest.json" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -1369,12 +1371,6 @@ function togglePeakDrive() {
 
 // ─── Save Flight ──────────────────────────────────────────────────────────────
 async function saveFlight() {
-  // Editing existing flights is always allowed; only new flight saves require being away
-  if (myStatus.status !== 'airborne' && editingId === null) {
-    toast('You must be sent away by office before logging a flight');
-    return;
-  }
-
   const date = document.getElementById('f-date').value;
   const notes = document.getElementById('f-notes').value;
 
@@ -2169,13 +2165,16 @@ function renderOfficeTab() {
           </div>` : ''}
           ${isAirborne && clientName ? `<div class="pilot-client">👤 ${clientName}</div>` : ''}
         </div>
-        ${!disabled ? `<div class="pilot-actions">
+        <div class="pilot-actions">
           ${isAirborne
             ? `<button class="btn-landed" style="cursor:default;opacity:1;background:var(--warning);color:#292f36;">🪂 Flying</button>
                <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name}')">Cancel</button>`
-            : `<button class="btn-leave" onclick="doLeaveOffice('${p.id}')">Away</button>`
+            : disabled
+              ? `<button class="btn-leave" style="background:var(--surface);border:1px solid var(--accent);color:var(--accent);" onclick="officeSignIn('${p.id}', '${p.name}')">Sign In</button>`
+              : `<button class="btn-leave" onclick="doLeaveOffice('${p.id}')">Away</button>
+                 <button class="btn-danger" onclick="officeSignOut('${p.id}', '${p.name}')">Sign Out</button>`
           }
-        </div>` : ''}
+        </div>
       </div>
       ${isAirborne && p.timer_expires_at ? `<div class="timer-display" id="timer-${p.id}" data-expires="${p.timer_expires_at}">Timer: --:--</div>` : ''}
       ${!disabled ? `<div class="pilot-client-row">
@@ -2226,6 +2225,19 @@ async function doLandedEarly(pilotId) {
   else { toast(data.error || 'Error'); }
 }
 
+async function officeSignOut(pilotId, name) {
+  if (!confirm(`Sign out ${name}?`)) return;
+  const res = await officeApi('/api/office/pilot-signout', { method: 'POST', body: JSON.stringify({ pilot_id: pilotId }) });
+  if (res.ok) { toast(`${name} signed out`); await loadOfficeData(); }
+  else toast('Failed to sign out pilot');
+}
+
+async function officeSignIn(pilotId, name) {
+  const res = await officeApi('/api/office/pilot-signin', { method: 'POST', body: JSON.stringify({ pilot_id: pilotId }) });
+  if (res.ok) { toast(`${name} signed in`); await loadOfficeData(); }
+  else toast('Failed to sign in pilot');
+}
+
 async function updateClientName(pilotId, clientName) {
   await officeApi('/api/office/leave', {
     method: 'POST',
@@ -2244,7 +2256,10 @@ function renderTodayTab() {
     sorted.sort((a, b) => dir * (a.pilot_name || '').localeCompare(b.pilot_name || ''));
   } else if (todaySort.col === 'client') {
     sorted.sort((a, b) => dir * (a.client_name || '').localeCompare(b.client_name || ''));
+  } else if (todaySort.col === 'sent_away') {
+    sorted.sort((a, b) => dir * (a.sent_away_at || '').localeCompare(b.sent_away_at || ''));
   } else {
+    // 'time' col sorts on landed_at
     sorted.sort((a, b) => dir * (a.landed_at || '').localeCompare(b.landed_at || ''));
   }
 
@@ -2261,28 +2276,29 @@ function renderTodayTab() {
 
   let html = `<table class="today-table">
     <thead><tr>
-      <th class="sortable sort-${todaySort.col === 'time' ? 'active' : 'inactive'}" onclick="sortToday('time')">Logged At${arrow('time')}</th>
+      <th class="sortable sort-${todaySort.col === 'sent_away' ? 'active' : 'inactive'}" onclick="sortToday('sent_away')">Sent Away${arrow('sent_away')}</th>
+      <th class="sortable sort-${todaySort.col === 'time' ? 'active' : 'inactive'}" onclick="sortToday('time')">Pilot Landed${arrow('time')}</th>
       <th class="sortable sort-${todaySort.col === 'pilot' ? 'active' : 'inactive'}" onclick="sortToday('pilot')">Pilot${arrow('pilot')}</th>
       <th class="sortable sort-${todaySort.col === 'client' ? 'active' : 'inactive'}" onclick="sortToday('client')">Client${arrow('client')}</th>
       <th>#</th>
       <th>Weight</th>
-      <th>Site</th>
-      <th>Min</th>
     </tr></thead>
     <tbody>`;
 
   sorted.forEach(f => {
-    const timeStr = f.landed_at
+    const sentAwayStr = f.sent_away_at
+      ? new Date(f.sent_away_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
+      : '—';
+    const landedStr = f.landed_at
       ? new Date(f.landed_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
       : '—';
     html += `<tr>
-      <td class="col-time">${timeStr}</td>
+      <td class="col-time">${sentAwayStr}</td>
+      <td class="col-time">${landedStr}</td>
       <td class="col-pilot">${f.pilot_name}</td>
       <td>${f.client_name || '—'}</td>
       <td>${f.flight_num}</td>
       <td>${f.weight}kg</td>
-      <td>${f.takeoff} → ${f.landing}</td>
-      <td>${f.time}</td>
     </tr>`;
   });
 
@@ -2398,10 +2414,11 @@ function exportAllCSV() {
   downloadCSV(buildCSV(toExport), label);
 }
 function buildCSV(flights) {
-  const header = ['Date','Pilot','Client Name','Flight #','Weight (kg)','Takeoff','Landing','Time (min)','Notes','Logged At'];
+  const header = ['Date','Pilot','Client Name','Flight #','Weight (kg)','Takeoff','Landing','Time (min)','Notes','Sent Away','Logged At'];
   const rows = flights.map(f => [
     f.date, f.pilot_name||'', f.client_name||'', f.flight_num, f.weight,
     f.takeoff, f.landing, f.time, f.notes||'',
+    f.sent_away_at ? new Date(f.sent_away_at).toLocaleString('en-NZ') : '',
     f.landed_at ? new Date(f.landed_at).toLocaleString('en-NZ') : ''
   ]);
   return [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
@@ -2563,6 +2580,18 @@ function connectWS() {
         toast(`${data.pilot_name}: timer extended to +30 min`);
         loadOfficeData();
         break;
+      case 'PILOT_SIGNED_OUT': {
+        const p = officePilots.find(p => p.id === data.pilot_id);
+        toast(`${p ? p.name : 'Pilot'} signed out`);
+        loadOfficeData();
+        break;
+      }
+      case 'PILOT_SIGNED_IN': {
+        const p = officePilots.find(p => p.id === data.pilot_id);
+        toast(`${p ? p.name : 'Pilot'} signed in`);
+        loadOfficeData();
+        break;
+      }
     }
   };
 }

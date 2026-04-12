@@ -3,6 +3,9 @@ const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const { createClient } = require('@libsql/client');
+
+process.on('unhandledRejection', (err) => { console.error('Unhandled rejection:', err); });
+process.on('uncaughtException', (err) => { console.error('Uncaught exception:', err); });
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
@@ -213,6 +216,13 @@ async function createTables() {
     id TEXT PRIMARY KEY, pilot_id TEXT, date TEXT, notes TEXT, group_id TEXT, created_at TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS push_subscriptions (
     id TEXT PRIMARY KEY, pilot_id TEXT NOT NULL, subscription TEXT NOT NULL, created_at TEXT)`);
+  // Indexes for common queries
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_flights_pilot_date ON flights(pilot_id, date)');
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_flights_date ON flights(date)');
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_timers_pilot ON active_timers(pilot_id)');
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_push_pilot ON push_subscriptions(pilot_id)');
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_drives_pilot ON drives(pilot_id)');
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_flights_landed ON flights(landed_at)');
   console.log('✅ Tables ready');
 }
 
@@ -298,7 +308,7 @@ app.get('/api/public/pilots', async (req, res) => {
     res.json(pilots);
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -372,7 +382,7 @@ app.get('/api/pilots', verifyToken, async (req, res) => {
     res.json(pilotsWithStatus);
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -407,7 +417,7 @@ app.get('/api/my-status', verifyToken, async (req, res) => {
     });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -433,7 +443,7 @@ app.post('/api/pilot/extend-timer', verifyToken, async (req, res) => {
     res.json({ message: 'Timer extended', expires_at: newExpiry.toISOString() });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -480,7 +490,7 @@ app.post('/api/flights', verifyToken, async (req, res) => {
     res.status(201).json({ id, message: 'Flight logged, office notified' });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -510,12 +520,12 @@ app.put('/api/flights/:id', verifyToken, async (req, res) => {
     if (!existing) return res.status(404).json({ error: 'Flight not found' });
     await run(
       `UPDATE flights SET date=?, flight_num=?, weight=?, takeoff=?, landing=?, time=?, photos=?, notes=?, wing_reg=? WHERE id=? AND pilot_id=?`,
-      [date, flight_num, weight, takeoff, landing, time, photos || 0, notes || '', wing_reg || null, id, pilotId]
+      [sanitize(date, 10), flight_num, weight, sanitize(takeoff, 10), sanitize(landing, 10), time, photos || 0, sanitize(notes, 500) || '', sanitize(wing_reg, 10), id, pilotId]
     );
     res.json({ id, message: 'Flight updated' });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Failed to update flight' });
   }
 });
 
@@ -529,7 +539,7 @@ app.delete('/api/flights/:id', verifyToken, async (req, res) => {
     res.json({ id, message: 'Flight deleted' });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -541,7 +551,7 @@ app.put('/api/pilot/wing', verifyToken, async (req, res) => {
     res.json({ message: 'Wing updated', wing_reg: wing_reg || null });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -574,7 +584,7 @@ app.post('/api/pilot/push-subscription', verifyToken, async (req, res) => {
     res.json({ message: 'Push subscription saved' });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -584,7 +594,7 @@ app.delete('/api/pilot/push-subscription', verifyToken, async (req, res) => {
     res.json({ message: 'Push subscription removed' });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -600,7 +610,7 @@ app.put('/api/pilot/available', verifyToken, async (req, res) => {
     res.json({ message: 'Availability updated', available: !!available });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -658,7 +668,7 @@ app.post('/api/pilot/cancel-timer', verifyToken, async (req, res) => {
     res.json({ message: 'Timer cancelled — marked as did not fly' });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -678,7 +688,7 @@ app.put('/api/pilot/hours', verifyToken, async (req, res) => {
     res.json({ message: 'Hours updated', flight_id: flight.id, hours: h });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -692,7 +702,7 @@ app.get('/api/drives', verifyToken, async (req, res) => {
     res.json(drives);
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -716,7 +726,7 @@ app.post('/api/drives', verifyToken, async (req, res) => {
     res.status(201).json({ id, message: 'Drive logged' });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -729,7 +739,7 @@ app.delete('/api/drives/:id', verifyToken, async (req, res) => {
     res.json({ message: 'Drive deleted' });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -745,7 +755,7 @@ app.get('/api/flying', verifyToken, async (req, res) => {
     res.json(rows);
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -785,7 +795,7 @@ app.get('/api/flight-following', verifyToken, async (req, res) => {
     res.json({ dates, pilots: result });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -809,7 +819,7 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
       type: 'LEFT_OFFICE',
       pilot_id,
       pilot_name: pilot.name,
-      client_name: client_name || null,
+      client_name: cleanClientName || null,
       started_at: now.toISOString(),
       expires_at: expires.toISOString()
     });
@@ -817,14 +827,14 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
     // Push notification to pilot's device (works even when app is closed)
     await sendPushToPilot(pilot_id, {
       title: '🪂 GForce — YOU\'RE AWAY!',
-      body: client_name ? `Client: ${client_name}. Timer started — 60 minutes.` : 'Office has started your timer. Have a great flight!',
+      body: cleanClientName ? `Client: ${cleanClientName}. Timer started — 60 minutes.` : 'Office has started your timer. Have a great flight!',
       tag: 'pilot-sent-away'
     });
 
     res.json({ message: `Timer started for ${pilot.name}`, expires_at: expires.toISOString() });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -877,7 +887,7 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
     res.json({ message: `Group "${group_name}" sent away — ${pilotNames.join(', ')}`, group_id: groupId, expires_at: expires.toISOString() });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -897,7 +907,7 @@ app.post('/api/office/landed-early', verifyOffice, async (req, res) => {
     res.json({ message: 'Timer cancelled' });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -925,7 +935,7 @@ app.post('/api/office/extend', verifyOffice, async (req, res) => {
     res.json({ message: `Timer extended by 30 minutes for ${pilot.name}`, expires_at: newExpiry.toISOString() });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -940,7 +950,7 @@ app.get('/api/office/flights', verifyOffice, async (req, res) => {
     res.json(flights);
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -974,7 +984,7 @@ app.get('/api/export/flights', verifyOffice, async (req, res) => {
     res.send(csv);
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message });
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -985,7 +995,7 @@ app.post('/api/office/pilot-signout', verifyOffice, async (req, res) => {
     await run('UPDATE pilots SET available = 0 WHERE id = ?', [pilot_id]);
     wss.clients.forEach(c => { if (c.readyState === 1) c.send(JSON.stringify({ type: 'PILOT_SIGNED_OUT', pilot_id })); });
     res.json({ message: 'Pilot signed out' });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 app.post('/api/office/pilot-signin', verifyOffice, async (req, res) => {
@@ -995,7 +1005,7 @@ app.post('/api/office/pilot-signin', verifyOffice, async (req, res) => {
     await run('UPDATE pilots SET available = 1 WHERE id = ?', [pilot_id]);
     wss.clients.forEach(c => { if (c.readyState === 1) c.send(JSON.stringify({ type: 'PILOT_SIGNED_IN', pilot_id })); });
     res.json({ message: 'Pilot signed in' });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 // ─── Office: Edit / Delete Flight ────────────────────────────────────────────
@@ -1007,10 +1017,10 @@ app.put('/api/office/flights/:id', verifyOffice, async (req, res) => {
     if (!existing) return res.status(404).json({ error: 'Flight not found' });
     await run(
       `UPDATE flights SET date=?, flight_num=?, weight=?, takeoff=?, landing=?, time=?, notes=?, client_name=?, wing_reg=? WHERE id=?`,
-      [date, flight_num, weight, takeoff, landing, time, notes || '', client_name || null, wing_reg || null, id]
+      [sanitize(date, 10), flight_num, weight, sanitize(takeoff, 10), sanitize(landing, 10), time, sanitize(notes, 500) || '', sanitize(client_name, 100), sanitize(wing_reg, 10), id]
     );
     res.json({ id, message: 'Flight updated by office' });
-  } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to update flight' }); }
 });
 
 app.delete('/api/office/flights/:id', verifyOffice, async (req, res) => {
@@ -1020,7 +1030,7 @@ app.delete('/api/office/flights/:id', verifyOffice, async (req, res) => {
     if (!existing) return res.status(404).json({ error: 'Flight not found' });
     await run('DELETE FROM flights WHERE id = ?', [id]);
     res.json({ id, message: 'Flight deleted by office' });
-  } catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
+  } catch (e) { console.error(e); console.error(e); res.status(500).json({ error: 'Internal server error' }); }
 });
 
 // ─── Health ───────────────────────────────────────────────────────────────────

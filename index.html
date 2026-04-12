@@ -904,6 +904,70 @@
   </div>
 </div>
 
+<!-- ── OFFICE EDIT FLIGHT MODAL ───────────────────────────────────────────── -->
+<div id="office-edit-modal" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);padding:20px;overflow-y:auto;">
+  <div style="background:var(--card);border:1px solid var(--border-hi);border-radius:20px;padding:24px;max-width:460px;margin:0 auto;box-shadow:0 8px 40px rgba(0,0,0,0.6);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div style="font-family:'Montserrat',sans-serif;font-size:15px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:1px;">Edit Flight</div>
+      <button onclick="closeOfficeEditModal()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;padding:0 4px;">×</button>
+    </div>
+
+    <input type="hidden" id="oe-flight-id" />
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Date</div>
+        <input type="date" id="oe-date" style="width:100%;background:var(--surface);border:1px solid var(--border-hi);border-radius:10px;color:var(--text);padding:10px 12px;font-size:15px;outline:none;" />
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Flight #</div>
+        <input type="number" id="oe-flight-num" min="1" style="width:100%;background:var(--surface);border:1px solid var(--border-hi);border-radius:10px;color:var(--text);padding:10px 12px;font-size:15px;outline:none;" />
+      </div>
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Client Name</div>
+      <input type="text" id="oe-client" placeholder="Optional" style="width:100%;background:var(--surface);border:1px solid var(--border-hi);border-radius:10px;color:var(--text);padding:10px 12px;font-size:15px;outline:none;" />
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px;">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Weight (kg)</div>
+        <input type="number" id="oe-weight" min="15" max="160" style="width:100%;background:var(--surface);border:1px solid var(--border-hi);border-radius:10px;color:var(--text);padding:10px 12px;font-size:15px;outline:none;" />
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Takeoff</div>
+        <input type="text" id="oe-takeoff" placeholder="E / W / G" style="width:100%;background:var(--surface);border:1px solid var(--border-hi);border-radius:10px;color:var(--text);padding:10px 12px;font-size:15px;outline:none;" />
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Landing</div>
+        <input type="text" id="oe-landing" placeholder="S / R / FP" style="width:100%;background:var(--surface);border:1px solid var(--border-hi);border-radius:10px;color:var(--text);padding:10px 12px;font-size:15px;outline:none;" />
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Time (min)</div>
+        <input type="number" id="oe-time" min="1" style="width:100%;background:var(--surface);border:1px solid var(--border-hi);border-radius:10px;color:var(--text);padding:10px 12px;font-size:15px;outline:none;" />
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Wing Reg</div>
+        <input type="text" id="oe-wing" placeholder="ZK-GFC" style="width:100%;background:var(--surface);border:1px solid var(--border-hi);border-radius:10px;color:var(--text);padding:10px 12px;font-size:15px;outline:none;text-transform:uppercase;" />
+      </div>
+    </div>
+
+    <div style="margin-bottom:20px;">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Notes</div>
+      <textarea id="oe-notes" rows="2" placeholder="Optional" style="width:100%;background:var(--surface);border:1px solid var(--border-hi);border-radius:10px;color:var(--text);padding:10px 12px;font-size:14px;outline:none;resize:vertical;"></textarea>
+    </div>
+
+    <div id="oe-error" style="color:var(--danger);font-size:13px;margin-bottom:10px;min-height:18px;"></div>
+
+    <button onclick="officeUpdateFlight()" style="width:100%;padding:14px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;font-family:'Montserrat',sans-serif;letter-spacing:0.5px;box-shadow:0 4px 16px var(--accent-glow);">Save Changes</button>
+    <button onclick="closeOfficeEditModal()" style="width:100%;padding:13px;background:none;border:1px solid var(--border-hi);border-radius:9999px;color:var(--text-2);font-size:14px;font-weight:600;cursor:pointer;margin-top:10px;">Cancel</button>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -961,6 +1025,14 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('pilot-select').addEventListener('change', function() {
     const pinInput = document.getElementById('pilot-pin');
     pinInput.placeholder = this.value === '__office__' ? 'Office password' : 'Enter password';
+  });
+
+  // Close edit modal on backdrop click or Escape
+  document.getElementById('office-edit-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeOfficeEditModal();
+  });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeOfficeEditModal();
   });
 });
 
@@ -1597,9 +1669,9 @@ function renderFlights() {
           ${f.client_name ? `<div class="flight-meta" style="color:#fff">👤 ${f.client_name}</div>` : ''}
           ${loggedAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">⏱ Logged ${loggedAt}</div>` : ''}
         </div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <button class="btn-edit" onclick="editFlight('${f.id}')">&#9998;</button>
-          <button class="btn-danger" onclick="deleteFlight('${f.id}')">✕</button>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:72px;">
+          <button class="btn-edit" onclick="editFlight('${f.id}')" style="padding:8px 12px;font-size:13px;font-weight:700;text-align:center;">✏️ Edit</button>
+          <button class="btn-danger" onclick="deleteFlight('${f.id}')" style="padding:8px 12px;font-size:13px;font-weight:700;text-align:center;">🗑 Delete</button>
         </div>
       </div>`;
     });
@@ -2296,6 +2368,64 @@ async function officeSignIn(pilotId, name) {
   else toast('Failed to sign in pilot');
 }
 
+// ─── Office Edit Flight ───────────────────────────────────────────────────────
+function officeEditFlight(flightId) {
+  const f = allFlights.find(f => f.id === flightId);
+  if (!f) { toast('Flight not found'); return; }
+  document.getElementById('oe-flight-id').value = f.id;
+  document.getElementById('oe-date').value = f.date;
+  document.getElementById('oe-flight-num').value = f.flight_num;
+  document.getElementById('oe-client').value = f.client_name || '';
+  document.getElementById('oe-weight').value = f.weight;
+  document.getElementById('oe-takeoff').value = f.takeoff || '';
+  document.getElementById('oe-landing').value = f.landing || '';
+  document.getElementById('oe-time').value = f.time;
+  document.getElementById('oe-wing').value = f.wing_reg || '';
+  document.getElementById('oe-notes').value = f.notes || '';
+  document.getElementById('oe-error').textContent = '';
+  document.getElementById('office-edit-modal').style.display = 'block';
+}
+
+function closeOfficeEditModal() {
+  document.getElementById('office-edit-modal').style.display = 'none';
+}
+
+async function officeUpdateFlight() {
+  const id = document.getElementById('oe-flight-id').value;
+  const date = document.getElementById('oe-date').value;
+  const flight_num = parseInt(document.getElementById('oe-flight-num').value);
+  const client_name = document.getElementById('oe-client').value.trim();
+  const weight = parseInt(document.getElementById('oe-weight').value);
+  const takeoff = document.getElementById('oe-takeoff').value.trim().toUpperCase();
+  const landing = document.getElementById('oe-landing').value.trim().toUpperCase();
+  const time = parseInt(document.getElementById('oe-time').value);
+  const wing_reg = document.getElementById('oe-wing').value.trim().toUpperCase() || null;
+  const notes = document.getElementById('oe-notes').value.trim();
+  const errEl = document.getElementById('oe-error');
+
+  if (!date || !flight_num || !weight || !takeoff || !landing || !time) {
+    errEl.textContent = 'Date, flight #, weight, takeoff, landing and time are required.';
+    return;
+  }
+
+  const btn = document.querySelector('#office-edit-modal button[onclick="officeUpdateFlight()"]');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const res = await officeApi(`/api/office/flights/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ date, flight_num, weight, takeoff, landing, time, notes, client_name, wing_reg })
+    });
+    if (!res.ok) { const d = await res.json(); errEl.textContent = d.error || 'Save failed'; return; }
+    closeOfficeEditModal();
+    toast('Flight updated');
+    await loadOfficeData();
+  } catch (e) {
+    errEl.textContent = 'Network error: ' + e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Changes';
+  }
+}
+
 async function updateClientName(pilotId, clientName) {
   await officeApi('/api/office/leave', {
     method: 'POST',
@@ -2332,14 +2462,15 @@ function renderTodayTab() {
 
   const arrow = (col) => todaySort.col === col ? ` <span class="sort-arrow">${todaySort.dir === 'asc' ? '▲' : '▼'}</span>` : '';
 
-  let html = `<table class="today-table">
+  let html = `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table class="today-table" style="min-width:480px;">
     <thead><tr>
-      <th class="sortable sort-${todaySort.col === 'sent_away' ? 'active' : 'inactive'}" onclick="sortToday('sent_away')">Sent Away${arrow('sent_away')}</th>
-      <th class="sortable sort-${todaySort.col === 'time' ? 'active' : 'inactive'}" onclick="sortToday('time')">Pilot Landed${arrow('time')}</th>
+      <th class="sortable sort-${todaySort.col === 'sent_away' ? 'active' : 'inactive'}" onclick="sortToday('sent_away')">Away${arrow('sent_away')}</th>
+      <th class="sortable sort-${todaySort.col === 'time' ? 'active' : 'inactive'}" onclick="sortToday('time')">Landed${arrow('time')}</th>
       <th class="sortable sort-${todaySort.col === 'pilot' ? 'active' : 'inactive'}" onclick="sortToday('pilot')">Pilot${arrow('pilot')}</th>
       <th class="sortable sort-${todaySort.col === 'client' ? 'active' : 'inactive'}" onclick="sortToday('client')">Client${arrow('client')}</th>
       <th>#</th>
-      <th>Weight</th>
+      <th>kg</th>
+      <th></th>
     </tr></thead>
     <tbody>`;
 
@@ -2356,11 +2487,12 @@ function renderTodayTab() {
       <td class="col-pilot">${f.pilot_name}</td>
       <td>${f.client_name || '—'}</td>
       <td>${f.flight_num}</td>
-      <td>${f.weight}kg</td>
+      <td>${f.weight}</td>
+      <td><button class="btn-edit" onclick="officeEditFlight('${f.id}')">Edit</button></td>
     </tr>`;
   });
 
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   el.innerHTML = html;
 }
 
@@ -2417,32 +2549,29 @@ function renderFlightsTab() {
     byDate[f.date].push(f);
   });
 
-  let html = `<table class="flight-table">
+  let html = `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table class="flight-table" style="min-width:560px;">
     <thead><tr>
       <th>Date</th><th>Pilot</th><th>Client</th><th>#</th>
-      <th>Weight</th><th>Site</th><th>Time</th><th>Notes</th><th>Logged</th>
+      <th>kg</th><th>Site</th><th>Min</th><th>Notes</th><th></th>
     </tr></thead><tbody>`;
 
   Object.keys(byDate).sort().reverse().forEach(date => {
     byDate[date].forEach(f => {
-      const loggedAt = f.landed_at
-        ? new Date(f.landed_at).toLocaleString('en-NZ', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
-        : '—';
       html += `<tr>
-        <td>${officeFmtDate(date)}</td>
+        <td class="time-col">${officeFmtDate(date)}</td>
         <td class="pilot-col">${f.pilot_name}</td>
         <td class="client-col">${f.client_name || '—'}</td>
         <td>${f.flight_num}</td>
-        <td>${f.weight}kg</td>
-        <td>${f.takeoff} → ${f.landing}</td>
-        <td>${f.time}min</td>
-        <td class="time-col">${f.notes || ''}</td>
-        <td class="time-col">${loggedAt}</td>
+        <td>${f.weight}</td>
+        <td style="white-space:nowrap">${f.takeoff}→${f.landing}</td>
+        <td>${f.time}</td>
+        <td class="time-col" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.notes || ''}</td>
+        <td><button class="btn-edit" onclick="officeEditFlight('${f.id}')">Edit</button></td>
       </tr>`;
     });
   });
 
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
   el.innerHTML = html;
 }
 

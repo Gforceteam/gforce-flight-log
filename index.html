@@ -369,7 +369,7 @@
     .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 4px; font-weight: 600; }
 
     /* ── OFFICE DASHBOARD ──────────────────────────────────────────────── */
-    #office-dashboard { display: none; padding-bottom: 0; background: #ffffff; }
+    #office-dashboard { display: none; padding-bottom: 0; background: var(--bg); }
 
     .office-header {
       background: var(--card);
@@ -992,33 +992,17 @@ let flyingPilots = []; // pilots currently airborne — shown on dashboard
 let statsMonthOffset = 0; // 0 = current month, -1 = last month, etc.
 let myStatus = { status: 'in_office', client_name: null, timer_expires_at: null };
 let pilotAvailable = false; // explicit availability toggle — off by default on login
-let availablePilotsOrder = JSON.parse(localStorage.getItem('gforce_available_order') || '[]'); // array of pilot IDs
-
-// Save order to localStorage
-function saveAvailablePilotsOrder() {
-  localStorage.setItem('gforce_available_order', JSON.stringify(availablePilotsOrder));
-}
-
-// Move pilot up in order
-function movePilotUp(pilotId) {
-  const idx = availablePilotsOrder.indexOf(pilotId);
-  if (idx > 0) {
-    availablePilotsOrder.splice(idx, 1);
-    availablePilotsOrder.splice(idx - 1, 0, pilotId);
-    saveAvailablePilotsOrder();
-    renderOfficeTab();
-  }
-}
-
-// Move pilot down in order
-function movePilotDown(pilotId) {
-  const idx = availablePilotsOrder.indexOf(pilotId);
-  if (idx < availablePilotsOrder.length - 1) {
-    availablePilotsOrder.splice(idx, 1);
-    availablePilotsOrder.splice(idx + 1, 0, pilotId);
-    saveAvailablePilotsOrder();
-    renderOfficeTab();
-  }
+// Adjust a flying pilot's timer by delta minutes
+async function adjustPilotTimer(pilotId, delta) {
+  try {
+    const res = await officeFetch('/api/office/adjust-timer', {
+      method: 'POST',
+      body: JSON.stringify({ pilot_id: pilotId, delta })
+    });
+    const data = await res.json();
+    if (res.ok) { toast(`${delta > 0 ? '+' : ''}${delta} min`); await loadOfficeData(); }
+    else toast(data.error || 'Failed');
+  } catch (e) { toast('Error: ' + e.message); }
 }
 
 // ─── Audio Context (unlocked on first touch, reused) ─────────────────────────
@@ -2391,14 +2375,9 @@ function renderOfficeTab() {
   const el = document.getElementById('pilots-list');
 
   const flying       = officePilots.filter(p => p.status === 'airborne');
-  // Sort available: manual order first (from localStorage), then by last_landed_at wait time
+  // Sort available by last_landed_at ascending — longest wait first (null = never flown, top priority)
   const signedIn     = officePilots.filter(p => p.status !== 'airborne' && Number(p.available) === 1)
     .sort((a, b) => {
-      const aIdx = availablePilotsOrder.indexOf(a.id);
-      const bIdx = availablePilotsOrder.indexOf(b.id);
-      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-      if (aIdx !== -1) return -1;
-      if (bIdx !== -1) return 1;
       if (!a.last_landed_at && !b.last_landed_at) return a.name.localeCompare(b.name);
       if (!a.last_landed_at) return -1;
       if (!b.last_landed_at) return -1;
@@ -2434,7 +2413,13 @@ function renderOfficeTab() {
             <span style="font-weight:600;font-size:13px;">${p.name}</span>
             <div class="timer-display" id="timer-${p.id}" data-expires="${p.timer_expires_at || ''}" style="font-size:13px;margin:0;">--:--</div>
           </div>
-          <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name}')" style="font-size:11px;padding:4px 10px;">Cancel</button>
+          <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
+            <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name}')" style="font-size:11px;padding:4px 10px;">Cancel</button>
+            <div style="display:flex;gap:3px;">
+              <button onclick="adjustPilotTimer('${p.id}', -5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">−5</button>
+              <button onclick="adjustPilotTimer('${p.id}', 5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">+5</button>
+            </div>
+          </div>
         </div>`;
       });
       flyingHtml += `</div>`;
@@ -2449,7 +2434,13 @@ function renderOfficeTab() {
             ${p.client_name ? `<div style="color:var(--accent);font-size:12px;">👤 ${p.client_name}</div>` : ''}
             <div class="timer-display" id="timer-${p.id}" data-expires="${p.timer_expires_at || ''}" style="font-size:13px;margin:2px 0 0;">--:--</div>
           </div>
-          <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name}')" style="font-size:11px;padding:4px 10px;">Cancel</button>
+          <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
+            <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name}')" style="font-size:11px;padding:4px 10px;">Cancel</button>
+            <div style="display:flex;gap:3px;">
+              <button onclick="adjustPilotTimer('${p.id}', -5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">−5</button>
+              <button onclick="adjustPilotTimer('${p.id}', 5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">+5</button>
+            </div>
+          </div>
         </div>
       </div>`;
     });
@@ -2475,9 +2466,7 @@ function renderOfficeTab() {
               <div style="font-size:10px;color:var(--muted);">${lastFlight}</div>
             </div>
           </div>
-          <div style="display:flex;gap:3px;flex-shrink:0;">
-            <button onclick="movePilotUp('${p.id}')" title="Move up" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:2px 4px;">▲</button>
-            <button onclick="movePilotDown('${p.id}')" title="Move down" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:2px 4px;">▼</button>
+          <div style="display:flex;gap:5px;flex-shrink:0;">
             <button class="btn-leave" onclick="doLeaveOffice('${p.id}')" style="font-size:11px;padding:5px 10px;">Away</button>
             <button class="btn-danger" onclick="officeSignOut('${p.id}', '${p.name}')" style="font-size:10px;padding:5px 8px;">Sign Out</button>
           </div>
@@ -2995,6 +2984,10 @@ function connectWS() {
         break;
       case 'TIMER_EXTENDED':
         toast(`${data.pilot_name}: timer extended to +30 min`);
+        loadOfficeData();
+        break;
+      case 'TIMER_ADJUSTED':
+        toast(`${data.pilot_name}: timer adjusted`);
         loadOfficeData();
         break;
       case 'PILOT_SIGNED_OUT': {

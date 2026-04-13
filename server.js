@@ -191,9 +191,12 @@ async function run(sql, params = []) {
 async function createTables() {
   await db.execute(`CREATE TABLE IF NOT EXISTS pilots (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, pin_hash TEXT NOT NULL,
-    created_at TEXT, last_seen TEXT, current_wing TEXT, available INTEGER DEFAULT 0)`);
+    created_at TEXT, last_seen TEXT, current_wing TEXT, available INTEGER DEFAULT 0,
+    refresh_token TEXT)`);
   // Add available column to existing DBs that predate this column
   try { await db.execute('ALTER TABLE pilots ADD COLUMN available INTEGER DEFAULT 0'); } catch (_) {}
+  // Add refresh_token column to existing DBs
+  try { await db.execute('ALTER TABLE pilots ADD COLUMN refresh_token TEXT'); } catch (_) {}
   await db.execute(`CREATE TABLE IF NOT EXISTS flights (
     id TEXT PRIMARY KEY, pilot_id TEXT, client_name TEXT, date TEXT,
     flight_num INTEGER, weight REAL, takeoff TEXT, landing TEXT,
@@ -329,7 +332,9 @@ app.post('/api/auth/pilot', async (req, res) => {
     }
     clearRateLimit(ip); // reset on successful login
     const token = jwt.sign({ id: pilot.id, name: pilot.name, type: 'pilot' }, JWT_SECRET, { expiresIn: '24h' });
-    res.json({ token, pilot: { id: pilot.id, name: pilot.name } });
+    const refreshToken = uuidv4();
+    await run('UPDATE pilots SET refresh_token = ? WHERE id = ?', [refreshToken, pilot.id]);
+    res.json({ token, refresh_token: refreshToken, pilot: { id: pilot.id, name: pilot.name } });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Login failed' });
@@ -350,10 +355,45 @@ app.post('/api/auth/office', async (req, res) => {
     }
     clearRateLimit(ip);
     const token = jwt.sign({ type: 'office' }, JWT_SECRET, { expiresIn: '8h' });
-    res.json({ token });
+    const refreshSecret = process.env.OFFICE_REFRESH_SECRET || OFFICE_PASSWORD + '_refresh'; // fallback
+    res.json({ token, refresh_token: refreshSecret });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// ─── Refresh Token (keep pilots logged in) ───────────────────────────────────
+app.post('/api/auth/refresh-pilot', async (req, res) => {
+  try {
+    const { refresh_token } = req.body;
+    if (!refresh_token) return res.status(400).json({ error: 'Refresh token required' });
+    // Find pilot by refresh token
+    const pilot = await queryOne('SELECT * FROM pilots WHERE refresh_token = ?', [refresh_token]);
+    if (!pilot) return res.status(401).json({ error: 'Invalid refresh token' });
+    // Issue new access token (24h)
+    const token = jwt.sign({ id: pilot.id, name: pilot.name, type: 'pilot' }, JWT_SECRET, { expiresIn: '24h' });
+    res.json({ token });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Refresh failed' });
+  }
+});
+
+app.post('/api/auth/refresh-office', async (req, res) => {
+  try {
+    const { refresh_token } = req.body;
+    if (!refresh_token) return res.status(400).json({ error: 'Refresh token required' });
+    // Office uses a fixed secret token stored in env — verify it matches
+    const expected = process.env.OFFICE_REFRESH_SECRET;
+    if (!expected || !safeCompare(refresh_token, expected)) {
+      return res.status(401).json({ error: 'Invalid refresh token' });
+    }
+    const token = jwt.sign({ type: 'office' }, JWT_SECRET, { expiresIn: '8h' });
+    res.json({ token });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Refresh failed' });
   }
 });
 

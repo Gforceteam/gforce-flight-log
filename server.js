@@ -217,6 +217,8 @@ async function createTables() {
   try { await db.execute('ALTER TABLE active_timers ADD COLUMN notif_expired INTEGER DEFAULT 0'); } catch (_) {}
   // Add cancelled_at column for early-land tracking
   try { await db.execute('ALTER TABLE active_timers ADD COLUMN cancelled_at TEXT'); } catch (_) {}
+  // Add office_adjustments column to track cumulative time adjustments
+  try { await db.execute('ALTER TABLE active_timers ADD COLUMN office_adjustments INTEGER DEFAULT 0'); } catch (_) {}
   await db.execute(`CREATE TABLE IF NOT EXISTS drives (
     id TEXT PRIMARY KEY, pilot_id TEXT, date TEXT, notes TEXT, group_id TEXT, created_at TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -933,6 +935,49 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
   }
 });
 
+// ─── Office Land Pilot (manual landing via office button) ──────────────────
+app.post('/api/office/land-pilot', verifyOffice, async (req, res) => {
+  try {
+    const { pilot_id } = req.body;
+    if (!pilot_id) return res.status(400).json({ error: 'pilot_id required' });
+    const timer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [pilot_id]);
+    if (!timer) return res.status(404).json({ error: 'No active timer for this pilot' });
+
+    const now = new Date().toISOString();
+    const flightId = uuidv4();
+    const today = now.split('T')[0];
+
+    const todayFlights = await queryAll('SELECT COUNT(*) as c FROM flights WHERE pilot_id = ? AND date = ?', [pilot_id, today]);
+    const flightNum = (Number(todayFlights?.[0]?.c) || 0) + 1;
+
+    const pilotRec = await queryOne('SELECT current_wing FROM pilots WHERE id = ?', [pilot_id]);
+    const adjustments = Number(timer.office_adjustments || 0);
+    let note = 'Office landed pilot';
+    if (adjustments !== 0) {
+      note = adjustments > 0
+        ? `Office landed pilot — added ${adjustments} minutes`
+        : `Office landed pilot — removed ${Math.abs(adjustments)} minutes`;
+    }
+
+    await run(
+      `INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, sent_away_at, wing_reg)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [flightId, pilot_id, timer.client_name || '', today, flightNum, 0, '', '', 0, 0, note, now, timer.started_at || null, pilotRec?.current_wing || null]
+    );
+
+    await run('DELETE FROM active_timers WHERE pilot_id = ?', [pilot_id]);
+    await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'office_landed', now]);
+
+    const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [pilot_id]);
+    broadcast({ type: 'LANDED_EARLY', pilot_id, pilot_name: pilot.name, landed_at: now, flight_id: flightId });
+
+    res.json({ message: 'Pilot landed and flight logged', flight_id: flightId });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.post('/api/office/landed-early', verifyOffice, async (req, res) => {
   try {
     const { pilot_id } = req.body;
@@ -944,15 +989,22 @@ app.post('/api/office/landed-early', verifyOffice, async (req, res) => {
     const flightId = uuidv4();
     const today = now.split('T')[0];
 
-    // Get flight count for today to set flight_num
     const todayFlights = await queryAll('SELECT COUNT(*) as c FROM flights WHERE pilot_id = ? AND date = ?', [pilot_id, today]);
     const flightNum = (Number(todayFlights?.[0]?.c) || 0) + 1;
 
-    // Create a flight record for this early landing
+    const pilotRec = await queryOne('SELECT current_wing FROM pilots WHERE id = ?', [pilot_id]);
+    const adjustments = Number(timer.office_adjustments || 0);
+    let note = 'Office landed pilot';
+    if (adjustments !== 0) {
+      note = adjustments > 0
+        ? `Office landed pilot — added ${adjustments} minutes`
+        : `Office landed pilot — removed ${Math.abs(adjustments)} minutes`;
+    }
+
     await run(
-      `INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, sent_away_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [flightId, pilot_id, timer.client_name || '', today, flightNum, 0, '', '', 0, 0, 'Early landing — time not recorded', now, timer.started_at || null]
+      `INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, sent_away_at, wing_reg)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [flightId, pilot_id, timer.client_name || '', today, flightNum, 0, '', '', 0, 0, note, now, timer.started_at || null, pilotRec?.current_wing || null]
     );
 
     await run('DELETE FROM active_timers WHERE pilot_id = ?', [pilot_id]);
@@ -977,7 +1029,8 @@ app.post('/api/office/adjust-timer', verifyOffice, async (req, res) => {
     const deltaMs = delta * 60 * 1000;
     const newExpiry = new Date(new Date(timer.expires_at).getTime() + deltaMs);
     if (newExpiry <= new Date()) return res.status(400).json({ error: 'New time must be in the future' });
-    await run('UPDATE active_timers SET expires_at = ? WHERE pilot_id = ?', [newExpiry.toISOString(), pilot_id]);
+    const currentAdjustments = Number(timer.office_adjustments || 0);
+    await run('UPDATE active_timers SET expires_at = ?, office_adjustments = ? WHERE pilot_id = ?', [newExpiry.toISOString(), currentAdjustments + delta, pilot_id]);
     const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [pilot_id]);
     broadcast({ type: 'TIMER_ADJUSTED', pilot_id, pilot_name: pilot.name, expires_at: newExpiry.toISOString() });
     res.json({ message: `Timer ${delta > 0 ? 'added' : 'removed'} ${Math.abs(delta)} min`, expires_at: newExpiry.toISOString() });

@@ -969,6 +969,25 @@ app.post('/api/office/landed-early', verifyOffice, async (req, res) => {
   }
 });
 
+app.post('/api/office/adjust-timer', verifyOffice, async (req, res) => {
+  try {
+    const { pilot_id, delta } = req.body;
+    if (!pilot_id || delta === undefined) return res.status(400).json({ error: 'pilot_id and delta required' });
+    const timer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [pilot_id]);
+    if (!timer) return res.status(404).json({ error: 'No active timer for this pilot' });
+    const deltaMs = delta * 60 * 1000;
+    const newExpiry = new Date(new Date(timer.expires_at).getTime() + deltaMs);
+    if (newExpiry <= new Date()) return res.status(400).json({ error: 'New time must be in the future' });
+    await run('UPDATE active_timers SET expires_at = ? WHERE pilot_id = ?', [newExpiry.toISOString(), pilot_id]);
+    const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [pilot_id]);
+    broadcast({ type: 'TIMER_ADJUSTED', pilot_id, pilot_name: pilot.name, expires_at: newExpiry.toISOString() });
+    res.json({ message: `Timer ${delta > 0 ? 'added' : 'removed'} ${Math.abs(delta)} min`, expires_at: newExpiry.toISOString() });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.post('/api/office/extend', verifyOffice, async (req, res) => {
   try {
     const { pilot_id } = req.body;

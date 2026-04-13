@@ -38,6 +38,29 @@
       --shadow: 0 4px 24px rgba(0,0,0,0.4);
       --shadow-sm: 0 2px 8px rgba(0,0,0,0.3);
     }
+    [data-theme="light"] {
+      --bg: #f0f1f4;
+      --surface: #ffffff;
+      --card: #ffffff;
+      --card-hi: #f7f8fa;
+      --border: #d8dae2;
+      --border-hi: #c4c7d0;
+      --accent: #e8621a;
+      --accent-dim: rgba(243,115,41,0.10);
+      --accent-glow: rgba(243,115,41,0.20);
+      --danger: #dc2626;
+      --danger-dim: rgba(220,38,38,0.08);
+      --warning: #d97706;
+      --warning-dim: rgba(217,119,6,0.12);
+      --success: #16a34a;
+      --text: #1a1d26;
+      --text-2: #5a6070;
+      --muted: #8b9099;
+      --radius: 16px;
+      --radius-sm: 10px;
+      --shadow: 0 4px 24px rgba(0,0,0,0.12);
+      --shadow-sm: 0 2px 8px rgba(0,0,0,0.08);
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
@@ -751,6 +774,15 @@
 
   <div class="page" id="page-settings">
     <div style="padding:0 0 24px;">
+
+      <!-- Theme -->
+      <div class="card stat-section" style="margin-bottom:12px;">
+        <div class="stat-section-title" style="margin-bottom:6px;">🎨 Theme</div>
+        <div style="display:flex;gap:8px;">
+          <button id="btn-theme-dark" onclick="setTheme('dark')" style="flex:1;padding:12px;background:var(--surface);border:2px solid var(--border);border-radius:12px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">🌙 Dark</button>
+          <button id="btn-theme-light" onclick="setTheme('light')" style="flex:1;padding:12px;background:var(--surface);border:2px solid var(--border);border-radius:12px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">☀️ Light</button>
+        </div>
+      </div>
 
       <!-- App update -->
       <div class="card stat-section" style="margin-bottom:12px;">
@@ -3253,6 +3285,7 @@ function notifyPilotSentAway() {
 
 // ─── Settings page ────────────────────────────────────────────────────────────
 function renderSettingsPage() {
+  updateThemeButtons();
   // Notification status
   const statusEl = document.getElementById('settings-notif-status');
   const btnEl = document.getElementById('settings-notif-btn');
@@ -3276,6 +3309,31 @@ function renderSettingsPage() {
     }
   }
 }
+
+// Theme management
+function setTheme(theme) {
+  localStorage.setItem('gforce_theme', theme);
+  document.documentElement.setAttribute('data-theme', theme);
+  updateThemeButtons();
+}
+
+function updateThemeButtons() {
+  const saved = localStorage.getItem('gforce_theme') || 'dark';
+  const darkBtn = document.getElementById('btn-theme-dark');
+  const lightBtn = document.getElementById('btn-theme-light');
+  if (darkBtn && lightBtn) {
+    darkBtn.style.borderColor = saved === 'dark' ? 'var(--accent)' : 'var(--border)';
+    darkBtn.style.color = saved === 'dark' ? 'var(--accent)' : 'var(--text)';
+    lightBtn.style.borderColor = saved === 'light' ? 'var(--accent)' : 'var(--border)';
+    lightBtn.style.color = saved === 'light' ? 'var(--accent)' : 'var(--text)';
+  }
+}
+
+// Apply saved theme on load
+(function initTheme() {
+  const saved = localStorage.getItem('gforce_theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+})();
 
 async function settingsToggleNotif() {
   if (Notification.permission === 'granted') {

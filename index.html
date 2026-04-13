@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-title" content="GForce" />
   <meta name="theme-color" content="#f37329" />
   <meta name="msapplication-TileColor" content="#000000" />
-  <link rel="apple-touch-icon" href="/gforce-flight-log/icon-192.png" />
+  <link rel="apple-touch-icon" href="/checklist/icon-192.png" />
   <link rel="manifest" href="/checklist/manifest.json" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -631,7 +631,7 @@
 <!-- ── LOGIN PAGE ──────────────────────────────────────────────────────────── -->
 <div id="login-page">
   <div class="login-logo" style="background:none;width:110px;height:110px;">
-    <img src="/gforce-flight-log/icon-512.png" alt="GForce" style="width:100%;height:100%;object-fit:contain;" />
+    <img src="/checklist/icon-512.png" alt="GForce" style="width:100%;height:100%;object-fit:contain;" />
   </div>
   <h1>GFORCE</h1>
   <p class="subtitle">Flight Log</p>
@@ -1014,6 +1014,17 @@
 const API_BASE = 'https://gforce-api.fly.dev';
 const VAPID_PUBLIC_KEY = 'BGpwh5XQFo1PLmfcYqAwO3sFt8Y4JNMX89x594oX76yTW4cttHEgvcIndfNa-IM3RyjXW0-n_W3A2svCME2fySQ';
 
+// ─── HTML escaping ────────────────────────────────────────────────────────────
+// Use esc() for ALL user-controlled strings inserted into innerHTML to prevent XSS.
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ─── Pilot State ─────────────────────────────────────────────────────────────
 let pilotToken = localStorage.getItem('gforce_pilot_token');
 let pilotId = localStorage.getItem('gforce_pilot_id');
@@ -1122,7 +1133,10 @@ async function loadPilotList() {
     const res = await fetch(`${API_BASE}/api/public/pilots`);
     const pilots = await res.json();
     pilots.forEach(p => {
-      sel.innerHTML += `<option value="${p.id}">${p.name}</option>`;
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name;
+      sel.appendChild(opt);
     });
     sel.value = pilotId || '';
   } catch {
@@ -1203,6 +1217,8 @@ function doLogout() {
   unsubscribeFromPush(); // remove push subscription from server
   pilotToken = pilotId = pilotName = null;
   clearInterval(window._statusPoll);
+  // Kill the visibility-change listener set up by startStatusPoll
+  if (window._statusPollAbort) { window._statusPollAbort.abort(); window._statusPollAbort = null; }
   localStorage.removeItem('gforce_pilot_token');
   localStorage.removeItem('gforce_pilot_id');
   localStorage.removeItem('gforce_pilot_name');
@@ -1229,10 +1245,20 @@ function showApp(name) {
 
 function startStatusPoll() {
   clearInterval(window._statusPoll);
-  window._statusPoll = setInterval(async () => {
+  // Cancel any previous visibility listener
+  if (window._statusPollAbort) window._statusPollAbort.abort();
+  window._statusPollAbort = new AbortController();
+
+  let _polling = false; // concurrency guard — skip tick if previous one is still in flight
+
+  async function pollTick() {
     if (!pilotToken) { clearInterval(window._statusPoll); return; }
+    if (_polling) return; // previous request still in flight
+    if (document.hidden) return; // don't poll while the tab is backgrounded
+    _polling = true;
     try {
-      const res = await api('/api/my-status');
+      const res = await apiFetch('/api/my-status');
+      if (!res) { doLogout(); return; } // session expired
       if (!res.ok) return;
       const newStatus = await res.json();
       const prevStatus = myStatus.status;
@@ -1245,8 +1271,8 @@ function startStatusPoll() {
         if (wingEl) wingEl.value = currentWing;
       }
       // Also refresh who's flying (lightweight — runs every poll)
-      const flyingRes = await api('/api/flying');
-      if (flyingRes.ok) flyingPilots = await flyingRes.json();
+      const flyingRes = await apiFetch('/api/flying');
+      if (flyingRes && flyingRes.ok) flyingPilots = await flyingRes.json();
 
       const groupPilotsChanged = (newStatus.group_pilots || []).join(',') !== prevGroupPilots;
       if (newStatus.status !== prevStatus || groupPilotsChanged) {
@@ -1258,8 +1284,19 @@ function startStatusPoll() {
       // Always re-render dashboard to keep flying list current
       renderDashboard();
       setServerStatus('synced');
-    } catch {}
-  }, 15000);
+    } catch {
+      setServerStatus('offline');
+    } finally {
+      _polling = false;
+    }
+  }
+
+  window._statusPoll = setInterval(pollTick, 15000);
+
+  // Resume polling immediately when the tab becomes visible again after being hidden
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && pilotToken) pollTick();
+  }, { signal: window._statusPollAbort.signal });
 }
 
 function setupForm() {
@@ -1325,6 +1362,7 @@ async function loadMyData() {
       apiFetch('/api/drives'),
       apiFetch('/api/flying')
     ]);
+    if (!statusRes || !flightsRes) { doLogout(); return; }
     if (statusRes.status === 401 || flightsRes.status === 401) { doLogout(); return; }
     const statusData = await statusRes.json();
     myStatus = statusData;
@@ -1406,10 +1444,10 @@ function renderFlyingList(excludeSelf = false) {
     const timeStr = mins > 0 ? `${mins}m left` : 'timer expired';
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
       <div>
-        <span style="font-weight:600;font-size:14px;">${p.name}</span>
-        ${p.client_name ? `<span style="font-size:12px;color:var(--muted);margin-left:6px;">· ${p.client_name}</span>` : ''}
+        <span style="font-weight:600;font-size:14px;">${esc(p.name)}</span>
+        ${p.client_name ? `<span style="font-size:12px;color:var(--muted);margin-left:6px;">· ${esc(p.client_name)}</span>` : ''}
       </div>
-      <span style="font-size:12px;color:${mins <= 10 && mins > 0 ? 'var(--warning)' : 'var(--muted)'};">${timeStr}</span>
+      <span style="font-size:12px;color:${mins <= 10 && mins > 0 ? 'var(--warning)' : 'var(--muted)'};">${esc(timeStr)}</span>
     </div>`;
   }).join('');
   return `
@@ -1426,11 +1464,11 @@ function renderDashboard() {
     el.innerHTML = `
       <div class="dashboard-status-icon">🪂</div>
       <div class="dashboard-status-label">Currently Flying</div>
-      ${myStatus.group_name ? `<div class="dashboard-client" style="font-size:16px;">📋 ${myStatus.group_name}</div>` : ''}
+      ${myStatus.group_name ? `<div class="dashboard-client" style="font-size:16px;">📋 ${esc(myStatus.group_name)}</div>` : ''}
       ${myStatus.group_pilots && myStatus.group_pilots.length ? `
         <div style="margin-top:10px;padding:10px 14px;background:var(--surface);border-radius:10px;border:1px solid var(--border);">
           <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Flying with</div>
-          <div style="font-size:15px;font-weight:600;color:var(--text);">${myStatus.group_pilots.join(' · ')}</div>
+          <div style="font-size:15px;font-weight:600;color:var(--text);">${myStatus.group_pilots.map(esc).join(' · ')}</div>
         </div>` : ''}
       <div class="dashboard-timer" id="dashboard-timer">--:--</div>
       <button class="btn-log-flight" onclick="goToLogFlight()">Log Flight</button>
@@ -1451,7 +1489,7 @@ function renderDashboard() {
       <div class="dashboard-status-icon">🏢</div>
       <div class="dashboard-status-label">Status</div>
       <div class="dashboard-status-value">${pilotAvailable ? 'Available' : 'Not Available'}</div>
-      <p style="color:var(--muted);font-size:14px;margin-top:8px">${pilotAvailable ? 'Office can send you away' : 'Sign in to appear for office'}</p>
+      <p style="color:var(--muted);font-size:14px;margin-top:8px;">${pilotAvailable ? 'Office can send you away' : 'Sign in to appear for office'}</p>
       <button onclick="toggleAvailability()" style="margin-top:16px;padding:12px 32px;background:${pilotAvailable ? 'rgba(239,83,80,0.15)' : 'rgba(74,143,30,0.2)'};border:1px solid ${pilotAvailable ? 'var(--danger)' : '#4a8f1e'};border-radius:9999px;color:${pilotAvailable ? 'var(--danger)' : '#7bc950'};font-size:15px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;letter-spacing:0.5px;">
         ${pilotAvailable ? 'Sign Out' : 'Sign In'}
       </button>
@@ -1793,10 +1831,10 @@ function renderFlights() {
       html += `<div class="flight-item">
         <div>
           <div style="font-size:14px;font-weight:600">Flight ${f.flight_num} · ${f.weight}kg · ${f.time}min</div>
-          <div class="flight-meta">${f.takeoff} → ${f.landing}${f.notes ? ' · '+f.notes : ''}</div>
-          ${f.client_name ? `<div class="flight-meta" style="color:#fff">👤 ${f.client_name}</div>` : ''}
-          ${sentAwayAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">✈️ Away ${sentAwayAt}</div>` : ''}
-          ${loggedAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">⏱ Landed ${loggedAt}</div>` : ''}
+          <div class="flight-meta">${esc(f.takeoff)} → ${esc(f.landing)}${f.notes ? ' · ' + esc(f.notes) : ''}</div>
+          ${f.client_name ? `<div class="flight-meta" style="color:#fff">👤 ${esc(f.client_name)}</div>` : ''}
+          ${sentAwayAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">✈️ Away ${esc(sentAwayAt)}</div>` : ''}
+          ${loggedAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">⏱ Landed ${esc(loggedAt)}</div>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:72px;">
           <button class="btn-edit" onclick="editFlight('${f.id}')" style="padding:8px 12px;font-size:13px;font-weight:700;text-align:center;">✏️ Edit</button>
@@ -1899,15 +1937,8 @@ function exportMonthCSV() {
   downloadPilotCSV(csv, `my_flights_${monthLabel}.csv`);
 }
 
-function downloadPilotCSV(csv, filename) {
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a);
-  toast('Downloading...');
-}
+// Shared CSV download helper — works for both pilot and office contexts
+function downloadPilotCSV(csv, filename) { downloadCSV(csv, filename); }
 
 function renderStats() {
   const flights = myFlights;
@@ -2142,8 +2173,8 @@ function renderStats() {
       ${allDrives.map(d => `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
           <div>
-            <div style="font-size:14px;font-weight:600;">${fmtDate(d.date)}</div>
-            ${d.notes ? `<div style="font-size:12px;color:var(--muted);margin-top:2px;">${d.notes}</div>` : ''}
+            <div style="font-size:14px;font-weight:600;">${esc(fmtDate(d.date))}</div>
+            ${d.notes ? `<div style="font-size:12px;color:var(--muted);margin-top:2px;">${esc(d.notes)}</div>` : ''}
           </div>
           <div style="display:flex;align-items:center;gap:8px;">
             <div style="font-size:12px;color:var(--warning);font-weight:700;">PEAK</div>
@@ -2313,9 +2344,11 @@ async function loadOfficeData() {
       officeFetch('/api/pilots'),
       officeFetch('/api/office/flights')
     ]);
+    // officeFetch returns null when it handles a 401 logout internally
+    if (!pilotsRes) return;
     if (pilotsRes.status === 401) { officeDoLogout(); return; }
     officePilots = await pilotsRes.json();
-    allFlights = flightsRes.ok ? await flightsRes.json() : [];
+    allFlights = (flightsRes && flightsRes.ok) ? await flightsRes.json() : [];
     renderOfficeTab();
     renderTodayTab();
     renderFlightsTab();
@@ -2360,7 +2393,7 @@ function renderGroupsTab() {
           <div style="width:22px;height:22px;border-radius:5px;border:2px solid var(--accent);background:var(--card);display:flex;align-items:center;justify-content:center;flex-shrink:0;" id="grp-chk-${p.id}">
             <span id="grp-tick-${p.id}" style="display:none;color:var(--accent);font-size:16px;line-height:1;">✓</span>
           </div>
-          <span style="font-size:15px;font-weight:500;">${p.name}</span>
+          <span style="font-size:15px;font-weight:500;">${esc(p.name)}</span>
         </div>`;
     });
   }
@@ -2386,8 +2419,8 @@ function renderGroupsTab() {
     });
     Object.values(grouped).forEach(g => {
       html += `<div class="card" style="border-color:var(--warning);margin-bottom:10px;">
-        <div style="font-weight:700;color:var(--accent);margin-bottom:8px;">📋 ${g.name}</div>
-        <div style="color:#ccc;font-size:14px;">${g.pilots.map(p => p.name).join(', ')}</div>
+        <div style="font-weight:700;color:var(--accent);margin-bottom:8px;">📋 ${esc(g.name)}</div>
+        <div style="color:var(--text-2);font-size:14px;">${g.pilots.map(p => esc(p.name)).join(', ')}</div>
       </div>`;
     });
   }
@@ -2477,17 +2510,17 @@ function renderOfficeTab() {
     // Grouped flights — one card per group
     Object.values(grouped).forEach(g => {
       flyingHtml += `<div class="pilot-card airborne" style="margin-bottom:0;">
-        <div style="font-weight:700;color:var(--accent);font-size:14px;margin-bottom:6px;">📋 ${g.name}</div>`;
+        <div style="font-weight:700;color:var(--accent);font-size:14px;margin-bottom:6px;">📋 ${esc(g.name)}</div>`;
       g.pilots.forEach(p => {
         flyingHtml += `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);">
           <div>
-            <span style="font-weight:600;font-size:13px;">${p.name}</span>
-            <div class="timer-display" id="timer-${p.id}" data-expires="${p.timer_expires_at || ''}" style="font-size:13px;margin:0;">--:--</div>
+            <span style="font-weight:600;font-size:13px;">${esc(p.name)}</span>
+            <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at || '')}" style="font-size:13px;margin:0;">--:--</div>
           </div>
           <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
             <div style="display:flex;gap:3px;">
-              <button onclick="doLandPilot('${p.id}', '${p.name}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:11px;padding:4px 8px;font-weight:700;">Land</button>
-              <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name}')" style="font-size:11px;padding:4px 10px;">Cancel</button>
+              <button onclick="doLandPilot('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:11px;padding:4px 8px;font-weight:700;">Land</button>
+              <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="font-size:11px;padding:4px 10px;">Cancel</button>
             </div>
             <div style="display:flex;gap:3px;">
               <button onclick="adjustPilotTimer('${p.id}', -5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">−5</button>
@@ -2504,14 +2537,14 @@ function renderOfficeTab() {
       flyingHtml += `<div class="pilot-card airborne" style="margin-bottom:0;">
         <div style="display:flex;align-items:center;justify-content:space-between;">
           <div>
-            <div style="font-weight:600;font-size:14px;">${p.name}</div>
-            ${p.client_name ? `<div style="color:var(--accent);font-size:12px;">👤 ${p.client_name}</div>` : ''}
-            <div class="timer-display" id="timer-${p.id}" data-expires="${p.timer_expires_at || ''}" style="font-size:13px;margin:2px 0 0;">--:--</div>
+            <div style="font-weight:600;font-size:14px;">${esc(p.name)}</div>
+            ${p.client_name ? `<div style="color:var(--accent);font-size:12px;">👤 ${esc(p.client_name)}</div>` : ''}
+            <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at || '')}" style="font-size:13px;margin:2px 0 0;">--:--</div>
           </div>
           <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
             <div style="display:flex;gap:3px;">
-              <button onclick="doLandPilot('${p.id}', '${p.name}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:11px;padding:4px 8px;font-weight:700;">Land</button>
-              <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name}')" style="font-size:11px;padding:4px 10px;">Cancel</button>
+              <button onclick="doLandPilot('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:11px;padding:4px 8px;font-weight:700;">Land</button>
+              <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="font-size:11px;padding:4px 10px;">Cancel</button>
             </div>
             <div style="display:flex;gap:3px;">
               <button onclick="adjustPilotTimer('${p.id}', -5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">−5</button>
@@ -2534,25 +2567,26 @@ function renderOfficeTab() {
     availHtml += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">`;
     signedIn.forEach(p => {
       const lastFlight = p.last_landed_at ? fmtRelative(p.last_landed_at) : 'no flights';
+      const activeGroups = getActiveGroups();
       availHtml += `<div class="pilot-card" style="margin-bottom:0;padding:10px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
           <div style="display:flex;align-items:center;gap:8px;min-width:0;">
-            <div class="pilot-avatar" style="width:32px;height:32px;font-size:13px;">${p.name.charAt(0)}</div>
+            <div class="pilot-avatar" style="width:32px;height:32px;font-size:13px;">${esc(p.name.charAt(0))}</div>
             <div style="min-width:0;">
-              <div style="font-weight:600;font-size:13px;">${p.name}</div>
-              <div style="font-size:10px;color:var(--muted);">${lastFlight}</div>
+              <div style="font-weight:600;font-size:13px;">${esc(p.name)}</div>
+              <div style="font-size:10px;color:var(--muted);">${esc(lastFlight)}</div>
             </div>
           </div>
           <div style="display:flex;gap:5px;flex-shrink:0;align-items:center;">
-            ${getActiveGroups().length > 0 ? `<select onchange="doAddToGroup('${p.id}', this)" style="background:var(--surface);border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-size:10px;padding:4px 6px;cursor:pointer;font-weight:600;">
+            ${activeGroups.length > 0 ? `<select onchange="doAddToGroup('${p.id}', this)" style="background:var(--surface);border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-size:10px;padding:4px 6px;cursor:pointer;font-weight:600;">
               <option value="">+ Group</option>
-              ${getActiveGroups().map(g => `<option value="${g.id}">${g.name}</option>`).join('')}
+              ${activeGroups.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('')}
             </select>` : ''}
             <button class="btn-leave" onclick="doLeaveOffice('${p.id}')" style="font-size:11px;padding:5px 10px;">Away</button>
-            <button class="btn-danger" onclick="officeSignOut('${p.id}', '${p.name}')" style="font-size:10px;padding:5px 8px;">Sign Out</button>
+            <button class="btn-danger" onclick="officeSignOut('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="font-size:10px;padding:5px 8px;">Sign Out</button>
           </div>
         </div>
-        <input type="text" id="client-${p.id}" value="${p.client_name || ''}" placeholder="Client"
+        <input type="text" id="client-${p.id}" value="${esc(p.client_name || '')}" placeholder="Client"
           style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-size:12px;outline:none;" />
       </div>`;
     });
@@ -2570,10 +2604,10 @@ function renderOfficeTab() {
       naHtml += `<div class="pilot-card" style="margin-bottom:0;padding:10px 12px;opacity:0.6;">
         <div style="display:flex;align-items:center;justify-content:space-between;">
           <div style="display:flex;align-items:center;gap:8px;">
-            <div class="pilot-avatar" style="width:30px;height:30px;font-size:13px;border-color:var(--border);">${p.name.charAt(0)}</div>
-            <span style="font-weight:500;font-size:13px;">${p.name}</span>
+            <div class="pilot-avatar" style="width:30px;height:30px;font-size:13px;border-color:var(--border);">${esc(p.name.charAt(0))}</div>
+            <span style="font-weight:500;font-size:13px;">${esc(p.name)}</span>
           </div>
-          <button class="btn-leave" style="background:var(--surface);border:1px solid var(--accent);color:var(--accent);font-size:11px;padding:5px 10px;" onclick="officeSignIn('${p.id}', '${p.name}')">Sign In</button>
+          <button class="btn-leave" style="background:var(--surface);border:1px solid var(--accent);color:var(--accent);font-size:11px;padding:5px 10px;" onclick="officeSignIn('${p.id}', '${p.name.replace(/'/g, "\\'")}')" >Sign In</button>
         </div>
       </div>`;
     });
@@ -2592,6 +2626,7 @@ async function doLeaveOffice(pilotId) {
     method: 'POST',
     body: JSON.stringify({ pilot_id: pilotId, client_name: clientName })
   });
+  if (!res) return; // session expired, already handled by officeFetch
   const data = await res.json();
   if (res.ok) { toast(data.message); await loadOfficeData(); }
   else { toast(data.error || 'Error'); }
@@ -2621,6 +2656,7 @@ async function doLandedEarly(pilotId) {
     method: 'POST',
     body: JSON.stringify({ pilot_id: pilotId })
   });
+  if (!res) return;
   const data = await res.json();
   if (res.ok) { toast(data.message); await loadOfficeData(); }
   else { toast(data.error || 'Error'); }
@@ -2780,13 +2816,13 @@ function renderTodayTab() {
       ? new Date(f.landed_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
       : '—';
     html += `<tr>
-      <td class="col-time">${sentAwayStr}</td>
-      <td class="col-time">${landedStr}</td>
-      <td class="col-pilot">${f.pilot_name}</td>
-      <td>${f.client_name || '—'}</td>
+      <td class="col-time">${esc(sentAwayStr)}</td>
+      <td class="col-time">${esc(landedStr)}</td>
+      <td class="col-pilot">${esc(f.pilot_name)}</td>
+      <td>${esc(f.client_name || '—')}</td>
       <td>${f.flight_num}</td>
       <td>${f.weight}</td>
-      <td style="white-space:nowrap"><button class="btn-edit" onclick="officeEditFlight('${f.id}')" style="margin-right:4px;">✏️ Edit</button><button class="btn-danger" onclick="officeDeleteFlight('${f.id}', '${f.pilot_name}')">🗑</button></td>
+      <td style="white-space:nowrap"><button class="btn-edit" onclick="officeEditFlight('${f.id}')" style="margin-right:4px;">✏️ Edit</button><button class="btn-danger" onclick="officeDeleteFlight('${f.id}', '${(f.pilot_name||'').replace(/'/g,"\\'")}')" >🗑</button></td>
     </tr>`;
   });
 
@@ -2809,7 +2845,7 @@ function renderFlightsTab() {
 
   document.getElementById('pilot-export-btns').innerHTML = officePilots.map(p => {
     const isActive = term === p.name.toLowerCase();
-    return `<button class="btn-export-pilot${isActive ? ' active' : ''}" onclick="filterByPilot('${p.name}')">${p.name}</button>`;
+    return `<button class="btn-export-pilot${isActive ? ' active' : ''}" onclick="filterByPilot('${p.name.replace(/'/g, "\\'")}')">${esc(p.name)}</button>`;
   }).join('');
 
   const el = document.getElementById('flights-table-container');
@@ -2856,15 +2892,15 @@ function renderFlightsTab() {
   Object.keys(byDate).sort().reverse().forEach(date => {
     byDate[date].forEach(f => {
       html += `<tr>
-        <td class="time-col">${officeFmtDate(date)}</td>
-        <td class="pilot-col">${f.pilot_name}</td>
-        <td class="client-col">${f.client_name || '—'}</td>
+        <td class="time-col">${esc(officeFmtDate(date))}</td>
+        <td class="pilot-col">${esc(f.pilot_name)}</td>
+        <td class="client-col">${esc(f.client_name || '—')}</td>
         <td>${f.flight_num}</td>
         <td>${f.weight}</td>
-        <td style="white-space:nowrap">${f.takeoff}→${f.landing}</td>
+        <td style="white-space:nowrap">${esc(f.takeoff)}→${esc(f.landing)}</td>
         <td>${f.time}</td>
-        <td class="time-col" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.notes || ''}</td>
-        <td style="white-space:nowrap"><button class="btn-edit" onclick="officeEditFlight('${f.id}')" style="margin-right:4px;">✏️ Edit</button><button class="btn-danger" onclick="officeDeleteFlight('${f.id}', '${f.pilot_name}')">🗑</button></td>
+        <td class="time-col" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.notes || '')}</td>
+        <td style="white-space:nowrap"><button class="btn-edit" onclick="officeEditFlight('${f.id}')" style="margin-right:4px;">✏️ Edit</button><button class="btn-danger" onclick="officeDeleteFlight('${f.id}', '${(f.pilot_name||'').replace(/'/g,"\\'")}')" >🗑</button></td>
       </tr>`;
     });
   });
@@ -2913,8 +2949,11 @@ function downloadCSV(csv, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click();
+  document.body.appendChild(a);
+  a.click();
   document.body.removeChild(a);
+  // Revoke the object URL to free memory (after a tick so the browser has time to start the download)
+  setTimeout(() => URL.revokeObjectURL(url), 100);
   toast('Downloading...');
 }
 
@@ -3035,7 +3074,8 @@ function connectWS() {
   };
   ws.onerror = () => ws.close();
   ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
+    let data;
+    try { data = JSON.parse(event.data); } catch (_) { return; } // ignore non-JSON frames (pings etc.)
     switch (data.type) {
       case 'LEFT_OFFICE':
         toast(`${data.pilot_name} left office`);
@@ -3231,31 +3271,31 @@ function notifyPilotSentAway() {
   playAlarmSound();
 
   // Build group info
-  const groupInfo = myStatus.group_name ? `📋 ${myStatus.group_name}` : '';
+  const groupInfo = myStatus.group_name ? `📋 ${esc(myStatus.group_name)}` : '';
   const groupPilotsList = (myStatus.group_pilots && myStatus.group_pilots.length)
-    ? myStatus.group_pilots.join(', ')
+    ? myStatus.group_pilots.map(esc).join(', ')
     : '';
   const groupSection = (groupInfo || groupPilotsList) ? `
-    <div style="margin:16px 0;padding:12px 16px;background:#1a1a1a;border-radius:10px;border:1px solid #333;">
-      ${groupInfo ? `<div style="font-size:15px;font-weight:700;color:#f37329;margin-bottom:${groupPilotsList ? '6px' : '0'};">${groupInfo}</div>` : ''}
-      ${groupPilotsList ? `<div style="font-size:13px;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Flying with</div>
-      <div style="font-size:15px;font-weight:600;color:#f0f0f0;">${groupPilotsList}</div>` : ''}
+    <div style="margin:16px 0;padding:12px 16px;background:var(--surface);border-radius:10px;border:1px solid var(--border);">
+      ${groupInfo ? `<div style="font-size:15px;font-weight:700;color:var(--accent);margin-bottom:${groupPilotsList ? '6px' : '0'};">${groupInfo}</div>` : ''}
+      ${groupPilotsList ? `<div style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Flying with</div>
+      <div style="font-size:15px;font-weight:600;color:var(--text);">${groupPilotsList}</div>` : ''}
     </div>` : '';
 
-  // In-app modal — pulses orange border for visibility
+  // In-app modal — pulses orange border for visibility; uses CSS vars so it respects light/dark theme
   const existing = document.getElementById('sent-away-modal');
   if (existing) existing.remove();
   const modal = document.createElement('div');
   modal.id = 'sent-away-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;';
   modal.innerHTML = `
     <style>@keyframes pulse-border{0%,100%{box-shadow:0 0 0 0 rgba(243,115,41,0.7)}50%{box-shadow:0 0 0 16px rgba(243,115,41,0)}}</style>
-    <div style="background:#222;border:3px solid #f37329;border-radius:16px;padding:32px 28px;text-align:center;max-width:340px;width:90%;animation:pulse-border 1.2s ease-in-out 4;">
+    <div style="background:var(--card);border:3px solid var(--accent);border-radius:16px;padding:32px 28px;text-align:center;max-width:340px;width:90%;animation:pulse-border 1.2s ease-in-out 4;">
       <div style="font-size:64px;margin-bottom:12px;">🪂</div>
-      <div style="font-size:24px;font-weight:700;color:#f37329;font-family:Montserrat,sans-serif;letter-spacing:1px;margin-bottom:8px;">YOU'RE AWAY!</div>
-      <div style="color:#ccc;font-size:14px;">Office has started your timer. Have a great flight!</div>
+      <div style="font-size:24px;font-weight:700;color:var(--accent);font-family:Montserrat,sans-serif;letter-spacing:1px;margin-bottom:8px;">YOU'RE AWAY!</div>
+      <div style="color:var(--text-2);font-size:14px;">Office has started your timer. Have a great flight!</div>
       ${groupSection}
-      <button onclick="document.getElementById('sent-away-modal').remove()" style="margin-top:16px;background:#f37329;border:none;border-radius:9999px;color:#fff;font-size:16px;font-weight:700;padding:14px 32px;cursor:pointer;font-family:Montserrat,sans-serif;width:100%;">GOT IT 👍</button>
+      <button onclick="document.getElementById('sent-away-modal').remove()" style="margin-top:16px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:16px;font-weight:700;padding:14px 32px;cursor:pointer;font-family:Montserrat,sans-serif;width:100%;">GOT IT 👍</button>
     </div>`;
   document.body.appendChild(modal);
 
@@ -3269,8 +3309,8 @@ function notifyPilotSentAway() {
     navigator.serviceWorker.ready.then(reg => {
       reg.showNotification(pushTitle, {
         body: pushBody,
-        icon: '/gforce-flight-log/icon-192.png',
-        badge: '/gforce-flight-log/icon-192.png',
+        icon: '/checklist/icon-192.png',
+        badge: '/checklist/icon-192.png',
         vibrate: [600, 200, 600, 200, 1000],
         requireInteraction: true,
         tag: 'pilot-sent-away'
@@ -3410,6 +3450,8 @@ if ('serviceWorker' in navigator) {
 }
 
 function showInstallBanner() {
+  // Don't show if user already dismissed it permanently
+  if (localStorage.getItem('gforce_install_dismissed') === '1') return;
   const banner = document.getElementById('install-banner');
   if (banner) { banner.style.display = 'flex'; return; }
   const div = document.createElement('div');

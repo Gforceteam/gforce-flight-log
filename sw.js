@@ -1,38 +1,39 @@
-const CACHE = 'gforce-v7';
+const CACHE = 'gforce-v8';
 const APP = '/checklist/';
 const VERSION_URL = APP + 'version.json';
 
 // Static assets that change rarely and are safe to cache long-term
 const STATIC = [
   APP,
-  APP + 'gforce.html',
+  APP + 'index.html',
   APP + 'manifest.json',
   APP + 'icon-192.png',
   APP + 'icon-512.png',
   APP + 'version.json',
 ];
 
-// Check version on install and every 24h after
+// Check version and notify all open clients if a newer version exists.
+// NOTE: localStorage is NOT available in service worker scope — version dedup
+// is intentionally omitted here; the main app handles duplicate banner suppression.
 async function checkVersion() {
   try {
     const resp = await fetch(VERSION_URL + '?t=' + Date.now());
     if (!resp.ok) return;
     const info = await resp.json();
-    const last = localStorage.getItem('gforce_version_notified') || '';
-    if (info.version && info.version !== last) {
-      localStorage.setItem('gforce_version_notified', info.version);
-      // Notify all clients that a new version is available
-      const clients = await self.clients.matchAll({ type: 'window' });
-      clients.forEach(c => c.postMessage({ type: 'VERSION_UPDATE', version: info.version }));
-    }
+    if (!info.version) return;
+    const clients = await self.clients.matchAll({ type: 'window' });
+    clients.forEach(c => c.postMessage({ type: 'VERSION_UPDATE', version: info.version }));
   } catch (_) {}
 }
 
 self.addEventListener('install', e => {
+  // Single waitUntil combining cache priming + version check
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(STATIC)).then(() => self.skipWaiting())
+    caches.open(CACHE)
+      .then(c => c.addAll(STATIC))
+      .then(() => checkVersion())
+      .then(() => self.skipWaiting())
   );
-  e.waitUntil(checkVersion());
 });
 
 self.addEventListener('activate', e => {
@@ -40,11 +41,11 @@ self.addEventListener('activate', e => {
     caches.keys()
       .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
+      .then(() => checkVersion())
+    // NOTE: setInterval is NOT used here — service workers are terminated when
+    // idle so interval callbacks are unreliable. Version checks happen on each
+    // SW activation (i.e. after every browser/app restart) instead.
   );
-  // Recheck version on activation
-  e.waitUntil(checkVersion());
-  // Also schedule a recheck in 24h
-  setInterval(checkVersion, 24 * 60 * 60 * 1000);
 });
 
 self.addEventListener('fetch', e => {
@@ -54,8 +55,8 @@ self.addEventListener('fetch', e => {
   if (url.origin !== self.location.origin) return;
   if (!url.pathname.startsWith('/checklist')) return;
 
-  // HTML (navigate) — network first so updates are always visible on refresh
-  // Fall back to cache only when genuinely offline
+  // HTML (navigate) — network first so updates are always visible on refresh.
+  // Fall back to cache only when genuinely offline.
   if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request)
@@ -67,7 +68,8 @@ self.addEventListener('fetch', e => {
         })
         .catch(() =>
           caches.match(e.request)
-            .then(c => c || caches.match(APP + 'gforce.html'))
+            .then(c => c || caches.match(APP + 'index.html'))
+            .then(c => c || caches.match(APP))
             .then(c => c || new Response('<h1>Offline</h1><p>Please reconnect to use GForce.</p>', { headers: { 'Content-Type': 'text/html' } }))
         )
     );
@@ -110,7 +112,7 @@ self.addEventListener('notificationclick', e => {
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
       const appClient = cs.find(c => c.url.includes('/checklist'));
       if (appClient) return appClient.focus();
-      return clients.openWindow(APP + 'gforce.html');
+      return clients.openWindow(APP + 'index.html');
     })
   );
 });

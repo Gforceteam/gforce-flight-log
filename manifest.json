@@ -2,26 +2,27 @@
   "name": "GForce Flight Log",
   "short_name": "GForce",
   "description": "Tandem paragliding flight logger",
-  "start_url": "/flightlog/",
+  "start_url": "/checklist/",
+  "scope": "/checklist/",
   "display": "standalone",
   "background_color": "#0b0d12",
   "theme_color": "#f37329",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/flightlog/icon-192.png",
+      "src": "/checklist/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/flightlog/icon-512.png",
+      "src": "/checklist/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/flightlog/icon-512.png",
+      "src": "/checklist/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

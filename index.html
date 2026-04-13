@@ -950,7 +950,11 @@
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
       <div>
         <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Time (min)</div>
-        <input type="number" id="oe-time" min="1" style="width:100%;background:var(--surface);border:1px solid var(--border-hi);border-radius:10px;color:var(--text);padding:10px 12px;font-size:15px;outline:none;" />
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="number" id="oe-time" min="1" style="flex:1;background:var(--surface);border:1px solid var(--border-hi);border-radius:10px;color:var(--text);padding:10px 12px;font-size:15px;outline:none;" />
+          <button onclick="adjustTime(-5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;color:var(--text);padding:8px 10px;cursor:pointer;font-size:13px;white-space:nowrap;">−5</button>
+          <button onclick="adjustTime(5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;color:var(--text);padding:8px 10px;cursor:pointer;font-size:13px;white-space:nowrap;">+5</button>
+        </div>
       </div>
       <div>
         <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Wing Reg</div>
@@ -988,6 +992,34 @@ let flyingPilots = []; // pilots currently airborne — shown on dashboard
 let statsMonthOffset = 0; // 0 = current month, -1 = last month, etc.
 let myStatus = { status: 'in_office', client_name: null, timer_expires_at: null };
 let pilotAvailable = false; // explicit availability toggle — off by default on login
+let availablePilotsOrder = JSON.parse(localStorage.getItem('gforce_available_order') || '[]'); // array of pilot IDs
+
+// Save order to localStorage
+function saveAvailablePilotsOrder() {
+  localStorage.setItem('gforce_available_order', JSON.stringify(availablePilotsOrder));
+}
+
+// Move pilot up in order
+function movePilotUp(pilotId) {
+  const idx = availablePilotsOrder.indexOf(pilotId);
+  if (idx > 0) {
+    availablePilotsOrder.splice(idx, 1);
+    availablePilotsOrder.splice(idx - 1, 0, pilotId);
+    saveAvailablePilotsOrder();
+    renderOfficeTab();
+  }
+}
+
+// Move pilot down in order
+function movePilotDown(pilotId) {
+  const idx = availablePilotsOrder.indexOf(pilotId);
+  if (idx < availablePilotsOrder.length - 1) {
+    availablePilotsOrder.splice(idx, 1);
+    availablePilotsOrder.splice(idx + 1, 0, pilotId);
+    saveAvailablePilotsOrder();
+    renderOfficeTab();
+  }
+}
 
 // ─── Audio Context (unlocked on first touch, reused) ─────────────────────────
 let _audioCtx = null;
@@ -1697,6 +1729,9 @@ function renderFlights() {
       </div>
     </div>`;
     dayFlights.forEach(f => {
+      const sentAwayAt = f.sent_away_at
+        ? new Date(f.sent_away_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
+        : null;
       const loggedAt = f.landed_at
         ? new Date(f.landed_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
         : null;
@@ -1705,7 +1740,8 @@ function renderFlights() {
           <div style="font-size:14px;font-weight:600">Flight ${f.flight_num} · ${f.weight}kg · ${f.time}min</div>
           <div class="flight-meta">${f.takeoff} → ${f.landing}${f.notes ? ' · '+f.notes : ''}</div>
           ${f.client_name ? `<div class="flight-meta" style="color:#fff">👤 ${f.client_name}</div>` : ''}
-          ${loggedAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">⏱ Logged ${loggedAt}</div>` : ''}
+          ${sentAwayAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">✈️ Away ${sentAwayAt}</div>` : ''}
+          ${loggedAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">⏱ Landed ${loggedAt}</div>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:72px;">
           <button class="btn-edit" onclick="editFlight('${f.id}')" style="padding:8px 12px;font-size:13px;font-weight:700;text-align:center;">✏️ Edit</button>
@@ -2355,9 +2391,14 @@ function renderOfficeTab() {
   const el = document.getElementById('pilots-list');
 
   const flying       = officePilots.filter(p => p.status === 'airborne');
-  // Sort available by last_landed_at ascending — longest wait first (null = never flown, top priority)
+  // Sort available: manual order first (from localStorage), then by last_landed_at wait time
   const signedIn     = officePilots.filter(p => p.status !== 'airborne' && Number(p.available) === 1)
     .sort((a, b) => {
+      const aIdx = availablePilotsOrder.indexOf(a.id);
+      const bIdx = availablePilotsOrder.indexOf(b.id);
+      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+      if (aIdx !== -1) return -1;
+      if (bIdx !== -1) return 1;
       if (!a.last_landed_at && !b.last_landed_at) return a.name.localeCompare(b.name);
       if (!a.last_landed_at) return -1;
       if (!b.last_landed_at) return -1;
@@ -2434,7 +2475,9 @@ function renderOfficeTab() {
               <div style="font-size:10px;color:var(--muted);">${lastFlight}</div>
             </div>
           </div>
-          <div style="display:flex;gap:5px;flex-shrink:0;">
+          <div style="display:flex;gap:3px;flex-shrink:0;">
+            <button onclick="movePilotUp('${p.id}')" title="Move up" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:2px 4px;">▲</button>
+            <button onclick="movePilotDown('${p.id}')" title="Move down" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:2px 4px;">▼</button>
             <button class="btn-leave" onclick="doLeaveOffice('${p.id}')" style="font-size:11px;padding:5px 10px;">Away</button>
             <button class="btn-danger" onclick="officeSignOut('${p.id}', '${p.name}')" style="font-size:10px;padding:5px 8px;">Sign Out</button>
           </div>
@@ -2534,6 +2577,13 @@ function closeOfficeEditModal() {
   document.getElementById('office-edit-modal').style.display = 'none';
 }
 
+// Quick time adjustment buttons in office edit modal
+function adjustTime(delta) {
+  const el = document.getElementById('oe-time');
+  const current = parseInt(el.value) || 0;
+  el.value = Math.max(1, current + delta);
+}
+
 async function officeUpdateFlight() {
   const id = document.getElementById('oe-flight-id').value;
   const date = document.getElementById('oe-date').value;
@@ -2555,9 +2605,19 @@ async function officeUpdateFlight() {
   const btn = document.querySelector('#office-edit-modal button[onclick="officeUpdateFlight()"]');
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
+    // Get original flight to detect time changes
+    const origRes = await officeFetch(`/api/office/flights/${id}`);
+    let finalNotes = notes;
+    if (origRes && origRes.ok) {
+      const orig = await origRes.json();
+      if (orig.time !== time) {
+        const now = new Date().toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' });
+        finalNotes = finalNotes ? `${finalNotes} [Time adjusted from ${orig.time} to ${time} min at ${now}]` : `[Time adjusted from ${orig.time} to ${time} min at ${now}]`;
+      }
+    }
     const res = await officeFetch(`/api/office/flights/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ date, flight_num, weight, takeoff, landing, time, notes, client_name, wing_reg })
+      body: JSON.stringify({ date, flight_num, weight, takeoff, landing, time, notes: finalNotes, client_name, wing_reg })
     });
     if (!res.ok) { const d = await res.json(); errEl.textContent = d.error || 'Save failed'; return; }
     closeOfficeEditModal();

@@ -2354,19 +2354,21 @@ function renderOfficeTab() {
     signedIn.forEach(p => {
       const lastFlight = p.last_landed_at ? fmtRelative(p.last_landed_at) : 'no flights';
       availHtml += `<div class="pilot-card" style="margin-bottom:0;padding:10px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-          <div class="pilot-avatar" style="width:32px;height:32px;font-size:13px;">${p.name.charAt(0)}</div>
-          <div style="flex:1;min-width:0;">
-            <div style="font-weight:600;font-size:13px;">${p.name}</div>
-            <div style="font-size:10px;color:var(--muted);">${lastFlight}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+          <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+            <div class="pilot-avatar" style="width:32px;height:32px;font-size:13px;">${p.name.charAt(0)}</div>
+            <div style="min-width:0;">
+              <div style="font-weight:600;font-size:13px;">${p.name}</div>
+              <div style="font-size:10px;color:var(--muted);">${lastFlight}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:5px;flex-shrink:0;">
+            <button class="btn-leave" onclick="doLeaveOffice('${p.id}')" style="font-size:11px;padding:5px 10px;">Away</button>
+            <button class="btn-danger" onclick="officeSignOut('${p.id}', '${p.name}')" style="font-size:10px;padding:5px 8px;">Sign Out</button>
           </div>
         </div>
         <input type="text" id="client-${p.id}" value="${p.client_name || ''}" placeholder="Client"
-          style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-size:12px;outline:none;margin-bottom:6px;" />
-        <div style="display:flex;gap:5px;">
-          <button class="btn-leave" onclick="doLeaveOffice('${p.id}')" style="flex:1;font-size:11px;padding:5px 4px;">Away</button>
-          <button class="btn-danger" onclick="officeSignOut('${p.id}', '${p.name}')" style="font-size:10px;padding:5px 8px;">Sign Out</button>
-        </div>
+          style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-size:12px;outline:none;" />
       </div>`;
     });
     availHtml += `</div>`;

@@ -935,6 +935,29 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
   }
 });
 
+// ─── Office Add Pilot to Existing Group ─────────────────────────────────────
+app.post('/api/office/add-to-group', verifyOffice, async (req, res) => {
+  try {
+    const { pilot_id, group_id } = req.body;
+    if (!pilot_id || !group_id) return res.status(400).json({ error: 'pilot_id and group_id required' });
+    // Find the group's active timer
+    const groupTimer = await queryOne('SELECT * FROM active_timers WHERE group_id = ? LIMIT 1', [group_id]);
+    if (!groupTimer) return res.status(404).json({ error: 'No active group with that ID' });
+    // Get pilot info
+    const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [pilot_id]);
+    if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
+    // Add pilot to the group timer
+    await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, group_id, office_adjustments) VALUES (?, ?, ?, ?, ?, ?)',
+      [pilot_id, groupTimer.client_name, new Date().toISOString(), groupTimer.expires_at, group_id, 0]);
+    await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'added_to_group', new Date().toISOString()]);
+    broadcast({ type: 'PILOT_ADDED_TO_GROUP', pilot_id, pilot_name: pilot.name, group_id, group_name: groupTimer.client_name, expires_at: groupTimer.expires_at });
+    res.json({ message: `${pilot.name} added to group` });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ─── Office Land Pilot (manual landing via office button) ──────────────────
 app.post('/api/office/land-pilot', verifyOffice, async (req, res) => {
   try {

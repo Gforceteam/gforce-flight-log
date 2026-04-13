@@ -215,6 +215,8 @@ async function createTables() {
   try { await db.execute('ALTER TABLE active_timers ADD COLUMN notif_10min INTEGER DEFAULT 0'); } catch (_) {}
   try { await db.execute('ALTER TABLE active_timers ADD COLUMN notif_5min INTEGER DEFAULT 0'); } catch (_) {}
   try { await db.execute('ALTER TABLE active_timers ADD COLUMN notif_expired INTEGER DEFAULT 0'); } catch (_) {}
+  // Add cancelled_at column for early-land tracking
+  try { await db.execute('ALTER TABLE active_timers ADD COLUMN cancelled_at TEXT'); } catch (_) {}
   await db.execute(`CREATE TABLE IF NOT EXISTS drives (
     id TEXT PRIMARY KEY, pilot_id TEXT, date TEXT, notes TEXT, group_id TEXT, created_at TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -939,13 +941,28 @@ app.post('/api/office/landed-early', verifyOffice, async (req, res) => {
     const timer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [pilot_id]);
     if (!timer) return res.status(404).json({ error: 'No active timer for this pilot' });
 
+    const now = new Date().toISOString();
+    const flightId = uuidv4();
+    const today = now.split('T')[0];
+
+    // Get flight count for today to set flight_num
+    const todayFlights = await queryAll('SELECT COUNT(*) as c FROM flights WHERE pilot_id = ? AND date = ?', [pilot_id, today]);
+    const flightNum = (Number(todayFlights?.[0]?.c) || 0) + 1;
+
+    // Create a flight record for this early landing
+    await run(
+      `INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, sent_away_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [flightId, pilot_id, timer.client_name || '', today, flightNum, 0, '', '', 0, 0, 'Early landing — time not recorded', now, timer.started_at || null]
+    );
+
     await run('DELETE FROM active_timers WHERE pilot_id = ?', [pilot_id]);
-    await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'landed_early', new Date().toISOString()]);
+    await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'landed_early', now]);
 
     const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [pilot_id]);
-    broadcast({ type: 'LANDED_EARLY', pilot_id, pilot_name: pilot.name });
+    broadcast({ type: 'LANDED_EARLY', pilot_id, pilot_name: pilot.name, landed_at: now, flight_id: flightId });
 
-    res.json({ message: 'Timer cancelled' });
+    res.json({ message: 'Timer cancelled and flight logged', flight_id: flightId });
   } catch (e) {
     console.error(e);
     console.error(e); res.status(500).json({ error: 'Internal server error' });

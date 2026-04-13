@@ -367,7 +367,7 @@
     .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 4px; font-weight: 600; }
 
     /* ── OFFICE DASHBOARD ──────────────────────────────────────────────── */
-    #office-dashboard { display: none; padding-bottom: 0; background: #f0f2f5; }
+    #office-dashboard { display: none; padding-bottom: 0; background: #ffffff; }
 
     .office-header {
       background: var(--card);
@@ -712,8 +712,7 @@
 
       <div id="field-time" class="field">
         <label>Flight Time (min): <span id="time-val">10</span></label>
-        <input type="range" id="fg-time" min="5" max="15" step="1" value="10"
-          style="width:100%;accent-color:var(--accent);cursor:pointer;"
+        <input type="range" class="weight-slider" id="fg-time" min="5" max="15" step="1" value="10"
           oninput="document.getElementById('time-val').textContent=this.value" />
       </div>
 

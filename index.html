@@ -992,7 +992,33 @@ let flyingPilots = []; // pilots currently airborne — shown on dashboard
 let statsMonthOffset = 0; // 0 = current month, -1 = last month, etc.
 let myStatus = { status: 'in_office', client_name: null, timer_expires_at: null };
 let pilotAvailable = false; // explicit availability toggle — off by default on login
-// Adjust a flying pilot's timer by delta minutes
+// Add a pilot from available list to an existing away group
+async function doAddToGroup(pilotId, selectEl) {
+  const groupId = selectEl.value;
+  if (!groupId) return;
+  try {
+    const res = await officeFetch('/api/office/add-to-group', {
+      method: 'POST',
+      body: JSON.stringify({ pilot_id: pilotId, group_id: groupId })
+    });
+    const data = await res.json();
+    if (res.ok) { toast(data.message); selectEl.value = ''; await loadOfficeData(); }
+    else toast(data.error || 'Failed');
+  } catch (e) { toast('Error: ' + e.message); }
+}
+
+// Collect active (airborne) groups for the add-to-group dropdown
+function getActiveGroups() {
+  const seen = new Set();
+  const groups = [];
+  officePilots.filter(p => p.status === 'airborne' && p.group_id).forEach(p => {
+    if (!seen.has(p.group_id)) {
+      seen.add(p.group_id);
+      groups.push({ id: p.group_id, name: p.client_name || 'Group' });
+    }
+  });
+  return groups;
+}
 async function adjustPilotTimer(pilotId, delta) {
   try {
     const res = await officeFetch('/api/office/adjust-timer', {
@@ -2483,7 +2509,11 @@ function renderOfficeTab() {
               <div style="font-size:10px;color:var(--muted);">${lastFlight}</div>
             </div>
           </div>
-          <div style="display:flex;gap:5px;flex-shrink:0;">
+          <div style="display:flex;gap:5px;flex-shrink:0;align-items:center;">
+            ${getActiveGroups().length > 0 ? `<select onchange="doAddToGroup('${p.id}', this)" style="background:var(--surface);border:1px solid var(--accent);border-radius:6px;color:var(--accent);font-size:10px;padding:4px 6px;cursor:pointer;font-weight:600;">
+              <option value="">+ Group</option>
+              ${getActiveGroups().map(g => `<option value="${g.id}">${g.name}</option>`).join('')}
+            </select>` : ''}
             <button class="btn-leave" onclick="doLeaveOffice('${p.id}')" style="font-size:11px;padding:5px 10px;">Away</button>
             <button class="btn-danger" onclick="officeSignOut('${p.id}', '${p.name}')" style="font-size:10px;padding:5px 8px;">Sign Out</button>
           </div>

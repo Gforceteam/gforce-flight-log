@@ -851,6 +851,7 @@
     <h1>GFORCE Office</h1>
     <div class="office-header-right">
       <div style="display:flex;align-items:center;gap:6px;"><span class="ws-label">WS</span><div class="ws-indicator" id="ws-indicator" title="Connection status"></div></div>
+      <button id="office-theme-btn" onclick="toggleOfficeTheme()" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:13px;padding:6px 10px;cursor:pointer;">🎨</button>
       <button class="office-logout-btn" onclick="officeDoLogout()">Logout</button>
     </div>
   </div>
@@ -2285,6 +2286,7 @@ async function officeFetch(path, opts = {}) {
 function showOfficeDashboard() {
   document.getElementById('login-page').style.display = 'none';
   document.getElementById('office-dashboard').style.display = 'block';
+  updateOfficeThemeBtn();
   connectWS();
   if (officeRefreshInterval) clearInterval(officeRefreshInterval);
   officeRefreshInterval = setInterval(loadOfficeData, 20000);
@@ -3315,6 +3317,7 @@ function setTheme(theme) {
   localStorage.setItem('gforce_theme', theme);
   document.documentElement.setAttribute('data-theme', theme);
   updateThemeButtons();
+  updateOfficeThemeBtn();
 }
 
 function updateThemeButtons() {
@@ -3327,6 +3330,16 @@ function updateThemeButtons() {
     lightBtn.style.borderColor = saved === 'light' ? 'var(--accent)' : 'var(--border)';
     lightBtn.style.color = saved === 'light' ? 'var(--accent)' : 'var(--text)';
   }
+}
+
+function toggleOfficeTheme() {
+  const current = localStorage.getItem('gforce_theme') || 'dark';
+  setTheme(current === 'dark' ? 'light' : 'dark');
+}
+
+function updateOfficeThemeBtn() {
+  const btn = document.getElementById('office-theme-btn');
+  if (btn) btn.textContent = (localStorage.getItem('gforce_theme') || 'dark') === 'dark' ? '☀️' : '🌙';
 }
 
 // Apply saved theme on load

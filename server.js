@@ -884,7 +884,6 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
 app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
   try {
     const { group_name, pilot_ids, is_peak_trip } = req.body;
-    if (!group_name) return res.status(400).json({ error: 'group_name required' });
     if (!pilot_ids || !pilot_ids.length) return res.status(400).json({ error: 'pilot_ids required' });
 
     const now = new Date();

@@ -421,8 +421,9 @@
     #office-alert-banner.show { display: block; }
 
     .office-content { padding: 18px 20px; max-width: 900px; margin: 0 auto; }
-    .office-tab-content { display: none; }
+    .office-tab-content { display: none; background: var(--bg); }
     .office-tab-content.active { display: block; }
+    #office-tab-today, #office-tab-flights, #office-tab-ff { background: var(--bg); }
 
     .section-title {
       font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase;
@@ -2254,7 +2255,7 @@ function toggleGroupPilot(id) {
 
 async function submitGroupAway() {
   const name = document.getElementById('group-name-input').value.trim();
-  if (!name) { toast('Enter a group name or booking number'); return; }
+  if (!name) { /* group name is optional */ }
   if (_groupSelected.size === 0) { toast('Select at least one pilot'); return; }
   const availablePilots = officePilots.filter(p => p.status !== 'airborne' && Number(p.available) === 1);
   const pilot_ids = availablePilots.filter(p => _groupSelected.has(p.id)).map(p => p.id);
@@ -2726,7 +2727,11 @@ function updateTimers() {
           if (card) card.classList.add('alert');
           if (remaining <= 600000 && !p._warned10) {
             p._warned10 = true;
-            toast(`⚠️ ${p.name} — 10 min to landing`);
+            // Only show toast on office dashboard, not pilot New FF tab
+            const od = document.getElementById('office-dashboard');
+            if (od && od.style.display !== 'none') {
+              toast(`⚠️ ${p.name} — 10 min to landing`);
+            }
           }
         }
       }

@@ -1495,6 +1495,18 @@ function setupBtnGroups() {
     });
   });
 }
+
+function getGroupVal(groupId) {
+  const selected = document.querySelector(`#${groupId} button.selected`);
+  return selected ? selected.getAttribute('data-val') : '';
+}
+
+function setGroupVal(groupId, val) {
+  const btns = document.querySelectorAll(`#${groupId} button`);
+  btns.forEach(b => {
+    b.classList.toggle('selected', b.getAttribute('data-val') === val);
+  });
+}
 function getTimeVal() {
   return document.getElementById('fg-time').value;
 }

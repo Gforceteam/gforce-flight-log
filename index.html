@@ -45,6 +45,8 @@
       color: var(--text);
       min-height: 100vh;
       padding-bottom: 80px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     }
 
     /* ── LOGIN ─────────────────────────────────────────────────────────── */
@@ -172,7 +174,7 @@
     nav button.active { color: var(--accent); }
     nav button svg { width: 22px; height: 22px; }
 
-    .page { display: none; padding: 16px; max-width: 500px; margin: 0 auto; }
+    .page { display: none; padding: 16px; padding-bottom: 80px; max-width: 500px; margin: 0 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; }
     .page.active { display: block; }
 
     .page-header {

@@ -2414,7 +2414,10 @@ function renderOfficeTab() {
             <div class="timer-display" id="timer-${p.id}" data-expires="${p.timer_expires_at || ''}" style="font-size:13px;margin:0;">--:--</div>
           </div>
           <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
-            <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name}')" style="font-size:11px;padding:4px 10px;">Cancel</button>
+            <div style="display:flex;gap:3px;">
+              <button onclick="doLandPilot('${p.id}', '${p.name}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:11px;padding:4px 8px;font-weight:700;">Land</button>
+              <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name}')" style="font-size:11px;padding:4px 10px;">Cancel</button>
+            </div>
             <div style="display:flex;gap:3px;">
               <button onclick="adjustPilotTimer('${p.id}', -5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">−5</button>
               <button onclick="adjustPilotTimer('${p.id}', 5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">+5</button>
@@ -2435,7 +2438,10 @@ function renderOfficeTab() {
             <div class="timer-display" id="timer-${p.id}" data-expires="${p.timer_expires_at || ''}" style="font-size:13px;margin:2px 0 0;">--:--</div>
           </div>
           <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
-            <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name}')" style="font-size:11px;padding:4px 10px;">Cancel</button>
+            <div style="display:flex;gap:3px;">
+              <button onclick="doLandPilot('${p.id}', '${p.name}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:11px;padding:4px 8px;font-weight:700;">Land</button>
+              <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name}')" style="font-size:11px;padding:4px 10px;">Cancel</button>
+            </div>
             <div style="display:flex;gap:3px;">
               <button onclick="adjustPilotTimer('${p.id}', -5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">−5</button>
               <button onclick="adjustPilotTimer('${p.id}', 5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">+5</button>
@@ -2514,6 +2520,20 @@ async function doLeaveOffice(pilotId) {
   const data = await res.json();
   if (res.ok) { toast(data.message); await loadOfficeData(); }
   else { toast(data.error || 'Error'); }
+}
+
+// Land a pilot from the office side — creates flight record with pilot's current wing and office adjustment notes
+async function doLandPilot(pilotId, pilotName) {
+  if (!confirm(`Land ${pilotName} from office? This will log a flight with their current wing.`)) return;
+  try {
+    const res = await officeFetch('/api/office/land-pilot', {
+      method: 'POST',
+      body: JSON.stringify({ pilot_id: pilotId })
+    });
+    const data = await res.json();
+    if (res.ok) { toast(`${pilotName} landed`); await loadOfficeData(); }
+    else toast(data.error || 'Failed');
+  } catch (e) { toast('Error: ' + e.message); }
 }
 
 function confirmLandedEarly(pilotId, pilotName) {

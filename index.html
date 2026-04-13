@@ -1082,6 +1082,7 @@ async function doLogin() {
       if (data.token) {
         officeToken = data.token;
         localStorage.setItem('gforce_office_token', officeToken);
+        if (data.refresh_token) localStorage.setItem('gforce_office_refresh', data.refresh_token);
         showOfficeDashboard();
       } else {
         document.getElementById('login-error').textContent = res.status === 429 ? data.error : 'Incorrect office password';
@@ -1110,6 +1111,7 @@ async function doLogin() {
       localStorage.setItem('gforce_pilot_token', pilotToken);
       localStorage.setItem('gforce_pilot_id', pilotId);
       localStorage.setItem('gforce_pilot_name', pilotName);
+      if (data.refresh_token) localStorage.setItem('gforce_pilot_refresh', data.refresh_token);
       showApp(pilotName);
     } else {
       document.getElementById('login-error').textContent = res.status === 429 ? data.error : 'Incorrect password. Try again.';
@@ -1129,6 +1131,7 @@ function doLogout() {
   localStorage.removeItem('gforce_pilot_token');
   localStorage.removeItem('gforce_pilot_id');
   localStorage.removeItem('gforce_pilot_name');
+  localStorage.removeItem('gforce_pilot_refresh');
   document.getElementById('app-page').style.display = 'none';
   document.getElementById('bottom-nav').style.display = 'none';
   document.getElementById('login-page').style.display = 'flex';
@@ -1205,13 +1208,47 @@ function api(path, opts = {}) {
   });
 }
 
+// Auto-refresh pilot token on 401
+async function apiRefresh(path, opts = {}) {
+  const refreshToken = localStorage.getItem('gforce_pilot_refresh');
+  if (!refreshToken) return null;
+  const res = await fetch(`${API_BASE}/api/auth/refresh-pilot`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: refreshToken })
+  });
+  if (!res.ok) { localStorage.removeItem('gforce_pilot_refresh'); return null; }
+  const data = await res.json();
+  if (data.token) {
+    pilotToken = data.token;
+    localStorage.setItem('gforce_pilot_token', pilotToken);
+    if (data.refresh_token) localStorage.setItem('gforce_pilot_refresh', data.refresh_token);
+    return fetch(`${API_BASE}${path}`, {
+      ...opts,
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${pilotToken}`, ...opts.headers }
+    });
+  }
+  return null;
+}
+
+// Wrapped fetch that auto-retries with refresh on 401
+async function apiFetch(path, opts = {}) {
+  let res = await api(path, opts);
+  if (res && res.status === 401) {
+    const retry = await apiRefresh(path, opts);
+    if (retry) res = retry;
+    else { doLogout(); return null; }
+  }
+  return res;
+}
+
 async function loadMyData() {
   try {
     const [statusRes, flightsRes, drivesRes, flyingRes] = await Promise.all([
-      api('/api/my-status'),
-      api('/api/flights'),
-      api('/api/drives'),
-      api('/api/flying')
+      apiFetch('/api/my-status'),
+      apiFetch('/api/flights'),
+      apiFetch('/api/drives'),
+      apiFetch('/api/flying')
     ]);
     if (statusRes.status === 401 || flightsRes.status === 401) { doLogout(); return; }
     const statusData = await statusRes.json();
@@ -1262,7 +1299,7 @@ function updateStatusBadge() {
 async function toggleAvailability() {
   const newState = !pilotAvailable;
   try {
-    const res = await api('/api/pilot/available', {
+    const res = await apiFetch('/api/pilot/available', {
       method: 'PUT',
       body: JSON.stringify({ available: newState })
     });
@@ -1356,7 +1393,7 @@ async function didNotFly() {
   if (!confirm('Mark as Did Not Fly? This cancels your timer without logging a flight.')) return;
   if (btn) { btn.disabled = true; btn.textContent = 'Cancelling...'; }
   try {
-    const res = await api('/api/pilot/cancel-timer', { method: 'POST' });
+    const res = await apiFetch('/api/pilot/cancel-timer', { method: 'POST' });
     if (!res.ok) throw new Error(await res.text());
     myStatus.status = 'in_office';
     myStatus.timer_expires_at = null;
@@ -1377,7 +1414,7 @@ async function extendMyTimer() {
   btn.disabled = true;
   btn.textContent = 'Extending...';
   try {
-    const res = await api('/api/pilot/extend-timer', { method: 'POST' });
+    const res = await apiFetch('/api/pilot/extend-timer', { method: 'POST' });
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
     myStatus.timer_expires_at = data.expires_at;
@@ -1509,7 +1546,7 @@ async function saveFlight() {
   if (isPeakDrive) {
     setServerStatus('syncing');
     try {
-      const res = await api('/api/drives', {
+      const res = await apiFetch('/api/drives', {
         method: 'POST',
         body: JSON.stringify({ date, notes, group_id: myStatus.group_id || null })
       });
@@ -1540,7 +1577,7 @@ async function saveFlight() {
   try {
     if (editingId !== null) {
       const wingReg = (document.getElementById('f-wing')?.value || '').trim().toUpperCase() || null;
-      const res = await api(`/api/flights/${editingId}`, {
+      const res = await apiFetch(`/api/flights/${editingId}`, {
         method: 'PUT',
         body: JSON.stringify({ date, flight_num: flightNum, weight, takeoff, landing, time, notes, wing_reg: wingReg })
       });
@@ -1549,7 +1586,7 @@ async function saveFlight() {
     } else {
       const wingReg = (document.getElementById('f-wing')?.value || '').trim().toUpperCase() || null;
       if (wingReg && wingReg !== currentWing) currentWing = wingReg;
-      const res = await api('/api/flights', {
+      const res = await apiFetch('/api/flights', {
         method: 'POST',
         body: JSON.stringify({ date, flight_num: flightNum, weight, takeoff, landing, time, notes, wing_reg: wingReg })
       });
@@ -1690,7 +1727,7 @@ async function saveHours(date, value) {
     const hours = value === '' ? null : parseFloat(value);
     if (hours !== null && (isNaN(hours) || hours < 0)) return;
     try {
-      const res = await api('/api/pilot/hours', {
+      const res = await apiFetch('/api/pilot/hours', {
         method: 'PUT',
         body: JSON.stringify({ date, hours })
       });
@@ -1712,7 +1749,7 @@ async function saveHours(date, value) {
 async function deleteFlight(id) {
   if (!confirm('Delete this flight? This cannot be undone.')) return;
   try {
-    const res = await api(`/api/flights/${id}`, { method: 'DELETE' });
+    const res = await apiFetch(`/api/flights/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error(await res.text());
     toast('Flight deleted');
     await loadMyData();
@@ -1725,7 +1762,7 @@ async function deleteFlight(id) {
 async function deleteDrive(id) {
   if (!confirm('Delete this drive? This cannot be undone.')) return;
   try {
-    const res = await api(`/api/drives/${id}`, { method: 'DELETE' });
+    const res = await apiFetch(`/api/drives/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error(await res.text());
     toast('Drive deleted');
     await loadMyData();
@@ -1742,7 +1779,7 @@ async function updateWing(val) {
   if (el) el.value = reg;
   if (!reg) return;
   try {
-    await api('/api/pilot/wing', { method: 'PUT', body: JSON.stringify({ wing_reg: reg }) });
+    await apiFetch('/api/pilot/wing', { method: 'PUT', body: JSON.stringify({ wing_reg: reg }) });
   } catch {}
 }
 
@@ -2080,7 +2117,7 @@ async function renderPilotFF() {
   const el = document.getElementById('ff-content');
   el.innerHTML = '<div class="empty-state">Loading…</div>';
   try {
-    const res = await api('/api/flight-following');
+    const res = await apiFetch('/api/flight-following');
     if (!res.ok) throw new Error('Failed');
     const data = await res.json();
     el.innerHTML = `<div class="ff-wrap">${buildFFTable(data.dates, data.pilots)}</div>`;
@@ -2120,6 +2157,40 @@ function officeApi(path, opts = {}) {
   });
 }
 
+// ─── Auto-refresh office token on 401 ─────────────────────────────────────────
+async function officeApiRefresh(path, opts = {}) {
+  const refreshToken = localStorage.getItem('gforce_office_refresh');
+  if (!refreshToken) return null;
+  const res = await fetch(`${API_BASE}/api/auth/refresh-office`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: refreshToken })
+  });
+  if (!res.ok) { localStorage.removeItem('gforce_office_refresh'); return null; }
+  const data = await res.json();
+  if (data.token) {
+    officeToken = data.token;
+    localStorage.setItem('gforce_office_token', officeToken);
+    if (data.refresh_token) localStorage.setItem('gforce_office_refresh', data.refresh_token);
+    return fetch(`${API_BASE}${path}`, {
+      ...opts,
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${officeToken}`, ...opts.headers }
+    });
+  }
+  return null;
+}
+
+// Wrapped fetch that auto-retries with refresh on 401
+async function officeFetch(path, opts = {}) {
+  let res = await officeApi(path, opts);
+  if (res && res.status === 401) {
+    const retry = await officeApiRefresh(path, opts);
+    if (retry) res = retry;
+    else { localStorage.removeItem('gforce_office_token'); localStorage.removeItem('gforce_office_refresh'); officeToken = null; document.getElementById('office-dashboard').style.display = 'none'; document.getElementById('login-page').style.display = 'flex'; toast('Session expired. Please log in again.'); return null; }
+  }
+  return res;
+}
+
 // ─── Office Auth ──────────────────────────────────────────────────────────────
 function showOfficeDashboard() {
   document.getElementById('login-page').style.display = 'none';
@@ -2132,6 +2203,7 @@ function showOfficeDashboard() {
 
 function officeDoLogout() {
   localStorage.removeItem('gforce_office_token');
+  localStorage.removeItem('gforce_office_refresh');
   officeToken = null;
   if (ws) { ws.close(); ws = null; }
   clearInterval(timerInterval);
@@ -2146,8 +2218,8 @@ function officeDoLogout() {
 async function loadOfficeData() {
   try {
     const [pilotsRes, flightsRes] = await Promise.all([
-      officeApi('/api/pilots'),
-      officeApi('/api/office/flights')
+      officeFetch('/api/pilots'),
+      officeFetch('/api/office/flights')
     ]);
     if (pilotsRes.status === 401) { officeDoLogout(); return; }
     officePilots = await pilotsRes.json();
@@ -2261,7 +2333,7 @@ async function submitGroupAway() {
   const pilot_ids = availablePilots.filter(p => _groupSelected.has(p.id)).map(p => p.id);
   const pilot_names = availablePilots.filter(p => _groupSelected.has(p.id)).map(p => p.name);
   try {
-    const res = await officeApi('/api/office/group-leave', {
+    const res = await officeFetch('/api/office/group-leave', {
       method: 'POST',
       body: JSON.stringify({ group_name: name, pilot_ids })
     });
@@ -2403,7 +2475,7 @@ function renderOfficeTab() {
 
 async function doLeaveOffice(pilotId) {
   const clientName = document.getElementById(`client-${pilotId}`)?.value || '';
-  const res = await officeApi('/api/office/leave', {
+  const res = await officeFetch('/api/office/leave', {
     method: 'POST',
     body: JSON.stringify({ pilot_id: pilotId, client_name: clientName })
   });
@@ -2418,7 +2490,7 @@ function confirmLandedEarly(pilotId, pilotName) {
 }
 
 async function doLandedEarly(pilotId) {
-  const res = await officeApi('/api/office/landed-early', {
+  const res = await officeFetch('/api/office/landed-early', {
     method: 'POST',
     body: JSON.stringify({ pilot_id: pilotId })
   });
@@ -2429,13 +2501,13 @@ async function doLandedEarly(pilotId) {
 
 async function officeSignOut(pilotId, name) {
   if (!confirm(`Sign out ${name}?`)) return;
-  const res = await officeApi('/api/office/pilot-signout', { method: 'POST', body: JSON.stringify({ pilot_id: pilotId }) });
+  const res = await officeFetch('/api/office/pilot-signout', { method: 'POST', body: JSON.stringify({ pilot_id: pilotId }) });
   if (res.ok) { toast(`${name} signed out`); await loadOfficeData(); }
   else toast('Failed to sign out pilot');
 }
 
 async function officeSignIn(pilotId, name) {
-  const res = await officeApi('/api/office/pilot-signin', { method: 'POST', body: JSON.stringify({ pilot_id: pilotId }) });
+  const res = await officeFetch('/api/office/pilot-signin', { method: 'POST', body: JSON.stringify({ pilot_id: pilotId }) });
   if (res.ok) { toast(`${name} signed in`); await loadOfficeData(); }
   else toast('Failed to sign in pilot');
 }
@@ -2483,7 +2555,7 @@ async function officeUpdateFlight() {
   const btn = document.querySelector('#office-edit-modal button[onclick="officeUpdateFlight()"]');
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
-    const res = await officeApi(`/api/office/flights/${id}`, {
+    const res = await officeFetch(`/api/office/flights/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ date, flight_num, weight, takeoff, landing, time, notes, client_name, wing_reg })
     });
@@ -2501,7 +2573,7 @@ async function officeUpdateFlight() {
 async function officeDeleteFlight(flightId, pilotName) {
   if (!confirm(`Delete this flight for ${pilotName}? This cannot be undone.`)) return;
   try {
-    const res = await officeApi(`/api/office/flights/${flightId}`, { method: 'DELETE' });
+    const res = await officeFetch(`/api/office/flights/${flightId}`, { method: 'DELETE' });
     if (!res.ok) { const d = await res.json(); toast('Delete failed: ' + (d.error || 'unknown error')); return; }
     toast('Flight deleted');
     await loadOfficeData();
@@ -2509,7 +2581,7 @@ async function officeDeleteFlight(flightId, pilotName) {
 }
 
 async function updateClientName(pilotId, clientName) {
-  await officeApi('/api/office/leave', {
+  await officeFetch('/api/office/leave', {
     method: 'POST',
     body: JSON.stringify({ pilot_id: pilotId, client_name: clientName })
   });
@@ -2769,7 +2841,7 @@ async function populateOfficeResetPilots() {
   const sel = document.getElementById('office-reset-pilot-sel');
   if (!sel || sel.options.length > 1) return; // already populated
   try {
-    const res = await officeApi('/api/pilots');
+    const res = await officeFetch('/api/pilots');
     if (!res.ok) return;
     const pilots = await res.json();
     pilots.sort((a, b) => a.name.localeCompare(b.name)).forEach(p => {
@@ -2789,7 +2861,7 @@ async function officeResetPassword() {
   if (!pilotId) { errEl.textContent = 'Select a pilot'; return; }
   if (!newPw || newPw.length < 6) { errEl.textContent = 'Password must be at least 6 characters'; return; }
   try {
-    const res = await officeApi('/api/office/pilot-password', {
+    const res = await officeFetch('/api/office/pilot-password', {
       method: 'PUT',
       body: JSON.stringify({ pilot_id: pilotId, new_password: newPw })
     });
@@ -2956,7 +3028,7 @@ async function subscribeToPush() {
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
       });
     }
-    await api('/api/pilot/push-subscription', {
+    await apiFetch('/api/pilot/push-subscription', {
       method: 'POST',
       body: JSON.stringify({ subscription: sub })
     });
@@ -2974,7 +3046,7 @@ async function unsubscribeFromPush() {
       const sub = await reg.pushManager.getSubscription();
       if (sub) await sub.unsubscribe();
     }
-    await api('/api/pilot/push-subscription', { method: 'DELETE' });
+    await apiFetch('/api/pilot/push-subscription', { method: 'DELETE' });
   } catch (e) {}
 }
 
@@ -3208,7 +3280,7 @@ async function submitChangePassword() {
   const btn = document.getElementById('cpw-submit');
   btn.disabled = true; btn.textContent = 'Saving...';
   try {
-    const res = await api('/api/pilot/password', {
+    const res = await apiFetch('/api/pilot/password', {
       method: 'PUT',
       body: JSON.stringify({ current_password: current, new_password: newPw })
     });

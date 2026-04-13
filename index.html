@@ -2358,8 +2358,7 @@ function toggleGroupPilot(id) {
 }
 
 async function submitGroupAway() {
-  const name = document.getElementById('group-name-input').value.trim();
-  if (!name) { /* group name is optional */ }
+  const name = document.getElementById('group-name-input').value.trim() || 'Group';
   if (_groupSelected.size === 0) { toast('Select at least one pilot'); return; }
   const availablePilots = officePilots.filter(p => p.status !== 'airborne' && Number(p.available) === 1);
   const pilot_ids = availablePilots.filter(p => _groupSelected.has(p.id)).map(p => p.id);

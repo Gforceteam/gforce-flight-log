@@ -9,7 +9,7 @@
   <meta name="theme-color" content="#f37329" />
   <meta name="msapplication-TileColor" content="#000000" />
   <link rel="apple-touch-icon" href="/gforce-flight-log/icon-192.png" />
-  <link rel="manifest" href="/gforce-flight-log/manifest.json" />
+  <link rel="manifest" href="/flightlog/manifest.json" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -3114,7 +3114,7 @@ async function updateApp() {
 // ─── Service Worker ───────────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
   const hadController = !!navigator.serviceWorker.controller;
-  navigator.serviceWorker.register('/gforce-flight-log/sw.js').then(reg => {
+  navigator.serviceWorker.register('/flightlog/sw.js').then(reg => {
     // Proactively check for a new SW version each time the app loads
     reg.update().catch(() => {});
   }).catch(() => {});
@@ -3128,6 +3128,53 @@ if ('serviceWorker' in navigator) {
       window.location.reload();
     }
   });
+
+  // Listen for version update pings from the service worker
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data && e.data.type === 'VERSION_UPDATE') {
+      showVersionBanner(e.data.version);
+    }
+  });
+
+  // PWA install prompt
+  let deferredInstallPrompt = null;
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    showInstallBanner();
+  });
+}
+
+function showInstallBanner() {
+  const banner = document.getElementById('install-banner');
+  if (banner) { banner.style.display = 'flex'; return; }
+  const div = document.createElement('div');
+  div.id = 'install-banner';
+  div.style.cssText = 'position:fixed;bottom:72px;left:12px;right:12px;background:#12151d;border:1px solid #f37329;border-radius:12px;padding:14px 16px;z-index:9998;display:none;flex-direction:column;gap:10px;box-shadow:0 4px 20px rgba(0,0,0,0.5);';
+  div.innerHTML = `<div style="font-size:13px;font-weight:600;color:var(--text);line-height:1.4;">📱 Add GForce to your Home Screen for the best experience</div><div style="font-size:11px;color:var(--muted);line-height:1.4;">iOS: tap <strong style="color:var(--accent)">Share</strong> → <strong style="color:var(--accent)">Add to Home Screen</strong><br>Android: tap <strong style="color:var(--accent)">Install app</strong> or <strong style="color:var(--accent)">Add to Home Screen</strong></div><div style="display:flex;gap:8px;"><button onclick="doInstallApp();this.closest('#install-banner').style.display='none';" style="flex:1;padding:10px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-weight:700;font-size:13px;cursor:pointer;">👍 Got it</button><button onclick="this.closest('#install-banner').style.display='none';localStorage.setItem('gforce_install_dismissed','1');" style="flex:1;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:13px;cursor:pointer;">Later</button></div>`;
+  document.body.appendChild(div);
+  div.style.display = 'flex';
+}
+
+async function doInstallApp() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  const { outcome } = await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  if (outcome === 'accepted') {
+    const b = document.getElementById('install-banner');
+    if (b) b.style.display = 'none';
+  }
+}
+
+function showVersionBanner(version) {
+  const banner = document.getElementById('version-banner');
+  if (banner) { banner.style.display = 'flex'; return; }
+  const div = document.createElement('div');
+  div.id = 'version-banner';
+  div.style.cssText = 'position:fixed;top:0;left:0;right:0;background:linear-gradient(90deg,#f37329,#c95f1a);color:#fff;padding:14px 20px;z-index:9999;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 4px 16px rgba(243,115,41,0.4);';
+  div.innerHTML = `<span style="font-weight:700;font-size:14px;">🚀 New version available (v${version})</span><button onclick="updateApp();this.closest('#version-banner').style.display='none';" style="background:#fff;color:var(--accent);border:none;border-radius:9999px;padding:6px 16px;font-weight:700;font-size:13px;cursor:pointer;">Update Now</button>`;
+  document.body.appendChild(div);
 }
 
 // ─── Change Password ──────────────────────────────────────────────────────────

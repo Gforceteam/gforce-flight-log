@@ -1,18 +1,38 @@
-const CACHE = 'gforce-v5';
-const APP = '/gforce-flight-log/';
+const CACHE = 'gforce-v6';
+const APP = '/flightlog/';
+const VERSION_URL = APP + 'version.json';
 
 // Static assets that change rarely and are safe to cache long-term
 const STATIC = [
+  APP,
   APP + 'index.html',
   APP + 'manifest.json',
   APP + 'icon-192.png',
   APP + 'icon-512.png',
+  APP + 'version.json',
 ];
+
+// Check version on install and every 24h after
+async function checkVersion() {
+  try {
+    const resp = await fetch(VERSION_URL + '?t=' + Date.now());
+    if (!resp.ok) return;
+    const info = await resp.json();
+    const last = localStorage.getItem('gforce_version_notified') || '';
+    if (info.version && info.version !== last) {
+      localStorage.setItem('gforce_version_notified', info.version);
+      // Notify all clients that a new version is available
+      const clients = await self.clients.matchAll({ type: 'window' });
+      clients.forEach(c => c.postMessage({ type: 'VERSION_UPDATE', version: info.version }));
+    }
+  } catch (_) {}
+}
 
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE).then(c => c.addAll(STATIC)).then(() => self.skipWaiting())
   );
+  e.waitUntil(checkVersion());
 });
 
 self.addEventListener('activate', e => {
@@ -21,6 +41,10 @@ self.addEventListener('activate', e => {
       .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
+  // Recheck version on activation
+  e.waitUntil(checkVersion());
+  // Also schedule a recheck in 24h
+  setInterval(checkVersion, 24 * 60 * 60 * 1000);
 });
 
 self.addEventListener('fetch', e => {

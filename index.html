@@ -2175,9 +2175,12 @@ function renderGroupsTab() {
         <button onclick="loadOfficeData()" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">↻ Refresh</button>
       </div>
       <div class="card" style="margin-bottom:16px;">
-        <div class="field">
-          <label>Group Name / Booking</label>
-          <input type="text" id="group-name-input" placeholder="e.g. Smith Family or BK-2042" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:16px;outline:none;" />
+        <div style="display:flex;gap:10px;align-items:flex-start;">
+          <div class="field" style="flex:1;margin-bottom:0;">
+            <label>Group Name / Booking <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+            <input type="text" id="group-name-input" placeholder="e.g. Smith Family or BK-2042" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:16px;outline:none;" />
+          </div>
+          <button onclick="submitGroupAway()" style="margin-top:20px;padding:12px 20px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;">Send Away</button>
         </div>
         <div class="field">
           <label>Select Pilots</label>
@@ -2346,22 +2349,22 @@ function renderOfficeTab() {
   let availHtml = '';
   if (signedIn.length > 0) {
     availHtml += `<div class="section-title">✅ Available (${signedIn.length})</div>`;
-    availHtml += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">`;
+    availHtml += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">`;
     signedIn.forEach(p => {
       const lastFlight = p.last_landed_at ? fmtRelative(p.last_landed_at) : 'no flights';
-      availHtml += `<div class="pilot-card" style="margin-bottom:0;padding:12px;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-          <div class="pilot-avatar" style="width:36px;height:36px;font-size:15px;">${p.name.charAt(0)}</div>
+      availHtml += `<div class="pilot-card" style="margin-bottom:0;padding:10px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <div class="pilot-avatar" style="width:32px;height:32px;font-size:13px;">${p.name.charAt(0)}</div>
           <div style="flex:1;min-width:0;">
-            <div style="font-weight:600;font-size:14px;">${p.name}</div>
-            <div style="font-size:11px;color:var(--muted);">${lastFlight}</div>
+            <div style="font-weight:600;font-size:13px;">${p.name}</div>
+            <div style="font-size:10px;color:var(--muted);">${lastFlight}</div>
           </div>
         </div>
-        <input type="text" id="client-${p.id}" value="${p.client_name || ''}" placeholder="Client name"
-          style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 10px;font-size:13px;outline:none;margin-bottom:8px;" />
-        <div style="display:flex;gap:6px;">
-          <button class="btn-leave" onclick="doLeaveOffice('${p.id}')" style="flex:1;font-size:12px;padding:7px 6px;">Away</button>
-          <button class="btn-danger" onclick="officeSignOut('${p.id}', '${p.name}')" style="font-size:11px;padding:6px 10px;">Sign Out</button>
+        <input type="text" id="client-${p.id}" value="${p.client_name || ''}" placeholder="Client"
+          style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-size:12px;outline:none;margin-bottom:6px;" />
+        <div style="display:flex;gap:5px;">
+          <button class="btn-leave" onclick="doLeaveOffice('${p.id}')" style="flex:1;font-size:11px;padding:5px 4px;">Away</button>
+          <button class="btn-danger" onclick="officeSignOut('${p.id}', '${p.name}')" style="font-size:10px;padding:5px 8px;">Sign Out</button>
         </div>
       </div>`;
     });
@@ -2718,6 +2721,14 @@ function updateTimers() {
         const secs = Math.floor((remaining % 60000) / 1000);
         el.textContent = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')} remaining`;
         el.classList.toggle('urgent', remaining < 600000);
+        if (remaining < 600000 && remaining > 0) {
+          const card = document.getElementById(`pilot-card-${p.id}`);
+          if (card) card.classList.add('alert');
+          if (remaining <= 600000 && !p._warned10) {
+            p._warned10 = true;
+            toast(`⚠️ ${p.name} — 10 min to landing`);
+          }
+        }
       }
     });
   }

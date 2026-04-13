@@ -9,7 +9,7 @@
   <meta name="theme-color" content="#f37329" />
   <meta name="msapplication-TileColor" content="#000000" />
   <link rel="apple-touch-icon" href="/gforce-flight-log/icon-192.png" />
-  <link rel="manifest" href="/flightlog/manifest.json" />
+  <link rel="manifest" href="/checklist/manifest.json" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -3114,7 +3114,7 @@ async function updateApp() {
 // ─── Service Worker ───────────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
   const hadController = !!navigator.serviceWorker.controller;
-  navigator.serviceWorker.register('/flightlog/sw.js').then(reg => {
+  navigator.serviceWorker.register('/checklist/sw.js').then(reg => {
     // Proactively check for a new SW version each time the app loads
     reg.update().catch(() => {});
   }).catch(() => {});

@@ -1,11 +1,11 @@
-const CACHE = 'gforce-v6';
-const APP = '/flightlog/';
+const CACHE = 'gforce-v7';
+const APP = '/checklist/';
 const VERSION_URL = APP + 'version.json';
 
 // Static assets that change rarely and are safe to cache long-term
 const STATIC = [
   APP,
-  APP + 'index.html',
+  APP + 'gforce.html',
   APP + 'manifest.json',
   APP + 'icon-192.png',
   APP + 'icon-512.png',
@@ -52,7 +52,7 @@ self.addEventListener('fetch', e => {
 
   // Only intercept same-origin requests within our app path
   if (url.origin !== self.location.origin) return;
-  if (!url.pathname.startsWith('/gforce-flight-log')) return;
+  if (!url.pathname.startsWith('/checklist')) return;
 
   // HTML (navigate) — network first so updates are always visible on refresh
   // Fall back to cache only when genuinely offline
@@ -67,7 +67,7 @@ self.addEventListener('fetch', e => {
         })
         .catch(() =>
           caches.match(e.request)
-            .then(c => c || caches.match(APP + 'index.html'))
+            .then(c => c || caches.match(APP + 'gforce.html'))
             .then(c => c || new Response('<h1>Offline</h1><p>Please reconnect to use GForce.</p>', { headers: { 'Content-Type': 'text/html' } }))
         )
     );
@@ -93,8 +93,8 @@ self.addEventListener('push', e => {
   e.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: '/gforce-flight-log/icon-192.png',
-      badge: '/gforce-flight-log/icon-192.png',
+      icon: '/checklist/icon-192.png',
+      badge: '/checklist/icon-192.png',
       vibrate: [600, 200, 600, 200, 1000],
       requireInteraction: data.requireInteraction !== false,
       tag: data.tag || 'pilot-sent-away',
@@ -108,9 +108,9 @@ self.addEventListener('notificationclick', e => {
   e.notification.close();
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
-      const appClient = cs.find(c => c.url.includes('/gforce-flight-log/'));
+      const appClient = cs.find(c => c.url.includes('/checklist'));
       if (appClient) return appClient.focus();
-      return clients.openWindow(APP);
+      return clients.openWindow(APP + 'gforce.html');
     })
   );
 });

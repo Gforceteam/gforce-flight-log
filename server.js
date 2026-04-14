@@ -262,7 +262,14 @@ function verifyToken(req, res, next) {
     return res.status(401).json({ error: 'No token provided' });
   }
   try {
-    req.pilot = jwt.verify(auth.slice(7), JWT_SECRET);
+    const decoded = jwt.verify(auth.slice(7), JWT_SECRET);
+    if (decoded.type === 'office') {
+      return res.status(403).json({ error: 'Pilot token required' });
+    }
+    if (!decoded.id) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    req.pilot = decoded;
     next();
   } catch {
     return res.status(401).json({ error: 'Invalid token' });
@@ -306,7 +313,7 @@ function verifyPilotOrOffice(req, res, next) {
   }
 }
 
-const MAX_AVATAR_BYTES = 256 * 1024;
+const MAX_AVATAR_BYTES = 320 * 1024;
 
 /** Returns validated data URL string, or null to clear. Throws on invalid input. */
 function validateAvatarBody(body) {
@@ -316,7 +323,8 @@ function validateAvatarBody(body) {
   const raw = body.avatar;
   if (raw === null || raw === '') return null;
   if (typeof raw !== 'string') throw new Error('avatar must be a string or null');
-  const m = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/i);
+  const compact = raw.replace(/\s/g, '');
+  const m = compact.match(/^data:(image\/(?:jpeg|jpg|png|webp))(?:;charset=[^;]+)?;base64,(.+)$/i);
   if (!m) throw new Error('Avatar must be a base64 data URL (JPEG, PNG, or WebP)');
   let buf;
   try {
@@ -326,7 +334,7 @@ function validateAvatarBody(body) {
   }
   if (buf.length > MAX_AVATAR_BYTES) throw new Error(`Image too large (max ${MAX_AVATAR_BYTES / 1024}KB)`);
   if (buf.length < 80) throw new Error('Image too small');
-  return raw;
+  return compact;
 }
 
 function broadcast(data) {
@@ -352,7 +360,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-app.use(express.json({ limit: '900kb' }));
+app.use(express.json({ limit: '2mb' }));
 
 // ─── Public Routes ────────────────────────────────────────────────────────────
 app.get('/api/public/pilots', async (req, res) => {
@@ -1273,6 +1281,14 @@ app.delete('/api/office/flights/:id', verifyOffice, async (req, res) => {
 // ─── Health ───────────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 app.get('/', (req, res) => res.json({ name: 'GForce API', status: 'running', time: new Date().toISOString() }));
+
+// JSON body too large (e.g. avatar) — return JSON so the client can show a clear message
+app.use((err, req, res, next) => {
+  if (err && (err.type === 'entity.too.large' || err.status === 413)) {
+    return res.status(413).json({ error: 'Request too large (try a smaller photo)' });
+  }
+  next(err);
+});
 
 // ─── Civil Twilight Notification ────────────────────────────────────────────
 function eveningCivilTwilightUTC(dateStr) {

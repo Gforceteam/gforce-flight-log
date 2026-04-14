@@ -457,7 +457,7 @@ app.post('/api/auth/refresh-office', async (req, res) => {
 });
 
 // ─── Pilot Routes ─────────────────────────────────────────────────────────────
-app.get('/api/pilots', verifyToken, async (req, res) => {
+app.get('/api/pilots', verifyPilotOrOffice, async (req, res) => {
   try {
     const pilots = await queryAll(`
       SELECT id, name, last_seen, current_wing, available,

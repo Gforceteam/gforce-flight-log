@@ -391,21 +391,48 @@
     .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 4px; font-weight: 600; }
     .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
 
-    /* ── STATS HEADER (sticky) ─────────────────────────────────────────── */
+    /* ── STATS HEADER (sticky + collapsible) ──────────────────────────── */
     #header-stats {
       position: sticky; top: 0; z-index: 10;
       background: var(--bg);
       padding-bottom: 12px;
       border-bottom: 1px solid var(--border);
     }
-    .stats-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-    .stats-month-nav { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .stats-title-row {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 8px;
+      transition: grid-template-columns 0.25s ease, gap 0.25s ease;
+    }
+    #header-stats h1 {
+      overflow: hidden;
+      white-space: nowrap;
+      transition: opacity 0.2s ease;
+    }
+    #header-stats.stats-scrolled .stats-title-row {
+      grid-template-columns: 0px 1fr;
+      gap: 0;
+    }
+    #header-stats.stats-scrolled h1 {
+      opacity: 0;
+    }
+    .stats-month-nav {
+      display: flex; align-items: center; gap: 6px;
+    }
+    #header-stats.stats-scrolled .stats-month-nav {
+      justify-content: space-between;
+    }
     .stats-month-nav button {
       background: none; border: 1px solid var(--border); border-radius: 8px;
       color: var(--text); padding: 4px 12px; cursor: pointer; font-size: 18px; line-height: 1;
+      flex-shrink: 0;
     }
     .stats-month-nav button:disabled { opacity: 0.3; cursor: default; }
-    #stats-month-label { font-size: 13px; font-weight: 600; color: var(--accent); white-space: nowrap; }
+    #stats-month-label {
+      font-size: 13px; font-weight: 600; color: var(--accent); white-space: nowrap;
+      min-width: 100px; text-align: center; flex: 1;
+    }
 
     /* ── OFFICE DASHBOARD ──────────────────────────────────────────────── */
     #office-dashboard { display: none; padding-bottom: 0; background: var(--bg); }
@@ -2235,10 +2262,22 @@ function showPage(name) {
   document.getElementById('nav-'+name).classList.add('active');
   const hdr = document.getElementById('header-'+name);
   if (hdr) hdr.style.display = 'block';
-  if (name === 'stats') { statsMonthOffset = 0; renderStats(); }
+  if (name === 'stats') {
+    statsMonthOffset = 0;
+    renderStats();
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    document.getElementById('header-stats').classList.remove('stats-scrolled');
+  }
   if (name === 'ff') renderPilotFF();
   if (name === 'settings') renderSettingsPage();
 }
+
+// Collapse stats header on scroll
+window.addEventListener('scroll', () => {
+  const hdr = document.getElementById('header-stats');
+  if (!hdr || hdr.style.display === 'none') return;
+  hdr.classList.toggle('stats-scrolled', window.scrollY > 30);
+}, { passive: true });
 
 // ─── Flight Following ─────────────────────────────────────────────────────────
 function ffFmtDate(d) {

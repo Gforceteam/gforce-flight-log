@@ -197,6 +197,7 @@ async function createTables() {
   try { await db.execute('ALTER TABLE pilots ADD COLUMN available INTEGER DEFAULT 0'); } catch (_) {}
   // Add refresh_token column to existing DBs
   try { await db.execute('ALTER TABLE pilots ADD COLUMN refresh_token TEXT'); } catch (_) {}
+  try { await db.execute('ALTER TABLE pilots ADD COLUMN avatar_data TEXT'); } catch (_) {}
   await db.execute(`CREATE TABLE IF NOT EXISTS flights (
     id TEXT PRIMARY KEY, pilot_id TEXT, client_name TEXT, date TEXT,
     flight_num INTEGER, weight REAL, takeoff TEXT, landing TEXT,
@@ -283,6 +284,51 @@ function verifyOffice(req, res, next) {
   }
 }
 
+/** Pilot JWT or office JWT (for shared routes like avatar fetch). */
+function verifyPilotOrOffice(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'No token provided' });
+  }
+  try {
+    const decoded = jwt.verify(auth.slice(7), JWT_SECRET);
+    if (decoded.type === 'office') {
+      req.office = decoded;
+      return next();
+    }
+    if (decoded.type === 'pilot' && decoded.id) {
+      req.pilot = decoded;
+      return next();
+    }
+    return res.status(403).json({ error: 'Forbidden' });
+  } catch {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+}
+
+const MAX_AVATAR_BYTES = 256 * 1024;
+
+/** Returns validated data URL string, or null to clear. Throws on invalid input. */
+function validateAvatarBody(body) {
+  if (body == null || !Object.prototype.hasOwnProperty.call(body, 'avatar')) {
+    throw new Error('Missing avatar field');
+  }
+  const raw = body.avatar;
+  if (raw === null || raw === '') return null;
+  if (typeof raw !== 'string') throw new Error('avatar must be a string or null');
+  const m = raw.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/i);
+  if (!m) throw new Error('Avatar must be a base64 data URL (JPEG, PNG, or WebP)');
+  let buf;
+  try {
+    buf = Buffer.from(m[2], 'base64');
+  } catch {
+    throw new Error('Invalid base64');
+  }
+  if (buf.length > MAX_AVATAR_BYTES) throw new Error(`Image too large (max ${MAX_AVATAR_BYTES / 1024}KB)`);
+  if (buf.length < 80) throw new Error('Image too small');
+  return raw;
+}
+
 function broadcast(data) {
   const msg = JSON.stringify(data);
   wss.clients.forEach(client => {
@@ -306,7 +352,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-app.use(express.json({ limit: '100kb' }));
+app.use(express.json({ limit: '900kb' }));
 
 // ─── Public Routes ────────────────────────────────────────────────────────────
 app.get('/api/public/pilots', async (req, res) => {
@@ -404,7 +450,10 @@ app.post('/api/auth/refresh-office', async (req, res) => {
 // ─── Pilot Routes ─────────────────────────────────────────────────────────────
 app.get('/api/pilots', verifyToken, async (req, res) => {
   try {
-    const pilots = await queryAll('SELECT id, name, last_seen, current_wing, available FROM pilots ORDER BY name');
+    const pilots = await queryAll(`
+      SELECT id, name, last_seen, current_wing, available,
+        CASE WHEN avatar_data IS NOT NULL AND LENGTH(avatar_data) > 0 THEN 1 ELSE 0 END AS has_avatar
+      FROM pilots ORDER BY name`);
     const timers = await queryAll('SELECT * FROM active_timers');
     const lastLanded = await queryAll('SELECT pilot_id, MAX(landed_at) as last_landed FROM flights WHERE landed_at IS NOT NULL GROUP BY pilot_id');
 
@@ -434,7 +483,10 @@ app.get('/api/my-status', verifyToken, async (req, res) => {
   try {
     await run('UPDATE pilots SET last_seen = ? WHERE id = ?', [new Date().toISOString(), req.pilot.id]);
     const timer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
-    const pilot = await queryOne('SELECT current_wing, available FROM pilots WHERE id = ?', [req.pilot.id]);
+    const pilot = await queryOne(
+      'SELECT current_wing, available, CASE WHEN avatar_data IS NOT NULL AND LENGTH(avatar_data) > 0 THEN 1 ELSE 0 END AS has_avatar FROM pilots WHERE id = ?',
+      [req.pilot.id]
+    );
     let groupName = null;
     let groupPilots = [];
     let groupId = timer ? (timer.group_id || null) : null;
@@ -455,6 +507,7 @@ app.get('/api/my-status', verifyToken, async (req, res) => {
       timer_expires_at: timer ? timer.expires_at : null,
       current_wing: pilot ? pilot.current_wing : null,
       available: pilot ? (Number(pilot.available) === 1) : false,
+      has_avatar: pilot ? Number(pilot.has_avatar) === 1 : false,
       group_name: groupName,
       group_pilots: groupPilots,
       group_id: groupId
@@ -596,6 +649,38 @@ app.put('/api/pilot/wing', verifyToken, async (req, res) => {
   } catch (e) {
     console.error(e);
     console.error(e); res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── Profile photo (small JPEG/PNG/WebP stored as data URL in DB) ────────────
+app.put('/api/pilot/avatar', verifyToken, async (req, res) => {
+  try {
+    let dataUrl;
+    try {
+      dataUrl = validateAvatarBody(req.body);
+    } catch (err) {
+      return res.status(400).json({ error: err.message || 'Invalid avatar' });
+    }
+    await run('UPDATE pilots SET avatar_data = ? WHERE id = ?', [dataUrl, req.pilot.id]);
+    res.json({ message: dataUrl ? 'Profile photo updated' : 'Profile photo removed', has_avatar: !!dataUrl });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to update profile photo' });
+  }
+});
+
+app.get('/api/pilot/avatar/:pilotId', verifyPilotOrOffice, async (req, res) => {
+  try {
+    const { pilotId } = req.params;
+    if (req.pilot && req.pilot.id !== pilotId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    const row = await queryOne('SELECT avatar_data FROM pilots WHERE id = ?', [pilotId]);
+    if (!row || !row.avatar_data) return res.status(404).json({ error: 'No profile photo' });
+    res.json({ avatar: row.avatar_data });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to load profile photo' });
   }
 });
 

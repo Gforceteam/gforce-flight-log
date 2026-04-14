@@ -1703,27 +1703,31 @@ function resizeImageFileToJpegDataUrl(file, maxDim, quality) {
   });
 }
 
-/** Decoded image byte length from a data URL (matches server base64 check). */
-function dataUrlDecodedByteLength(dataUrl) {
-  const idx = dataUrl.indexOf('base64,');
-  if (idx < 0) return Infinity;
-  const b64 = dataUrl.slice(idx + 7).replace(/\s/g, '');
-  return Math.floor((b64.length * 3) / 4);
+/** Exact decoded byte length (matches Node Buffer.from(base64) used by the API). */
+function exactDataUrlDecodedBytes(dataUrl) {
+  try {
+    const m = dataUrl.match(/^data:image\/[^;]+;base64,(.+)$/i);
+    if (!m) return Infinity;
+    const b64 = m[1].replace(/\s/g, '');
+    return atob(b64).length;
+  } catch {
+    return Infinity;
+  }
 }
 
 /**
- * Resize/compress to JPEG until under maxBytes (API limit is 200KB; we target ~190KB).
+ * Resize/compress to JPEG until under maxBytes (must stay below API MAX_AVATAR_BYTES).
  */
 async function resizeImageFileToJpegDataUrlUnder(file, maxBytes) {
   let maxDim = 512;
   let quality = 0.82;
-  for (let round = 0; round < 18; round++) {
+  for (let round = 0; round < 28; round++) {
     const dataUrl = await resizeImageFileToJpegDataUrl(file, maxDim, quality);
-    if (dataUrlDecodedByteLength(dataUrl) <= maxBytes) return dataUrl;
-    quality -= 0.06;
-    if (quality < 0.38) {
+    if (exactDataUrlDecodedBytes(dataUrl) <= maxBytes) return dataUrl;
+    quality -= 0.05;
+    if (quality < 0.35) {
       quality = 0.78;
-      maxDim = Math.max(128, Math.floor(maxDim * 0.82));
+      maxDim = Math.max(96, Math.floor(maxDim * 0.8));
     }
   }
   throw new Error('Photo is still too large—try a simpler image or lower resolution.');
@@ -1776,11 +1780,20 @@ async function onSettingsAvatarFile(ev) {
   const statusEl = document.getElementById('settings-avatar-status');
   if (statusEl) statusEl.textContent = 'Processing…';
   try {
-    const dataUrl = await resizeImageFileToJpegDataUrlUnder(f, 190 * 1024);
+    const dataUrl = await resizeImageFileToJpegDataUrlUnder(f, 300 * 1024);
     const res = await apiFetch('/api/pilot/avatar', { method: 'PUT', body: JSON.stringify({ avatar: dataUrl }) });
     if (!res) throw new Error('Session expired—sign in again');
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || 'Upload failed');
+    const text = await res.text();
+    let data = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      const hint = res.status === 413 || /too large|payload|413/i.test(text)
+        ? 'Upload too large for the server. Try a smaller or simpler photo.'
+        : (text || '').slice(0, 120);
+      throw new Error(hint || `Upload failed (HTTP ${res.status})`);
+    }
+    if (!res.ok) throw new Error(data.error || `Upload failed (${res.status})`);
     pilotHasAvatar = true;
     if (pilotId) avatarCache[pilotId] = dataUrl;
     await refreshPilotHeaderAvatar();

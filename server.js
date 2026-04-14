@@ -1380,7 +1380,19 @@ async function pushDailyBackup() {
     const token = process.env.GITHUB_TOKEN;
     if (!token) { console.log('[backup] No GITHUB_TOKEN, skipping'); return; }
 
-    const repo = 'brookewhatnall/gforce-flight-log';
+    // Never push flight data to the public pilot-app repo. Use a private repo (override with GITHUB_BACKUP_REPO).
+    const repo = process.env.GITHUB_BACKUP_REPO || 'brookewhatnall/gforce-flight-data-backups';
+    const metaRes = await fetch(`https://api.github.com/repos/${repo}`, {
+      headers: { Authorization: `token ${token}`, 'User-Agent': 'gforce-api' }
+    });
+    if (metaRes.ok) {
+      const meta = await metaRes.json();
+      if (meta.private === false) {
+        console.error('[backup] Refusing to push: target repo is public. Flight CSV backups must use a private repository (set GITHUB_BACKUP_REPO).');
+        return;
+      }
+    }
+
     const apiUrl = `https://api.github.com/repos/${repo}/contents/${filename}`;
 
     // Check for existing file to get SHA

@@ -303,7 +303,8 @@ function verifyPilotOrOffice(req, res, next) {
       req.office = decoded;
       return next();
     }
-    if (decoded.type === 'pilot' && decoded.id) {
+    // Pilot: explicit type or legacy token with id (no type field)
+    if (decoded.id && decoded.type !== 'office') {
       req.pilot = decoded;
       return next();
     }

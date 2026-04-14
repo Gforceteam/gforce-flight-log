@@ -45,16 +45,16 @@ fly deploy --app gforce-api
 ## Secrets & Credentials
 
 ```
-# Fly.io (app: gforce-api)
-JWT_SECRET=gforce-prod-secret-2026
+# Fly.io (app: gforce-api) — get from Brooke's TOOLS.md or OpenClaw config
+JWT_SECRET=<get from TOOLS.md>
 OFFICE_PASSWORD=office123
-VAPID_PUBLIC_KEY=BGpwh5XQFo1PLmfcYqAwO3sFt8Y4JNMX89x594oX76yTW4cttHEgvcIndfNa-IM3RyjXW0-n_W3A2svCME2fySQ
-VAPID_PRIVATE_KEY=GdvRmlq2Z0q7fkVOTY_7SAfdzHrBzyD2NwP7-UQK43I
-GITHUB_TOKEN=<REDACTED — get from Brooke's TOOLS.md or OpenClaw config>
+VAPID_PUBLIC_KEY=<get from TOOLS.md>
+VAPID_PRIVATE_KEY=<get from TOOLS.md>
+GITHUB_TOKEN=<get from TOOLS.md>
 
-# Turso
+# Turso — get from Brooke's TOOLS.md or OpenClaw config
 TURSO_URL=libsql://gforce-api-nzgforce.aws-ap-northeast-1.turso.io
-TURSO_AUTH_TOKEN=<REDACTED — get from Brooke's TOOLS.md or OpenClaw config>
+TURSO_AUTH_TOKEN=<get from TOOLS.md>
 ```
 
 ## Pilot IDs & Passwords

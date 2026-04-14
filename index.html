@@ -848,9 +848,9 @@
       <!-- Profile photo -->
       <div class="card stat-section" style="margin-bottom:12px;">
         <div class="stat-section-title" style="margin-bottom:6px;">📷 Profile photo</div>
-        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Optional. Shown in the app header and on the office board. Images are resized on your device and stored securely.</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Optional. Shown in the app header and on the office board. Use JPEG or PNG (photos are compressed to fit the server limit). On iPhone, Settings → Camera → Formats → <strong>Most Compatible</strong> avoids HEIC issues.</div>
         <div class="settings-avatar-preview" id="settings-avatar-preview">?</div>
-        <input type="file" id="settings-avatar-input" accept="image/jpeg,image/png,image/webp,image/heic" style="display:none" />
+        <input type="file" id="settings-avatar-input" accept="image/jpeg,image/png,image/webp" style="display:none" />
         <div style="display:flex;flex-direction:column;gap:8px;">
           <button type="button" onclick="document.getElementById('settings-avatar-input').click()" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Choose photo…</button>
           <button type="button" id="settings-avatar-remove-btn" onclick="removePilotAvatar()" style="width:100%;padding:11px;background:none;border:1px solid var(--border-hi);border-radius:9999px;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;display:none;">Remove photo</button>
@@ -1703,12 +1703,39 @@ function resizeImageFileToJpegDataUrl(file, maxDim, quality) {
   });
 }
 
+/** Decoded image byte length from a data URL (matches server base64 check). */
+function dataUrlDecodedByteLength(dataUrl) {
+  const idx = dataUrl.indexOf('base64,');
+  if (idx < 0) return Infinity;
+  const b64 = dataUrl.slice(idx + 7).replace(/\s/g, '');
+  return Math.floor((b64.length * 3) / 4);
+}
+
+/**
+ * Resize/compress to JPEG until under maxBytes (API limit is 200KB; we target ~190KB).
+ */
+async function resizeImageFileToJpegDataUrlUnder(file, maxBytes) {
+  let maxDim = 512;
+  let quality = 0.82;
+  for (let round = 0; round < 18; round++) {
+    const dataUrl = await resizeImageFileToJpegDataUrl(file, maxDim, quality);
+    if (dataUrlDecodedByteLength(dataUrl) <= maxBytes) return dataUrl;
+    quality -= 0.06;
+    if (quality < 0.38) {
+      quality = 0.78;
+      maxDim = Math.max(128, Math.floor(maxDim * 0.82));
+    }
+  }
+  throw new Error('Photo is still too large—try a simpler image or lower resolution.');
+}
+
 async function removePilotAvatar() {
   const statusEl = document.getElementById('settings-avatar-status');
   try {
     const res = await apiFetch('/api/pilot/avatar', { method: 'PUT', body: JSON.stringify({ avatar: null }) });
-    const data = res ? await res.json().catch(() => ({})) : {};
-    if (!res || !res.ok) throw new Error(data.error || 'Failed to remove');
+    if (!res) throw new Error('Session expired—sign in again');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to remove');
     pilotHasAvatar = false;
     delete avatarCache[pilotId];
     await refreshPilotHeaderAvatar();
@@ -1740,13 +1767,20 @@ async function onSettingsAvatarFile(ev) {
   const f = ev.target.files && ev.target.files[0];
   ev.target.value = '';
   if (!f) return;
+  const name = (f.name || '').toLowerCase();
+  const isHeic = f.type === 'image/heic' || f.type === 'image/heif' || /\.hei[cf]$/i.test(name);
+  if (isHeic) {
+    toast('HEIC photos often fail in the browser. Use JPEG: iPhone Settings → Camera → Formats → Most Compatible, or pick a photo exported as JPG.');
+    return;
+  }
   const statusEl = document.getElementById('settings-avatar-status');
   if (statusEl) statusEl.textContent = 'Processing…';
   try {
-    const dataUrl = await resizeImageFileToJpegDataUrl(f, 512, 0.82);
+    const dataUrl = await resizeImageFileToJpegDataUrlUnder(f, 190 * 1024);
     const res = await apiFetch('/api/pilot/avatar', { method: 'PUT', body: JSON.stringify({ avatar: dataUrl }) });
-    const data = res ? await res.json().catch(() => ({})) : {};
-    if (!res || !res.ok) throw new Error(data.error || 'Upload failed');
+    if (!res) throw new Error('Session expired—sign in again');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Upload failed');
     pilotHasAvatar = true;
     if (pilotId) avatarCache[pilotId] = dataUrl;
     await refreshPilotHeaderAvatar();
@@ -2077,14 +2111,14 @@ function getLastCompletedWeekMondayNZ() {
   return addDaysYmd(mon, -7);
 }
 
+/** Compact D/M/YY for UI (e.g. 6/4/26 - 12/4/26). */
 function formatShortWeekRangeForButton(mon, sun) {
   function part(ymd) {
     const [y, mo, d] = ymd.split('-').map(Number);
-    return new Date(Date.UTC(y, mo - 1, d)).toLocaleDateString('en-NZ', {
-      weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC'
-    });
+    const yy = y % 100;
+    return `${d}/${mo}/${String(yy).padStart(2, '0')}`;
   }
-  return `${part(mon)} – ${part(sun)}`;
+  return `${part(mon)} - ${part(sun)}`;
 }
 
 // ─── Pilot Button Groups ──────────────────────────────────────────────────────
@@ -2525,11 +2559,14 @@ function exportLastCompletedWeekCompanyCSV() {
   exportWeeklyCompanyCSVForWeek(getLastCompletedWeekMondayNZ());
 }
 
-/** Filename: GforceLog%Pilot Name%Week%YYYY-MM-DD.csv (Monday = week start). */
+/** Filename: {FirstName}_logbook_{YYYY-MM-DD}.csv (Monday = week start). */
+function pilotFirstNameForFilename() {
+  const s = (getPilotFullName() || pilotName || 'Pilot').trim();
+  const first = s.split(/\s+/)[0] || 'Pilot';
+  return first.replace(/[/\\:*?"<>|%]/g, '-').replace(/^\.+/, '').trim() || 'Pilot';
+}
 function weeklyCompanyCsvFilename(monday) {
-  const raw = (getPilotFullName() || pilotName || '').trim() || 'Pilot';
-  const safe = raw.replace(/[/\\:*?"<>|%]/g, '-').replace(/\s+/g, ' ').trim() || 'Pilot';
-  return `GforceLog%${safe}%Week%${monday}.csv`;
+  return `${pilotFirstNameForFilename()}_logbook_${monday}.csv`;
 }
 
 /**
@@ -2834,14 +2871,14 @@ function renderStats() {
     <div class="card stat-section">
       <div class="stat-section-title">Export</div>
       <p style="font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.45;">
-        <strong>Last week (company)</strong> uses the Gforce Weekly Log layout. Row 1 uses your <strong>Name on weekly export</strong> and the <strong>glider</strong> selected on the Log tab (from Settings). It always targets the latest finished Mon–Sun week: on a Sunday that is the week ending that day; on any other day it is the previous Mon–Sun week so you can still send the file after Monday.
+        <strong>Logs for Georges</strong> uses the Gforce Weekly Log layout. Row 1 uses your <strong>Name on weekly export</strong> and the <strong>glider</strong> selected on the Log tab (from Settings). It always targets the latest finished Mon–Sun week: on a Sunday that is the week ending that day; on any other day it is the previous Mon–Sun week so you can still send the file after Monday.
       </p>
       <div style="display:flex;flex-direction:column;gap:10px;">
         <button type="button" onclick="exportFullLogbookCSV()" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:9999px;color:var(--text);padding:12px 20px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">⬇ Full logbook CSV (${flights.length})</button>
         ${monthFlights.length
           ? `<button type="button" onclick="exportMonthCSV()" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:9999px;color:var(--text);padding:12px 20px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">⬇ Export ${esc(monthLabel)} CSV (${monthFlights.length})</button>`
           : `<div style="font-size:12px;color:var(--muted);padding:8px 0;">No flights in <strong>${esc(monthLabel)}</strong> — change month above to export a different month.</div>`}
-        <button type="button" onclick="exportLastCompletedWeekCompanyCSV()" style="background:var(--accent);border:none;border-radius:9999px;color:#fff;padding:12px 20px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;letter-spacing:0.3px;">⬇ Last week (company): ${esc(lastWeekRangeLabel)}${lastWeekFlightsCount ? ` · ${lastWeekFlightsCount} flights` : ''}</button>
+        <button type="button" onclick="exportLastCompletedWeekCompanyCSV()" style="background:var(--accent);border:none;border-radius:9999px;color:#fff;padding:12px 20px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;letter-spacing:0.3px;">📧 Logs for Georges: ${esc(lastWeekRangeLabel)}, ${lastWeekFlightsCount} flights</button>
       </div>
     </div>` : '';
 

@@ -2559,14 +2559,21 @@ function exportLastCompletedWeekCompanyCSV() {
   exportWeeklyCompanyCSVForWeek(getLastCompletedWeekMondayNZ());
 }
 
-/** Filename: {FirstName}_logbook_{YYYY-MM-DD}.csv (Monday = week start). */
+/** Filename segment: week-start as DD-MM-YYYY (Monday = week start). */
+function weekStartDateForFilename(ymd) {
+  if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return ymd || '';
+  const [y, m, d] = ymd.split('-');
+  return `${d}-${m}-${y}`;
+}
+
+/** Filename: {FirstName}_logbook_{DD-MM-YYYY}.csv */
 function pilotFirstNameForFilename() {
   const s = (getPilotFullName() || pilotName || 'Pilot').trim();
   const first = s.split(/\s+/)[0] || 'Pilot';
   return first.replace(/[/\\:*?"<>|%]/g, '-').replace(/^\.+/, '').trim() || 'Pilot';
 }
 function weeklyCompanyCsvFilename(monday) {
-  return `${pilotFirstNameForFilename()}_logbook_${monday}.csv`;
+  return `${pilotFirstNameForFilename()}_logbook_${weekStartDateForFilename(monday)}.csv`;
 }
 
 /**

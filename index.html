@@ -8,8 +8,8 @@
   <meta name="apple-mobile-web-app-title" content="GForce" />
   <meta name="theme-color" content="#f37329" />
   <meta name="msapplication-TileColor" content="#000000" />
-  <link rel="apple-touch-icon" href="/checklist/icon-192.png" />
-  <link rel="manifest" href="/checklist/manifest.json" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
+  <link rel="manifest" href="./manifest.json" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -382,7 +382,6 @@
       border-radius: 9999px; font-size: 11px; color: var(--accent); padding: 2px 10px; font-weight: 600;
     }
 
-    #stats-panel { position: sticky; top: 0; z-index: 9; background: var(--bg); padding-top: 12px; }
     .stat-card {
       background: var(--card); border: 1px solid var(--border);
       border-radius: var(--radius); padding: 16px; text-align: center;
@@ -631,7 +630,7 @@
 <!-- ── LOGIN PAGE ──────────────────────────────────────────────────────────── -->
 <div id="login-page">
   <div class="login-logo" style="background:none;width:110px;height:110px;">
-    <img src="/checklist/icon-512.png" alt="GForce" style="width:100%;height:100%;object-fit:contain;" />
+    <img src="./icon-512.png" alt="GForce" style="width:100%;height:100%;object-fit:contain;" />
   </div>
   <h1>GFORCE</h1>
   <p class="subtitle">Flight Log</p>
@@ -763,10 +762,8 @@
     <div id="flights-list"></div>
   </div>
 
-  <div class="page" id="page-stats">
-    <div id="stats-panel">
-      <div class="stats-grid" id="stats-grid"></div>
-    </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;" id="page-stats">
+    <div class="stats-grid" id="stats-grid"></div>
     <div class="card" id="stats-breakdown"></div>
   </div>
 
@@ -1956,7 +1953,7 @@ function renderStats() {
   const monthStartStr = monthKey + '-01';
   const monthEndStr = monthEndDate.toLocaleDateString('en-CA', { timeZone: NZ_TZ });
 
-  const navHtml = `<div style="position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding:10px 14px;background:var(--bg);border-radius:10px;grid-column:1/-1;">
+  const navHtml = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding:10px 14px;background:var(--surface);border-radius:10px;grid-column:1/-1;">
     <div style="display:flex;align-items:center;gap:12px;">
       <button onclick="changeStatsMonth(-1)" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 14px;cursor:pointer;font-size:20px;line-height:1;">‹</button>
       <div style="font-weight:700;font-size:15px;color:var(--accent);">${monthLabel}</div>

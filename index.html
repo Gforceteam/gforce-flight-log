@@ -539,6 +539,104 @@
     }
     .settings-avatar-preview.has-photo { padding: 0; background: var(--surface); }
     .settings-avatar-preview.has-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    /* Settings tab */
+    .settings-page-inner { max-width: 520px; margin: 0 auto; padding: 0 4px 32px; }
+    .settings-intro {
+      font-size: 14px; color: var(--text-2); line-height: 1.5; margin: 0 0 20px; padding: 0 2px;
+    }
+    .settings-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 18px 20px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow-sm);
+    }
+    .settings-card-title {
+      font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--muted); margin: 0 0 6px;
+    }
+    .settings-card-head {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px;
+    }
+    .settings-card-head h2 {
+      margin: 0; font-size: 17px; font-weight: 700; color: var(--text); letter-spacing: -0.02em;
+    }
+    .settings-card-desc {
+      font-size: 13px; color: var(--text-2); line-height: 1.5; margin: 0 0 14px;
+    }
+    .settings-input {
+      width: 100%; padding: 14px 14px; border-radius: 12px; border: 1px solid var(--border-hi);
+      background: var(--surface); color: var(--text); font-size: 16px; box-sizing: border-box;
+      outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+      -webkit-appearance: none; appearance: none;
+    }
+    .settings-input:focus {
+      border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+    .settings-btn {
+      width: 100%; padding: 14px 16px; border-radius: 9999px; font-size: 15px; font-weight: 700;
+      cursor: pointer; font-family: 'Montserrat', sans-serif; border: none;
+      touch-action: manipulation;
+    }
+    .settings-btn-primary { background: var(--accent); color: #fff; }
+    .settings-btn-secondary {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border-hi);
+      font-weight: 600;
+    }
+    .settings-btn-ghost {
+      background: transparent; color: var(--muted); border: 1px dashed var(--border-hi);
+      font-weight: 600;
+    }
+    .settings-btn-danger-outline {
+      background: var(--surface); color: var(--danger); border: 1px solid var(--danger-dim); font-weight: 600;
+    }
+    .theme-seg { display: flex; gap: 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--border-hi); }
+    .theme-seg button {
+      flex: 1; padding: 12px 14px; border: none; background: var(--surface); color: var(--text-2);
+      font-size: 14px; font-weight: 600; cursor: pointer; touch-action: manipulation;
+    }
+    .theme-seg button.active {
+      background: var(--accent-dim); color: var(--accent); font-weight: 700;
+    }
+
+    .glider-compact {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 12px 14px; border-radius: 12px; background: var(--surface);
+      border: 1px solid var(--border-hi); margin-bottom: 8px;
+    }
+    .glider-compact-main { min-width: 0; flex: 1; }
+    .glider-reg {
+      display: block; font-size: 15px; font-weight: 800; letter-spacing: 0.04em;
+      color: var(--text); font-variant-numeric: tabular-nums;
+    }
+    .glider-meta {
+      display: block; font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.35;
+    }
+    .glider-compact-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .glider-compact-actions button {
+      padding: 8px 12px; border-radius: 9999px; border: none; background: transparent;
+      font-size: 13px; font-weight: 600; cursor: pointer; color: var(--accent); touch-action: manipulation;
+    }
+    .glider-compact-actions button.glider-del { color: var(--danger); }
+    .settings-empty { font-size: 13px; color: var(--muted); padding: 8px 0 4px; margin: 0; }
+
+    .glider-editor-panel {
+      margin-top: 12px; padding: 16px; border-radius: 14px;
+      background: var(--surface); border: 1px solid var(--accent-dim);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+    }
+    [data-theme="light"] .glider-editor-panel { box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+    .glider-editor-title {
+      font-size: 14px; font-weight: 700; color: var(--accent); margin-bottom: 14px;
+    }
+    .glider-editor-grid { display: grid; gap: 10px; }
+    .glider-editor-grid label {
+      display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 4px;
+    }
+    .glider-editor-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
     .pilot-info { flex: 1; min-width: 0; }
     .pilot-name { font-size: 16px; font-weight: 700; color: var(--text); }
     .pilot-status { font-size: 13px; margin-top: 3px; font-weight: 500; color: var(--text-2); }
@@ -738,7 +836,7 @@
   </div>
   <div class="page-header" id="header-settings" style="display:none">
     <h1>Settings</h1>
-    <p>App &amp; account</p>
+    <p>Profile, gliders &amp; preferences</p>
   </div>
   <div class="page-header" id="header-stats" style="display:none">
     <div class="stats-title-row">
@@ -843,75 +941,124 @@
   </div>
 
   <div class="page" id="page-settings">
-    <div style="padding:0 0 24px;">
+    <div class="settings-page-inner">
+
+      <p class="settings-intro">Profile photo, export name, and gliders sync with logging and weekly CSV. Everything else stays on this device.</p>
 
       <!-- Profile photo -->
-      <div class="card stat-section" style="margin-bottom:12px;">
-        <div class="stat-section-title" style="margin-bottom:6px;">📷 Profile photo</div>
-        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Optional. Shown in the app header and on the office board. Use JPEG or PNG (photos are compressed to fit the server limit). On iPhone, Settings → Camera → Formats → <strong>Most Compatible</strong> avoids HEIC issues.</div>
+      <section class="settings-card" aria-labelledby="settings-h-photo">
+        <div class="settings-card-head">
+          <div>
+            <p class="settings-card-title" id="settings-h-photo">Photo</p>
+            <h2>Profile picture</h2>
+          </div>
+        </div>
+        <p class="settings-card-desc">Shown in the header and for office. Use JPEG or PNG. On iPhone: Settings → Camera → Formats → <strong>Most Compatible</strong> (avoids HEIC).</p>
         <div class="settings-avatar-preview" id="settings-avatar-preview">?</div>
         <input type="file" id="settings-avatar-input" accept="image/jpeg,image/png,image/webp" style="display:none" />
         <div style="display:flex;flex-direction:column;gap:8px;">
-          <button type="button" onclick="document.getElementById('settings-avatar-input').click()" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Choose photo…</button>
-          <button type="button" id="settings-avatar-remove-btn" onclick="removePilotAvatar()" style="width:100%;padding:11px;background:none;border:1px solid var(--border-hi);border-radius:9999px;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;display:none;">Remove photo</button>
+          <button type="button" class="settings-btn settings-btn-secondary" onclick="document.getElementById('settings-avatar-input').click()">Choose photo</button>
+          <button type="button" class="settings-btn settings-btn-ghost" id="settings-avatar-remove-btn" onclick="removePilotAvatar()" style="display:none;">Remove photo</button>
         </div>
-        <div id="settings-avatar-status" style="font-size:12px;color:var(--muted);margin-top:10px;min-height:16px;"></div>
-      </div>
+        <div id="settings-avatar-status" style="font-size:12px;color:var(--muted);margin-top:12px;min-height:16px;"></div>
+      </section>
 
-      <!-- Full name (weekly CSV) -->
-      <div class="card stat-section" style="margin-bottom:12px;">
-        <div class="stat-section-title" style="margin-bottom:6px;">Name on weekly export</div>
-        <div style="font-size:13px;color:var(--muted);margin-bottom:10px;">Your full name is written to cell B1 of the company weekly CSV.</div>
-        <input type="text" id="settings-full-name" placeholder="e.g. Brooke Whatnall" maxlength="120" autocomplete="name"
-          style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:15px;box-sizing:border-box;" />
-        <button type="button" onclick="savePilotFullNameSetting()" style="margin-top:10px;width:100%;padding:11px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Save name</button>
-      </div>
+      <!-- Export name -->
+      <section class="settings-card" aria-labelledby="settings-h-name">
+        <div class="settings-card-head">
+          <div>
+            <p class="settings-card-title" id="settings-h-name">Weekly CSV</p>
+            <h2>Name on export</h2>
+          </div>
+        </div>
+        <p class="settings-card-desc">Your full name appears in the company weekly log file (cell B1).</p>
+        <input type="text" id="settings-full-name" class="settings-input" placeholder="e.g. Brooke Whatnall" maxlength="120" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" inputmode="text" />
+        <button type="button" class="settings-btn settings-btn-secondary" style="margin-top:12px;" onclick="savePilotFullNameSetting()">Save name</button>
+      </section>
 
       <!-- Gliders -->
-      <div class="card stat-section" style="margin-bottom:12px;">
-        <div class="stat-section-title" style="margin-bottom:6px;">Gliders</div>
-        <div style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.45;">Manage the wings you fly. The Log tab uses a dropdown of these registrations. Weekly export uses the weight range of the glider you last selected, and registration in cell F1.</div>
-        <div id="settings-gliders-list"></div>
-        <button type="button" onclick="addGliderRow()" style="width:100%;margin-top:4px;padding:11px;background:var(--surface);border:1px dashed var(--border-hi);border-radius:12px;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;">+ Add glider</button>
-        <button type="button" onclick="saveGlidersFromForm()" style="margin-top:10px;width:100%;padding:13px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">Save gliders</button>
-      </div>
+      <section class="settings-card" aria-labelledby="settings-h-gliders">
+        <div class="settings-card-head">
+          <div>
+            <p class="settings-card-title" id="settings-h-gliders">Equipment</p>
+            <h2>Gliders</h2>
+          </div>
+        </div>
+        <p class="settings-card-desc">Pick a glider on the Log tab. Weekly export uses the <strong>weight range</strong> and <strong>registration</strong> of the wing you last selected.</p>
+        <div id="settings-gliders-saved"></div>
+        <div id="settings-gliders-editor-wrap" class="glider-editor-panel" style="display:none;" aria-hidden="true">
+          <div class="glider-editor-title" id="glider-editor-title">New glider</div>
+          <input type="hidden" id="glider-editor-id" value="" />
+          <div class="glider-editor-grid">
+            <div>
+              <label for="glider-f-reg">Registration</label>
+              <input type="text" id="glider-f-reg" class="settings-input" placeholder="e.g. ZK-GFC" maxlength="32" autocomplete="off" autocapitalize="characters" style="text-transform:uppercase;" />
+            </div>
+            <div>
+              <label for="glider-f-man">Manufacturer</label>
+              <input type="text" id="glider-f-man" class="settings-input" placeholder="Brand" maxlength="80" autocomplete="off" />
+            </div>
+            <div>
+              <label for="glider-f-model">Model</label>
+              <input type="text" id="glider-f-model" class="settings-input" placeholder="Model name" maxlength="80" autocomplete="off" />
+            </div>
+            <div>
+              <label for="glider-f-size">Size</label>
+              <input type="text" id="glider-f-size" class="settings-input" placeholder="e.g. M" maxlength="32" autocomplete="off" />
+            </div>
+            <div>
+              <label for="glider-f-wr">Weight range</label>
+              <input type="text" id="glider-f-wr" class="settings-input" placeholder="e.g. 90–120 kg" maxlength="64" autocomplete="off" />
+            </div>
+          </div>
+          <div class="glider-editor-actions">
+            <button type="button" class="settings-btn settings-btn-primary" id="glider-editor-save">Save glider</button>
+            <button type="button" class="settings-btn settings-btn-secondary" id="glider-editor-cancel">Cancel</button>
+          </div>
+        </div>
+        <button type="button" class="settings-btn settings-btn-ghost" style="margin-top:12px;" id="settings-add-glider-btn">Add new glider</button>
+      </section>
 
       <!-- Theme -->
-      <div class="card stat-section" style="margin-bottom:12px;">
-        <div class="stat-section-title" style="margin-bottom:6px;">🎨 Theme</div>
-        <div style="display:flex;gap:8px;">
-          <button id="btn-theme-dark" onclick="setTheme('dark')" style="flex:1;padding:12px;background:var(--surface);border:2px solid var(--border);border-radius:12px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">🌙 Dark</button>
-          <button id="btn-theme-light" onclick="setTheme('light')" style="flex:1;padding:12px;background:var(--surface);border:2px solid var(--border);border-radius:12px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">☀️ Light</button>
+      <section class="settings-card">
+        <p class="settings-card-title">Appearance</p>
+        <h2 style="margin:0 0 12px;font-size:17px;font-weight:700;">Theme</h2>
+        <div class="theme-seg" role="group" aria-label="Theme">
+          <button type="button" id="btn-theme-dark" onclick="setTheme('dark')">Dark</button>
+          <button type="button" id="btn-theme-light" onclick="setTheme('light')">Light</button>
         </div>
-      </div>
+      </section>
 
       <!-- App update -->
-      <div class="card stat-section" style="margin-bottom:12px;">
-        <div class="stat-section-title" style="margin-bottom:6px;">🔄 App Version</div>
-        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Pull the latest version from the server. Do this if the office has told you there's been an update.</div>
+      <section class="settings-card">
+        <p class="settings-card-title">Updates</p>
+        <h2 style="margin:0 0 8px;font-size:17px;font-weight:700;">App version</h2>
+        <p class="settings-card-desc" style="margin-bottom:12px;">Reload to pick up the latest files from the server after an office update.</p>
         <div id="settings-update-status" style="font-size:12px;color:var(--muted);margin-bottom:10px;"></div>
-        <button onclick="updateApp()" style="width:100%;padding:13px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;letter-spacing:0.5px;">⬇ Update App</button>
-      </div>
+        <button type="button" class="settings-btn settings-btn-primary" onclick="updateApp()">Update app</button>
+      </section>
 
-      <!-- Push notifications -->
-      <div class="card stat-section" style="margin-bottom:12px;">
-        <div class="stat-section-title" style="margin-bottom:6px;">🔔 Push Notifications</div>
-        <div id="settings-notif-status" style="font-size:13px;color:var(--muted);margin-bottom:14px;">Checking…</div>
-        <button id="settings-notif-btn" onclick="settingsToggleNotif()" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Enable Notifications</button>
-      </div>
+      <!-- Push -->
+      <section class="settings-card">
+        <p class="settings-card-title">Alerts</p>
+        <h2 style="margin:0 0 8px;font-size:17px;font-weight:700;">Push notifications</h2>
+        <div id="settings-notif-status" style="font-size:13px;color:var(--text-2);line-height:1.45;margin-bottom:12px;">Checking…</div>
+        <button type="button" class="settings-btn settings-btn-secondary" id="settings-notif-btn" onclick="settingsToggleNotif()">Enable notifications</button>
+      </section>
 
-      <!-- Change password -->
-      <div class="card stat-section" style="margin-bottom:12px;">
-        <div class="stat-section-title" style="margin-bottom:6px;">🔑 Change Password</div>
-        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Update your personal login password.</div>
-        <button onclick="showChangePwModal()" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Change Password</button>
-      </div>
+      <!-- Password -->
+      <section class="settings-card">
+        <p class="settings-card-title">Security</p>
+        <h2 style="margin:0 0 8px;font-size:17px;font-weight:700;">Password</h2>
+        <p class="settings-card-desc" style="margin-bottom:12px;">Change the PIN/password you use to sign in as a pilot.</p>
+        <button type="button" class="settings-btn settings-btn-secondary" onclick="showChangePwModal()">Change password</button>
+      </section>
 
-      <!-- Logout -->
-      <div class="card stat-section">
-        <div class="stat-section-title" style="margin-bottom:6px;">Account</div>
-        <button onclick="doLogout()" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--danger);font-size:14px;font-weight:600;cursor:pointer;">Sign Out</button>
-      </div>
+      <!-- Sign out -->
+      <section class="settings-card">
+        <p class="settings-card-title">Session</p>
+        <button type="button" class="settings-btn settings-btn-danger-outline" onclick="doLogout()">Sign out</button>
+      </section>
 
     </div>
   </div>
@@ -1304,65 +1451,130 @@ function ensureWingOptionForReg(reg) {
   sel.value = r;
 }
 
+function gliderCompactMeta(g) {
+  const bits = [
+    [g.manufacturer, g.model].filter(Boolean).join(' ').trim(),
+    g.size || '',
+    g.weightRange || ''
+  ].filter(Boolean);
+  return bits.join(' · ') || '—';
+}
+
 function renderGlidersSettingsList() {
-  const container = document.getElementById('settings-gliders-list');
+  const container = document.getElementById('settings-gliders-saved');
   if (!container) return;
   const gliders = loadGliders();
-  const inp = 'width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;box-sizing:border-box;';
   if (!gliders.length) {
-    container.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0;">No gliders yet. Tap &quot;Add glider&quot; below.</div>';
+    container.innerHTML = '<p class="settings-empty">No gliders yet — add your first wing below.</p>';
     return;
   }
-  container.innerHTML = gliders.map((g, idx) => `
-    <div class="glider-row" data-glider-id="${esc(g.id)}" style="border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;background:var(--card);">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <span style="font-weight:700;font-size:13px;color:var(--accent);">Glider ${idx + 1}</span>
-        <button type="button" onclick="deleteGliderById(this.closest('.glider-row').getAttribute('data-glider-id'))" style="background:none;border:none;color:var(--danger);font-size:12px;cursor:pointer;">Remove</button>
+  container.innerHTML = gliders.map(g => `
+    <div class="glider-compact" data-glider-id="${esc(g.id)}">
+      <div class="glider-compact-main">
+        <span class="glider-reg">${esc(g.registration || '—')}</span>
+        <span class="glider-meta">${esc(gliderCompactMeta(g))}</span>
       </div>
-      <div style="display:grid;gap:8px;">
-        <input type="text" data-field="registration" placeholder="Registration (e.g. ZK-GFC)" value="${esc(g.registration)}" style="${inp}text-transform:uppercase;" />
-        <input type="text" data-field="manufacturer" placeholder="Manufacturer" value="${esc(g.manufacturer)}" style="${inp}" />
-        <input type="text" data-field="model" placeholder="Model" value="${esc(g.model)}" style="${inp}" />
-        <input type="text" data-field="size" placeholder="Size" value="${esc(g.size)}" style="${inp}" />
-        <input type="text" data-field="weightRange" placeholder="Weight range (e.g. 100–120 kg)" value="${esc(g.weightRange)}" style="${inp}" />
+      <div class="glider-compact-actions">
+        <button type="button" class="glider-edit-btn" data-glider-id="${esc(g.id)}">Edit</button>
+        <button type="button" class="glider-del-btn glider-del" data-glider-id="${esc(g.id)}">Delete</button>
       </div>
     </div>`).join('');
 }
 
+function openGliderEditor(idOrNew) {
+  const wrap = document.getElementById('settings-gliders-editor-wrap');
+  const titleEl = document.getElementById('glider-editor-title');
+  const idField = document.getElementById('glider-editor-id');
+  const reg = document.getElementById('glider-f-reg');
+  const man = document.getElementById('glider-f-man');
+  const model = document.getElementById('glider-f-model');
+  const size = document.getElementById('glider-f-size');
+  const wr = document.getElementById('glider-f-wr');
+  if (!wrap || !titleEl || !idField || !reg) return;
+  if (idOrNew === 'new') {
+    titleEl.textContent = 'New glider';
+    idField.value = '';
+    reg.value = '';
+    man.value = '';
+    model.value = '';
+    size.value = '';
+    wr.value = '';
+  } else {
+    const g = loadGliders().find(x => x.id === idOrNew);
+    if (!g) return;
+    titleEl.textContent = 'Edit glider';
+    idField.value = g.id;
+    reg.value = g.registration || '';
+    man.value = g.manufacturer || '';
+    model.value = g.model || '';
+    size.value = g.size || '';
+    wr.value = g.weightRange || '';
+  }
+  wrap.style.display = 'block';
+  wrap.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(() => {
+    try { reg.focus({ preventScroll: false }); } catch { reg.focus(); }
+  });
+}
+
+function closeGliderEditor() {
+  const wrap = document.getElementById('settings-gliders-editor-wrap');
+  if (wrap) {
+    wrap.style.display = 'none';
+    wrap.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function saveGliderFromEditor() {
+  const idField = document.getElementById('glider-editor-id');
+  const reg = (document.getElementById('glider-f-reg')?.value || '').trim().toUpperCase();
+  if (!reg) {
+    toast('Registration is required');
+    return;
+  }
+  const payload = {
+    id: idField?.value || '',
+    manufacturer: (document.getElementById('glider-f-man')?.value || '').trim(),
+    model: (document.getElementById('glider-f-model')?.value || '').trim(),
+    size: (document.getElementById('glider-f-size')?.value || '').trim(),
+    weightRange: (document.getElementById('glider-f-wr')?.value || '').trim(),
+    registration: reg
+  };
+  let list = loadGliders();
+  if (payload.id) {
+    list = list.map(g => (g.id === payload.id ? normalizeGlider({ ...g, ...payload }) : g));
+  } else {
+    list.push(normalizeGlider(payload));
+  }
+  saveGliders(list);
+  refreshWingDropdown();
+  closeGliderEditor();
+  renderGlidersSettingsList();
+  toast('Glider saved');
+}
+
 function deleteGliderById(id) {
+  if (!id || !confirm('Remove this glider from your list?')) return;
   saveGliders(loadGliders().filter(g => g.id !== id));
   renderGlidersSettingsList();
   refreshWingDropdown();
   toast('Glider removed');
 }
 
-function addGliderRow() {
-  const list = loadGliders();
-  list.push(normalizeGlider({}));
-  saveGliders(list);
-  renderGlidersSettingsList();
-}
-
-function saveGlidersFromForm() {
-  const rows = document.querySelectorAll('#settings-gliders-list .glider-row');
-  const list = [];
-  rows.forEach(row => {
-    const id = row.getAttribute('data-glider-id');
-    const get = field => (row.querySelector(`[data-field="${field}"]`)?.value || '').trim();
-    const reg = get('registration').toUpperCase();
-    if (!reg) return;
-    list.push(normalizeGlider({
-      id,
-      manufacturer: get('manufacturer'),
-      model: get('model'),
-      size: get('size'),
-      weightRange: get('weightRange'),
-      registration: reg
-    }));
+function setupGliderSettingsEvents() {
+  const addBtn = document.getElementById('settings-add-glider-btn');
+  if (addBtn) addBtn.addEventListener('click', () => openGliderEditor('new'));
+  document.getElementById('glider-editor-save')?.addEventListener('click', saveGliderFromEditor);
+  document.getElementById('glider-editor-cancel')?.addEventListener('click', closeGliderEditor);
+  document.getElementById('settings-gliders-saved')?.addEventListener('click', e => {
+    const edit = e.target.closest('.glider-edit-btn');
+    const del = e.target.closest('.glider-del-btn');
+    if (edit) {
+      openGliderEditor(edit.getAttribute('data-glider-id'));
+      return;
+    }
+    if (del) deleteGliderById(del.getAttribute('data-glider-id'));
   });
-  saveGliders(list);
-  refreshWingDropdown();
-  toast('Gliders saved');
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -1382,6 +1594,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const avatarInput = document.getElementById('settings-avatar-input');
   if (avatarInput) avatarInput.addEventListener('change', onSettingsAvatarFile);
+  setupGliderSettingsEvents();
 
   // Close edit modal on backdrop click or Escape
   document.getElementById('office-edit-modal').addEventListener('click', function(e) {
@@ -4073,30 +4286,31 @@ async function renderSettingsPage() {
   const fnEl = document.getElementById('settings-full-name');
   if (fnEl) fnEl.value = getPilotFullName();
   renderGlidersSettingsList();
+  closeGliderEditor();
+  // Do not await — network delay was blocking Settings (keyboard could take 30s+ to appear).
   if (pilotHasAvatar && pilotId && !avatarCache[pilotId]) {
-    await fetchPilotAvatarCached(pilotId);
+    void fetchPilotAvatarCached(pilotId).then(() => updateSettingsAvatarPreview()).catch(() => {});
   }
   updateSettingsAvatarPreview();
   // Notification status
   const statusEl = document.getElementById('settings-notif-status');
   const btnEl = document.getElementById('settings-notif-btn');
   if (statusEl && btnEl) {
+    btnEl.style.display = '';
+    btnEl.className = 'settings-btn settings-btn-secondary';
     if (!('Notification' in window)) {
-      statusEl.textContent = 'Push notifications not supported on this browser.';
+      statusEl.textContent = 'Push notifications are not supported in this browser.';
       btnEl.style.display = 'none';
     } else if (Notification.permission === 'granted') {
-      statusEl.textContent = '✅ Push notifications are enabled. You will be alerted when the office sends you away.';
-      btnEl.textContent = 'Disable Notifications';
-      btnEl.style.borderColor = 'var(--danger)';
-      btnEl.style.color = 'var(--danger)';
+      statusEl.textContent = 'You will get an alert when the office starts your away timer.';
+      btnEl.textContent = 'Turn off notifications';
+      btnEl.className = 'settings-btn settings-btn-danger-outline';
     } else if (Notification.permission === 'denied') {
-      statusEl.textContent = '🚫 Notifications are blocked. Go to iPhone Settings → Safari → [this site] → Notifications to allow them.';
+      statusEl.textContent = 'Notifications are blocked. On iPhone: Settings → Safari → this site → Notifications.';
       btnEl.style.display = 'none';
     } else {
-      statusEl.textContent = 'Notifications are off. Enable them to get alerted when the office sends you away.';
-      btnEl.textContent = 'Enable Notifications';
-      btnEl.style.borderColor = '';
-      btnEl.style.color = '';
+      statusEl.textContent = 'Get alerted when the office sends you away.';
+      btnEl.textContent = 'Enable notifications';
     }
   }
 }
@@ -4114,10 +4328,8 @@ function updateThemeButtons() {
   const darkBtn = document.getElementById('btn-theme-dark');
   const lightBtn = document.getElementById('btn-theme-light');
   if (darkBtn && lightBtn) {
-    darkBtn.style.borderColor = saved === 'dark' ? 'var(--accent)' : 'var(--border)';
-    darkBtn.style.color = saved === 'dark' ? 'var(--accent)' : 'var(--text)';
-    lightBtn.style.borderColor = saved === 'light' ? 'var(--accent)' : 'var(--border)';
-    lightBtn.style.color = saved === 'light' ? 'var(--accent)' : 'var(--text)';
+    darkBtn.classList.toggle('active', saved === 'dark');
+    lightBtn.classList.toggle('active', saved === 'light');
   }
 }
 
@@ -4135,6 +4347,7 @@ function updateOfficeThemeBtn() {
 (function initTheme() {
   const saved = localStorage.getItem('gforce_theme') || 'dark';
   document.documentElement.setAttribute('data-theme', saved);
+  if (typeof updateThemeButtons === 'function') updateThemeButtons();
 })();
 
 async function settingsToggleNotif() {

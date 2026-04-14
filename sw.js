@@ -1,16 +1,26 @@
-const CACHE = 'gforce-v8';
-const APP = '/checklist/';
-const VERSION_URL = APP + 'version.json';
+const CACHE = 'gforce-v9';
 
-// Static assets that change rarely and are safe to cache long-term
+// Resolve all assets relative to this service worker (works on GitHub Pages /repo-name/ and at domain root).
+const SW_DIR = new URL('.', self.location);
+const VERSION_URL = new URL('version.json', SW_DIR).href;
+const INDEX_URL = new URL('index.html', SW_DIR).href;
+const ICON_192_URL = new URL('icon-192.png', SW_DIR).href;
+
 const STATIC = [
-  APP,
-  APP + 'index.html',
-  APP + 'manifest.json',
-  APP + 'icon-192.png',
-  APP + 'icon-512.png',
-  APP + 'version.json',
+  SW_DIR.href,
+  INDEX_URL,
+  new URL('manifest.json', SW_DIR).href,
+  new URL('icon-192.png', SW_DIR).href,
+  new URL('icon-512.png', SW_DIR).href,
+  new URL('version.json', SW_DIR).href,
 ];
+
+const SW_PREFIX = SW_DIR.pathname.replace(/\/$/, '');
+
+function isAppPath(pathname) {
+  if (!SW_PREFIX) return true;
+  return pathname === SW_PREFIX || pathname.startsWith(SW_PREFIX + '/');
+}
 
 // Check version and notify all open clients if a newer version exists.
 // NOTE: localStorage is NOT available in service worker scope — version dedup
@@ -27,7 +37,6 @@ async function checkVersion() {
 }
 
 self.addEventListener('install', e => {
-  // Single waitUntil combining cache priming + version check
   e.waitUntil(
     caches.open(CACHE)
       .then(c => c.addAll(STATIC))
@@ -42,21 +51,15 @@ self.addEventListener('activate', e => {
       .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
       .then(() => checkVersion())
-    // NOTE: setInterval is NOT used here — service workers are terminated when
-    // idle so interval callbacks are unreliable. Version checks happen on each
-    // SW activation (i.e. after every browser/app restart) instead.
   );
 });
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // Only intercept same-origin requests within our app path
   if (url.origin !== self.location.origin) return;
-  if (!url.pathname.startsWith('/checklist')) return;
+  if (!isAppPath(url.pathname)) return;
 
-  // HTML (navigate) — network first so updates are always visible on refresh.
-  // Fall back to cache only when genuinely offline.
   if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request)
@@ -68,15 +71,14 @@ self.addEventListener('fetch', e => {
         })
         .catch(() =>
           caches.match(e.request)
-            .then(c => c || caches.match(APP + 'index.html'))
-            .then(c => c || caches.match(APP))
+            .then(c => c || caches.match(INDEX_URL))
+            .then(c => c || caches.match(SW_DIR.href))
             .then(c => c || new Response('<h1>Offline</h1><p>Please reconnect to use GForce.</p>', { headers: { 'Content-Type': 'text/html' } }))
         )
     );
     return;
   }
 
-  // Static assets (icons, manifest) — cache first, network fallback
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
@@ -88,31 +90,35 @@ self.addEventListener('fetch', e => {
   );
 });
 
-// ─── Push notification handler ────────────────────────────────────────────────
 self.addEventListener('push', e => {
   let data = { title: '🪂 GForce — YOU\'RE AWAY!', body: 'Office has started your timer.' };
   try { if (e.data) data = { ...data, ...e.data.json() }; } catch (_) {}
   e.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: '/checklist/icon-192.png',
-      badge: '/checklist/icon-192.png',
+      icon: ICON_192_URL,
+      badge: ICON_192_URL,
       vibrate: [600, 200, 600, 200, 1000],
       requireInteraction: data.requireInteraction !== false,
       tag: data.tag || 'pilot-sent-away',
-      data: { url: APP }
+      data: { url: SW_DIR.href }
     })
   );
 });
 
-// When pilot taps the system notification, focus or open the app
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
-      const appClient = cs.find(c => c.url.includes('/checklist'));
+      const appClient = cs.find(c => {
+        try {
+          return isAppPath(new URL(c.url).pathname);
+        } catch {
+          return false;
+        }
+      });
       if (appClient) return appClient.focus();
-      return clients.openWindow(APP + 'index.html');
+      return clients.openWindow(INDEX_URL);
     })
   );
 });

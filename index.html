@@ -80,7 +80,6 @@
       letter-spacing: 1px;
     }
     .login-form button:hover { background: #e5681f; }
-    }
     #login-error { color: var(--danger); font-size: 13px; margin-top: 10px; text-align: center; display: none; }
 
     /* DASHBOARD */
@@ -316,7 +315,7 @@
 
 <script>
 // ─── Config ──────────────────────────────────────────────────────────────────
-const API_BASE = 'https://gforce-api-6jpm.onrender.com';
+const API_BASE = 'https://gforce-api.fly.dev';
 
 let token = localStorage.getItem('gforce_office_token');
 let ws = null;
@@ -612,7 +611,7 @@ function showTab(name) {
 
 // ─── WebSocket ────────────────────────────────────────────────────────────────
 function connectWS() {
-  const wsUrl = `wss://gforce-api-6jpm.onrender.com`;
+  const wsUrl = `wss://gforce-api.fly.dev`;
   ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {

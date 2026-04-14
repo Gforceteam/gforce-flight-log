@@ -382,7 +382,16 @@ async function loadData() {
       api('/api/office/flights')
     ]);
     if (pilotsRes.status === 401) { doLogout(); return; }
-    pilots = await pilotsRes.json();
+    if (pilotsRes.status === 403) {
+      toast('API config error: office token rejected on /api/pilots — server needs update');
+      return;
+    }
+    if (!pilotsRes.ok) {
+      toast(`Server error ${pilotsRes.status} loading pilots`);
+      return;
+    }
+    const pilotsData = await pilotsRes.json();
+    pilots = Array.isArray(pilotsData) ? pilotsData : [];
     allFlights = flightsRes.ok ? await flightsRes.json() : [];
     renderOfficeTab();
     renderFlightsTab();

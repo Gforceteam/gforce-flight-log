@@ -1,22 +1,22 @@
 # Gforce Flight Log (monorepo)
 
-Tandem paragliding flight logger: pilot PWA, office staff dashboard, API server code, and committed CSV backups live in **this single repository**. GitHub Pages serves the **repository root** so the pilot app URL is unchanged.
+Tandem paragliding flight logger: pilot PWA (with **built-in office mode**), API server code, and committed CSV backups live in **this single repository**. GitHub Pages serves the **repository root** so the public URL is unchanged.
 
 ## URLs
 
 | App | URL |
 |-----|-----|
-| Pilot PWA | https://brookewhatnall.github.io/gforce-flight-log/ |
-| Staff dashboard | https://brookewhatnall.github.io/gforce-flight-log/staff-dashboard/ |
+| Pilot + office (same PWA) | https://brookewhatnall.github.io/gforce-flight-log/ |
 | API (Fly.io) | https://gforce-api.fly.dev |
 | WebSocket | wss://gforce-api.fly.dev |
+
+**Office staff** do not use a second URL. On the login screen, choose **— Office —** in the pilot dropdown, then enter the **office password** (same as API `OFFICE_PASSWORD`). That unlocks the office dashboard (timers, roster, exports) inside this app.
 
 ## Repo layout
 
 | Path | Purpose |
 |------|---------|
-| Repo root (`index.html`, `sw.js`, `manifest.json`, icons) | Pilot PWA — **must stay at root** for the same GitHub Pages URL |
-| `staff-dashboard/` | Office dashboard (static HTML) |
+| Repo root (`index.html`, `sw.js`, `manifest.json`, icons) | Pilot PWA + office UI — **must stay at root** for the same GitHub Pages URL |
 | `api/` | Node API for Fly.io (`fly deploy` from `api/`) |
 | `flight-data-backups/` | Historical flight CSV exports (committed backups) |
 
@@ -25,12 +25,8 @@ Local-only pilot exports still go under `backups/` (gitignored), same as before.
 ## Development
 
 ```bash
-# Pilot app (static) — from repo root
+# PWA (pilot + office) — from repo root
 npx serve .
-
-# Staff dashboard
-npx serve . --listen 8080
-# Then open http://localhost:8080/staff-dashboard/
 
 # API
 cd api && npm install && npm start
@@ -58,7 +54,7 @@ fly deploy --app gforce-api
 
 ## Legacy separate repos
 
-The former split repos (`gforce-api`, `gforce-staff-dashboard`, `gforce-flight-data-backups`) can be archived on GitHub after this monorepo is pushed and the team uses the new staff URL.
+The former split repos (`gforce-api`, `gforce-staff-dashboard`, `gforce-flight-data-backups`) can be archived on GitHub after this monorepo is pushed. The old standalone **gforce-staff-dashboard** Pages site was redundant with **Office** mode in the main PWA.
 
 ## Adding pilots
 

@@ -4,8 +4,7 @@
 
 **Name:** Gforce Flight Log
 **Type:** Tandem paragliding flight operations management PWA
-**Live App:** https://brookewhatnall.github.io/gforce-flight-log/
-**Staff:** https://brookewhatnall.github.io/gforce-flight-log/staff-dashboard/
+**Live App:** https://brookewhatnall.github.io/gforce-flight-log/ (office: login → — Office — + office password; no separate staff URL)
 **API:** https://gforce-api.fly.dev | WebSocket: wss://gforce-api.fly.dev
 **Description:** Two-role PWA for GForce Paragliding (Queenstown, NZ). Pilots log tandem flights, receive timer alerts when office sends them away. Office dispatches pilots, tracks timers, manages the duty roster.
 
@@ -13,8 +12,7 @@
 
 ```
 Monorepo (https://github.com/brookewhatnall/gforce-flight-log)
-├── index.html, sw.js, manifest.json — pilot PWA (GitHub Pages = repo root)
-├── staff-dashboard/ — office dashboard (static HTML)
+├── index.html, sw.js, manifest.json — pilot PWA + office dashboard (same app)
 ├── api/server.js    — REST API + WebSocket (Fly.io Tokyo)
 └── Turso DB         — LibSQL/SQLite (gforce-api-nzgforce.aws-ap-northeast-1.turso.io)
 ```

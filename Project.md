@@ -8,8 +8,7 @@ Canonical onboarding for this product: architecture, deployment, API, data, UI c
 | --- | --- |
 | **Name** | Gforce Flight Log |
 | **Type** | Tandem paragliding flight operations management PWA |
-| **Live app** | https://brookewhatnall.github.io/gforce-flight-log/ |
-| **Staff dashboard** | https://brookewhatnall.github.io/gforce-flight-log/staff-dashboard/ |
+| **Live app** | https://brookewhatnall.github.io/gforce-flight-log/ (pilots + office: login → **— Office —** + office password) |
 | **API** | https://gforce-api.fly.dev |
 | **WebSocket** | wss://gforce-api.fly.dev |
 
@@ -19,16 +18,15 @@ Two-role PWA for GForce Paragliding (Queenstown, NZ). Pilots log tandem flights 
 
 **Single monorepo:** https://github.com/brookewhatnall/gforce-flight-log  
 
-The pilot PWA, staff dashboard static site, API source, and `flight-data-backups/` CSV history all live here. GitHub Pages publishes the **repo root** so the pilot URL is unchanged. Older split repos (`gforce-api`, `gforce-staff-dashboard`, `gforce-flight-data-backups`) may be archived after migration.
+The pilot PWA (including **office mode** in the same `index.html`), API source under `api/`, and `flight-data-backups/` CSV history all live here. GitHub Pages publishes the **repo root** so the public URL is unchanged. Older split repos (`gforce-api`, `gforce-staff-dashboard`, `gforce-flight-data-backups`) may be archived after migration.
 
 **Local path:** e.g. `~/Developer/Gforce Flight Log/gforce-flight-log` or your clone path.
 
 ## Architecture
 
 ```
-Monorepo (GitHub Pages = repo root for pilot app)
-├── index.html, sw.js, manifest.json, icons  — pilot PWA
-├── staff-dashboard/   — office dashboard (HTML)
+Monorepo (GitHub Pages = repo root)
+├── index.html, sw.js, manifest.json, icons  — pilot PWA + office UI (login → — Office —)
 ├── api/               — Node API (Fly.io): server.js, Dockerfile, fly.toml
 ├── flight-data-backups/ — committed CSV snapshots
 └── Turso DB           — LibSQL/SQLite (credentials in Fly secrets)

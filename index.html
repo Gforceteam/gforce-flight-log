@@ -3205,19 +3205,20 @@ function renderStats() {
 
   const tNz = todayStr();
   const winStart = addDaysYmd(tNz, -364);
-  const wingFlightsLastYear = currentWing ? flights.filter(f => f.wing_reg === currentWing && f.date >= winStart && f.date <= tNz) : [];
-  const nWin = wingFlightsLastYear.length;
-  const avgPerDayWing = nWin / 365;
+  /** All logged flights in last 365 NZ calendar days — rate is pilot-wide, not per registration */
+  const pilotFlightsLastYear = flights.filter(f => f.date >= winStart && f.date <= tNz);
+  const nPilotYear = pilotFlightsLastYear.length;
+  const avgFlightsPerDay = nPilotYear / 365;
   let replDays = null;
   let replDateStr = '';
   let replNote = '';
-  if (currentWing && wingRemaining > 0 && avgPerDayWing > 0) {
-    replDays = Math.min(365 * 5, Math.ceil(wingRemaining / avgPerDayWing));
+  if (currentWing && wingRemaining > 0 && avgFlightsPerDay > 0) {
+    replDays = Math.min(365 * 5, Math.ceil(wingRemaining / avgFlightsPerDay));
     const replYmd = addDaysYmd(tNz, replDays);
     replDateStr = new Date(replYmd + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric', timeZone: NZ_TZ });
-    replNote = `Based on ${nWin} flights on this wing in the last 365 days (~${avgPerDayWing.toFixed(3)} flights per day).`;
+    replNote = `Based on ${nPilotYear} flights in the last 365 days (all wings, ~${avgFlightsPerDay.toFixed(3)} flights per day). Forecast uses flights remaining on ${currentWing} at that overall pace.`;
   } else if (currentWing && wingRemaining > 0) {
-    replNote = 'Not enough flights on this wing in the last 365 days to estimate a replacement date.';
+    replNote = 'Not enough flights in the last 365 days to estimate your average rate — log more flying history first.';
   }
 
   // Compliance: unique days worked in last 14
@@ -3295,7 +3296,7 @@ function renderStats() {
       <div class="stat-section-title">Wing replacement (estimate)</div>
       <p style="font-size:14px;color:var(--muted);margin:0 0 10px;line-height:1.45;">${replNote}</p>
       <div style="font-size:26px;font-weight:800;color:var(--text);font-family:'Montserrat',sans-serif;">${replDateStr}</div>
-      <p style="margin:10px 0 0;font-size:13px;color:var(--muted);line-height:1.45;">About <strong>${replDays}</strong> calendar days from today at this rate (${wingRemaining} flights remaining on the 1000-flight wing life). Assumes similar usage going forward.</p>
+      <p style="margin:10px 0 0;font-size:13px;color:var(--muted);line-height:1.45;">About <strong>${replDays}</strong> calendar days from today at your overall flying rate (${wingRemaining} flights remaining on ${currentWing} of 1000). Assumes similar total activity going forward.</p>
     </div>`
       : `<div class="card stat-section">
       <div class="stat-section-title">Wing replacement (estimate)</div>

@@ -198,6 +198,11 @@ async function createTables() {
   // Add refresh_token column to existing DBs
   try { await db.execute('ALTER TABLE pilots ADD COLUMN refresh_token TEXT'); } catch (_) {}
   try { await db.execute('ALTER TABLE pilots ADD COLUMN avatar_data TEXT'); } catch (_) {}
+  // presence: 0 = signed_out, 1 = available, 2 = down_bottom (replaces boolean-only available)
+  try { await db.execute('ALTER TABLE pilots ADD COLUMN presence INTEGER DEFAULT 0'); } catch (_) {}
+  try {
+    await db.execute(`UPDATE pilots SET presence = CASE WHEN COALESCE(available,0) = 1 THEN 1 ELSE 0 END`);
+  } catch (_) {}
   await db.execute(`CREATE TABLE IF NOT EXISTS flights (
     id TEXT PRIMARY KEY, pilot_id TEXT, client_name TEXT, date TEXT,
     flight_num INTEGER, weight REAL, takeoff TEXT, landing TEXT,
@@ -253,6 +258,24 @@ async function seedIfNeeded() {
     });
   }
   console.log(`✅ ${pilots.length} pilots seeded with PIN 1234`);
+}
+
+// ─── NZ date / presence helpers ────────────────────────────────────────────────
+const NZ_TZ = 'Pacific/Auckland';
+function isoToNZDateString(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+}
+
+/** presence: 0 signed out, 1 available, 2 down bottom — keeps legacy `available` in sync (1 iff presence===1) */
+async function setPilotPresence(pilotId, presence) {
+  const p = Math.max(0, Math.min(2, Math.floor(Number(presence))));
+  const avail = p === 1 ? 1 : 0;
+  await run('UPDATE pilots SET presence = ?, available = ? WHERE id = ?', [p, avail, pilotId]);
+  await run(
+    'INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)',
+    [uuidv4(), pilotId, `presence:${p}`, new Date().toISOString()]
+  );
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -466,7 +489,9 @@ app.post('/api/auth/refresh-office', async (req, res) => {
 app.get('/api/pilots', verifyPilotOrOffice, async (req, res) => {
   try {
     const pilots = await queryAll(`
-      SELECT id, name, last_seen, current_wing, available,
+      SELECT id, name, last_seen, current_wing,
+        COALESCE(presence, CASE WHEN COALESCE(available,0)=1 THEN 1 ELSE 0 END) AS presence,
+        available,
         CASE WHEN avatar_data IS NOT NULL AND LENGTH(avatar_data) > 0 THEN 1 ELSE 0 END AS has_avatar
       FROM pilots ORDER BY name`);
     const timers = await queryAll('SELECT * FROM active_timers');
@@ -475,8 +500,12 @@ app.get('/api/pilots', verifyPilotOrOffice, async (req, res) => {
     const pilotsWithStatus = pilots.map(p => {
       const timer = timers.find(t => t.pilot_id === p.id);
       const lastL = lastLanded.find(f => f.pilot_id === p.id);
+      const pr = Number(p.presence);
+      const presence = Number.isFinite(pr) ? pr : (Number(p.available) === 1 ? 1 : 0);
       return {
         ...p,
+        presence,
+        available: presence === 1,
         status: timer ? 'airborne' : 'in_office',
         client_name: timer ? timer.client_name : null,
         timer_started_at: timer ? timer.started_at : null,
@@ -499,7 +528,7 @@ app.get('/api/my-status', verifyToken, async (req, res) => {
     await run('UPDATE pilots SET last_seen = ? WHERE id = ?', [new Date().toISOString(), req.pilot.id]);
     const timer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
     const pilot = await queryOne(
-      'SELECT current_wing, available, CASE WHEN avatar_data IS NOT NULL AND LENGTH(avatar_data) > 0 THEN 1 ELSE 0 END AS has_avatar FROM pilots WHERE id = ?',
+      'SELECT current_wing, available, presence, CASE WHEN avatar_data IS NOT NULL AND LENGTH(avatar_data) > 0 THEN 1 ELSE 0 END AS has_avatar FROM pilots WHERE id = ?',
       [req.pilot.id]
     );
     let groupName = null;
@@ -515,13 +544,16 @@ app.get('/api/my-status', verifyToken, async (req, res) => {
       );
       groupPilots = otherTimers.map(t => t.name);
     }
+    const pr = pilot ? Number(pilot.presence) : 0;
+    const presence = Number.isFinite(pr) ? pr : (pilot && Number(pilot.available) === 1 ? 1 : 0);
     res.json({
       status: timer ? 'airborne' : 'in_office',
       client_name: timer ? timer.client_name : null,
       timer_started_at: timer ? timer.started_at : null,
       timer_expires_at: timer ? timer.expires_at : null,
       current_wing: pilot ? pilot.current_wing : null,
-      available: pilot ? (Number(pilot.available) === 1) : false,
+      presence,
+      available: presence === 1,
       has_avatar: pilot ? Number(pilot.has_avatar) === 1 : false,
       group_name: groupName,
       group_pilots: groupPilots,
@@ -581,6 +613,14 @@ app.post('/api/flights', verifyToken, async (req, res) => {
     const cleanWingReg = sanitize(wing_reg, 10);
     const cleanTakeoff = sanitize(takeoff, 100);
     const cleanLanding = sanitize(landing, 100);
+
+    const dup = await queryOne(
+      'SELECT id FROM flights WHERE pilot_id = ? AND date = ? AND flight_num = ?',
+      [pilotId, date, flight_num]
+    );
+    if (dup) {
+      return res.status(409).json({ error: 'A flight with this date and flight number already exists' });
+    }
 
     if (cleanWingReg) {
       await run('UPDATE pilots SET current_wing = ? WHERE id = ?', [cleanWingReg, pilotId]);
@@ -746,16 +786,81 @@ app.get('/api/vapid-public-key', (req, res) => {
   res.json({ key: process.env.VAPID_PUBLIC_KEY || null });
 });
 
-// ─── Pilot Availability ──────────────────────────────────────────────────────
+// ─── Pilot presence (0 signed out, 1 available, 2 down bottom) ───────────────
+app.put('/api/pilot/presence', verifyToken, async (req, res) => {
+  try {
+    let p = req.body.presence;
+    if (p === undefined && req.body.available !== undefined) {
+      p = req.body.available ? 1 : 0;
+    }
+    if (p === undefined) return res.status(400).json({ error: 'presence (0–2) or available required' });
+    p = Math.floor(Number(p));
+    if (![0, 1, 2].includes(p)) return res.status(400).json({ error: 'presence must be 0, 1, or 2' });
+    await setPilotPresence(req.pilot.id, p);
+    broadcast({ type: 'PRESENCE_UPDATED', pilot_id: req.pilot.id, presence: p });
+    broadcast({ type: p === 1 ? 'PILOT_SIGNED_IN' : 'PILOT_SIGNED_OUT', pilot_id: req.pilot.id });
+    res.json({ message: 'Presence updated', presence: p, available: p === 1 });
+  } catch (e) {
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.put('/api/pilot/available', verifyToken, async (req, res) => {
   try {
     const { available } = req.body;
-    await run('UPDATE pilots SET available = ? WHERE id = ?', [available ? 1 : 0, req.pilot.id]);
-    const eventType = available ? 'PILOT_SIGNED_IN' : 'PILOT_SIGNED_OUT';
-    broadcast({ type: eventType, pilot_id: req.pilot.id });
-    res.json({ message: 'Availability updated', available: !!available });
+    const p = available ? 1 : 0;
+    await setPilotPresence(req.pilot.id, p);
+    broadcast({ type: available ? 'PILOT_SIGNED_IN' : 'PILOT_SIGNED_OUT', pilot_id: req.pilot.id });
+    broadcast({ type: 'PRESENCE_UPDATED', pilot_id: req.pilot.id, presence: p });
+    res.json({ message: 'Availability updated', available: !!available, presence: p });
   } catch (e) {
     console.error(e); res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/** Suggested duty hours from first sign-in (presence 1 or 2) to last sign-out (presence 0) in NZ calendar day */
+app.get('/api/pilot/duty-hours-suggestion', verifyToken, async (req, res) => {
+  try {
+    const date = req.query.date;
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: 'date query (YYYY-MM-DD) required' });
+    }
+    const todayNZ = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+    const logs = await queryAll(
+      `SELECT event, created_at FROM office_logs WHERE pilot_id = ? AND event LIKE 'presence:%' ORDER BY created_at ASC`,
+      [req.pilot.id]
+    );
+    const dayLogs = logs.filter(l => isoToNZDateString(l.created_at) === date);
+    let firstIn = null;
+    let lastOut = null;
+    for (const l of dayLogs) {
+      const v = parseInt(String(l.event).split(':')[1], 10);
+      if (Number.isNaN(v)) continue;
+      const t = new Date(l.created_at).getTime();
+      if (v === 1 || v === 2) {
+        if (firstIn === null) firstIn = t;
+      }
+      if (v === 0 && firstIn !== null) {
+        lastOut = t;
+      }
+    }
+    if (firstIn === null) {
+      return res.json({ suggested_hours: null, date });
+    }
+    let endMs;
+    if (lastOut !== null && lastOut >= firstIn) {
+      endMs = lastOut;
+    } else if (date === todayNZ) {
+      endMs = Date.now();
+    } else {
+      return res.json({ suggested_hours: null, date });
+    }
+    const hours = Math.round((endMs - firstIn) / 3600000);
+    const suggested = Math.max(0, Math.min(24, hours));
+    res.json({ suggested_hours: suggested, date });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
@@ -1075,11 +1180,11 @@ app.post('/api/office/land-pilot', verifyOffice, async (req, res) => {
 
     const pilotRec = await queryOne('SELECT current_wing FROM pilots WHERE id = ?', [pilot_id]);
     const adjustments = Number(timer.office_adjustments || 0);
-    let note = 'Office landed pilot';
+    let note = 'PENDING_PILOT_FILL';
     if (adjustments !== 0) {
       note = adjustments > 0
-        ? `Office landed pilot — added ${adjustments} minutes`
-        : `Office landed pilot — removed ${Math.abs(adjustments)} minutes`;
+        ? `PENDING_PILOT_FILL — office added ${adjustments} min to timer`
+        : `PENDING_PILOT_FILL — office removed ${Math.abs(adjustments)} min from timer`;
     }
 
     await run(
@@ -1244,8 +1349,9 @@ app.post('/api/office/pilot-signout', verifyOffice, async (req, res) => {
   try {
     const { pilot_id } = req.body;
     if (!pilot_id) return res.status(400).json({ error: 'pilot_id required' });
-    await run('UPDATE pilots SET available = 0 WHERE id = ?', [pilot_id]);
+    await setPilotPresence(pilot_id, 0);
     wss.clients.forEach(c => { if (c.readyState === 1) c.send(JSON.stringify({ type: 'PILOT_SIGNED_OUT', pilot_id })); });
+    wss.clients.forEach(c => { if (c.readyState === 1) c.send(JSON.stringify({ type: 'PRESENCE_UPDATED', pilot_id, presence: 0 })); });
     res.json({ message: 'Pilot signed out' });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -1254,8 +1360,9 @@ app.post('/api/office/pilot-signin', verifyOffice, async (req, res) => {
   try {
     const { pilot_id } = req.body;
     if (!pilot_id) return res.status(400).json({ error: 'pilot_id required' });
-    await run('UPDATE pilots SET available = 1 WHERE id = ?', [pilot_id]);
+    await setPilotPresence(pilot_id, 1);
     wss.clients.forEach(c => { if (c.readyState === 1) c.send(JSON.stringify({ type: 'PILOT_SIGNED_IN', pilot_id })); });
+    wss.clients.forEach(c => { if (c.readyState === 1) c.send(JSON.stringify({ type: 'PRESENCE_UPDATED', pilot_id, presence: 1 })); });
     res.json({ message: 'Pilot signed in' });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -1344,7 +1451,7 @@ async function scheduleCivilTwilightAlert() {
 async function sendCivilTwilightAlerts() {
   try {
     const availablePilots = await queryAll(
-      `SELECT p.id FROM pilots p WHERE p.available = 1 AND p.id NOT IN (SELECT pilot_id FROM active_timers)`
+      `SELECT p.id FROM pilots p WHERE COALESCE(p.presence, CASE WHEN COALESCE(p.available,0)=1 THEN 1 ELSE 0 END) = 1 AND p.id NOT IN (SELECT pilot_id FROM active_timers)`
     );
     console.log(`[twilight] Sending sign-out reminder to ${availablePilots.length} available pilots`);
     for (const p of availablePilots) {

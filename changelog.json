@@ -1,0 +1,18 @@
+{
+  "versions": [
+    {
+      "version": "1.0.7",
+      "date": "2026-04-15",
+      "items": [
+        "Pilot ground status: signed out, available, down bottom (off dispatch); office lists and card colours updated.",
+        "Flight log: 15-minute post-save mode, new flight control, duplicate save guard, and server 409 on duplicate flights.",
+        "Office: today refresh, flight log column order, newest-first flights, duplicate send-away removed from groups.",
+        "Stats: estimated wing replacement date from 12-month usage rate; pilot log dates show year.",
+        "Gliders and last wing choice are stored per pilot (legacy data migrates on login).",
+        "Duty hours: suggestion from sign-in/out logs (prefills empty day totals when possible).",
+        "Georges weekly CSV: strict validation before export and confirmation with exact filename.",
+        "Safer sign-out when a timer is still running; office-landed placeholder flights highlighted to complete."
+      ]
+    }
+  ]
+}

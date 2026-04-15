@@ -1,4 +1,4 @@
-const CACHE = 'gforce-v9';
+const CACHE = 'gforce-v10';
 
 // Resolve all assets relative to this service worker (works on GitHub Pages /repo-name/ and at domain root).
 const SW_DIR = new URL('.', self.location);
@@ -13,6 +13,7 @@ const STATIC = [
   new URL('icon-192.png', SW_DIR).href,
   new URL('icon-512.png', SW_DIR).href,
   new URL('version.json', SW_DIR).href,
+  new URL('changelog.json', SW_DIR).href,
 ];
 
 const SW_PREFIX = SW_DIR.pathname.replace(/\/$/, '');

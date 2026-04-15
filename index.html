@@ -369,6 +369,10 @@
       transition: border-color 0.15s;
     }
     .flight-item:hover { border-color: var(--border-hi); }
+    .flight-item.flight-item-pending {
+      border-left: 4px solid var(--warning);
+      background: rgba(255, 183, 77, 0.07);
+    }
     .flight-meta { font-size: 13px; color: var(--text-2); margin-top: 3px; }
     .flight-badge {
       background: var(--accent); color: #fff; border-radius: 9999px;
@@ -514,6 +518,7 @@
     }
     .pilot-card.airborne { border-left-color: var(--warning); border-color: var(--border); background: linear-gradient(90deg, rgba(245,166,35,0.05) 0%, var(--card) 40%); }
     .pilot-card.alert { border-left-color: var(--danger); border-color: var(--border); }
+    .pilot-card.office-timer-expired { border-color: var(--danger) !important; background: rgba(240,68,56,0.08) !important; }
 
     .pilot-card-top { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
     .pilot-avatar {
@@ -819,8 +824,8 @@
       </div>
     </div>
     <div class="status-right">
-      <span id="availability-btn"
-        style="background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;font-weight:600;">🔴 Not Available</span>
+      <button type="button" id="availability-btn" title="Tap to cycle: Signed out → Available → Down bottom"
+        style="background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;font-weight:600;cursor:pointer;">🔴 Signed out</button>
       <span class="server-badge" id="server-badge">...</span>
       <button onclick="doLogout()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;padding:4px 10px;cursor:pointer">Logout</button>
     </div>
@@ -924,6 +929,7 @@
 
       <button class="btn-primary" id="save-btn" onclick="saveFlight()">Save Flight</button>
       <button class="btn-cancel" id="cancel-btn" onclick="cancelEdit()" style="display:none">Cancel Edit</button>
+      <button type="button" id="new-flight-override-btn" onclick="startFreshFlightForm()" style="width:100%;margin-top:10px;padding:12px;background:var(--surface);border:1px solid var(--border-hi);border-radius:12px;color:var(--text-2);font-weight:600;font-size:14px;">New flight</button>
     </div>
   </div>
 
@@ -1033,9 +1039,21 @@
       <section class="settings-card">
         <p class="settings-card-title">Updates</p>
         <h2 style="margin:0 0 8px;font-size:17px;font-weight:700;">App version</h2>
+        <p id="settings-version-display" style="font-size:14px;color:var(--accent);font-weight:700;margin:0 0 8px;">—</p>
         <p class="settings-card-desc" style="margin-bottom:12px;">Reload to pick up the latest files from the server after an office update.</p>
         <div id="settings-update-status" style="font-size:12px;color:var(--muted);margin-bottom:10px;"></div>
         <button type="button" class="settings-btn settings-btn-primary" onclick="updateApp()">Update app</button>
+      </section>
+
+      <!-- Changelog -->
+      <section class="settings-card" aria-labelledby="settings-h-changelog">
+        <div class="settings-card-head">
+          <div>
+            <p class="settings-card-title" id="settings-h-changelog">Changes</p>
+            <h2>What’s new</h2>
+          </div>
+        </div>
+        <div id="settings-changelog" class="settings-card-desc" style="margin:0;line-height:1.5;">Loading…</div>
       </section>
 
       <!-- Push -->
@@ -1175,6 +1193,7 @@
       <div class="section-title" style="margin-top:0">All Flights</div>
       <div class="export-bar">
         <button class="btn-export-all" onclick="exportAllCSV()">Export All CSV</button>
+        <button type="button" class="btn-export-all" onclick="cycleOfficeFlightColumns()" title="Rotate column order">Columns</button>
         <div id="pilot-export-btns"></div>
       </div>
       <div class="flights-search-bar">
@@ -1296,7 +1315,9 @@ let myDrives = [];
 let flyingPilots = []; // pilots currently airborne — shown on dashboard
 let statsMonthOffset = 0; // 0 = current month, -1 = last month, etc.
 let myStatus = { status: 'in_office', client_name: null, timer_expires_at: null };
-let pilotAvailable = false; // explicit availability toggle — off by default on login
+let pilotAvailable = false; // true only when presence === 1 (available for dispatch)
+/** 0 signed out, 1 available, 2 down bottom */
+let pilotPresence = 0;
 let pilotHasAvatar = false;
 const avatarCache = {};
 // Add a pilot from available list to an existing away group
@@ -1360,14 +1381,33 @@ let allFlights = [];
 let filteredFlights = [];
 let alertDismissed = new Set();
 let timerInterval;
-let todaySort = { col: 'time', dir: 'asc' }; // col: 'time'|'pilot'|'client', dir: 'asc'|'desc'
+let todaySort = { col: 'time', dir: 'desc' }; // landed: newest first by default
 let flightsSearch = '';
 let currentWing = '';
 
 // ─── Pilot profile & gliders (local only, for exports + log dropdown) ─────────
 const LS_PILOT_FULL_NAME = 'gforce_pilot_full_name';
-const LS_GLIDERS = 'gforce_gliders';
-const LS_LAST_GLIDER_REG = 'gforce_last_glider_reg';
+
+function glidersStorageKey() {
+  return pilotId ? `gforce_gliders_${pilotId}` : 'gforce_gliders';
+}
+function lastGliderRegKey() {
+  return pilotId ? `gforce_last_glider_reg_${pilotId}` : 'gforce_last_glider_reg';
+}
+/** One-time copy from legacy global keys into per-pilot keys */
+function migrateLegacyGliderKeys() {
+  if (!pilotId) return;
+  const gk = glidersStorageKey();
+  const legacyG = localStorage.getItem('gforce_gliders');
+  if (legacyG && !localStorage.getItem(gk)) {
+    localStorage.setItem(gk, legacyG);
+  }
+  const rk = lastGliderRegKey();
+  const legacyR = localStorage.getItem('gforce_last_glider_reg');
+  if (legacyR && !localStorage.getItem(rk)) {
+    localStorage.setItem(rk, legacyR);
+  }
+}
 
 function getPilotFullName() {
   return (localStorage.getItem(LS_PILOT_FULL_NAME) || '').trim();
@@ -1379,7 +1419,7 @@ function savePilotFullNameSetting() {
 }
 function loadGliders() {
   try {
-    const raw = JSON.parse(localStorage.getItem(LS_GLIDERS) || '[]');
+    const raw = JSON.parse(localStorage.getItem(glidersStorageKey()) || '[]');
     return Array.isArray(raw) ? raw.map(normalizeGlider).filter(g => g.id) : [];
   } catch {
     return [];
@@ -1396,7 +1436,7 @@ function normalizeGlider(g) {
   };
 }
 function saveGliders(list) {
-  localStorage.setItem(LS_GLIDERS, JSON.stringify(list));
+  localStorage.setItem(glidersStorageKey(), JSON.stringify(list));
 }
 function getGliderByRegistration(reg) {
   if (!reg) return null;
@@ -1420,7 +1460,7 @@ function refreshWingDropdown() {
   const hint = document.getElementById('f-wing-hint');
   if (!sel) return;
   const gliders = loadGliders().filter(g => g.registration);
-  const preferred = (localStorage.getItem(LS_LAST_GLIDER_REG) || currentWing || '').trim().toUpperCase();
+  const preferred = (localStorage.getItem(lastGliderRegKey()) || currentWing || '').trim().toUpperCase();
   sel.innerHTML = '';
   if (!gliders.length) {
     const o = document.createElement('option');
@@ -1605,6 +1645,9 @@ document.addEventListener('DOMContentLoaded', () => {
     pinInput.placeholder = this.value === '__office__' ? 'Office password' : 'Enter password';
   });
 
+  const availHdr = document.getElementById('availability-btn');
+  if (availHdr) availHdr.addEventListener('click', () => cyclePilotPresenceHeader());
+
   const avatarInput = document.getElementById('settings-avatar-input');
   if (avatarInput) avatarInput.addEventListener('change', onSettingsAvatarFile);
   setupGliderSettingsEvents();
@@ -1621,6 +1664,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ─── Load Pilot List ──────────────────────────────────────────────────────────
 async function loadPilotList() {
   const sel = document.getElementById('pilot-select');
+  const restoreId = pilotId || '';
   sel.innerHTML = '<option value="">Select...</option><option value="__office__" class="office-option">— Office —</option>';
   try {
     const res = await fetch(`${API_BASE}/api/public/pilots`);
@@ -1631,7 +1675,12 @@ async function loadPilotList() {
       opt.textContent = p.name;
       sel.appendChild(opt);
     });
-    sel.value = pilotId || '';
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (restoreId && [...sel.options].some(o => o.value === restoreId)) sel.value = restoreId;
+        else sel.selectedIndex = 0;
+      });
+    });
   } catch {
     document.getElementById('login-error2').style.display = 'block';
     document.getElementById('login-error2').textContent = 'Cannot reach server';
@@ -1761,13 +1810,15 @@ function startStatusPoll() {
       const prevStatus = myStatus.status;
       const prevGroupPilots = (myStatus.group_pilots || []).join(',');
       myStatus = { status: newStatus.status, client_name: newStatus.client_name, timer_expires_at: newStatus.timer_expires_at, group_name: newStatus.group_name || null, group_pilots: newStatus.group_pilots || [], group_id: newStatus.group_id || null, is_peak_trip: newStatus.is_peak_trip || false };
-      pilotAvailable = newStatus.available === true;
+      pilotPresence = Number(newStatus.presence);
+      if (!Number.isFinite(pilotPresence)) pilotPresence = newStatus.available === true ? 1 : 0;
+      pilotAvailable = pilotPresence === 1;
       const prevHa = pilotHasAvatar;
       pilotHasAvatar = !!newStatus.has_avatar;
       if (prevHa !== pilotHasAvatar) refreshPilotHeaderAvatar();
       if (newStatus.current_wing && newStatus.current_wing !== currentWing) {
         currentWing = newStatus.current_wing;
-        localStorage.setItem(LS_LAST_GLIDER_REG, currentWing);
+        localStorage.setItem(lastGliderRegKey(), currentWing);
         refreshWingDropdown();
       }
       // Also refresh who's flying (lightweight — runs every poll)
@@ -2058,6 +2109,7 @@ async function hydrateOfficePilotAvatars() {
 
 async function loadMyData() {
   try {
+    migrateLegacyGliderKeys();
     const [statusRes, flightsRes, drivesRes, flyingRes] = await Promise.all([
       apiFetch('/api/my-status'),
       apiFetch('/api/flights'),
@@ -2068,12 +2120,14 @@ async function loadMyData() {
     if (statusRes.status === 401 || flightsRes.status === 401) { doLogout(); return; }
     const statusData = await statusRes.json();
     myStatus = statusData;
-    pilotAvailable = statusData.available === true;
+    pilotPresence = Number(statusData.presence);
+    if (!Number.isFinite(pilotPresence)) pilotPresence = statusData.available === true ? 1 : 0;
+    pilotAvailable = pilotPresence === 1;
     pilotHasAvatar = !!statusData.has_avatar;
     if (statusData.current_wing) {
       currentWing = statusData.current_wing;
-      if (!localStorage.getItem(LS_LAST_GLIDER_REG)) {
-        localStorage.setItem(LS_LAST_GLIDER_REG, currentWing);
+      if (!localStorage.getItem(lastGliderRegKey())) {
+        localStorage.setItem(lastGliderRegKey(), currentWing);
       }
     }
     await refreshPilotHeaderAvatar();
@@ -2105,14 +2159,20 @@ function updateStatusBadge() {
     availBtn.style.borderColor = 'var(--warning)';
     availBtn.style.color = 'var(--warning)';
     availBtn.style.display = '';
-  } else if (pilotAvailable) {
+  } else if (pilotPresence === 1) {
     availBtn.textContent = '🟢 Available';
     availBtn.style.background = 'rgba(74,143,30,0.2)';
     availBtn.style.borderColor = '#4a8f1e';
     availBtn.style.color = '#7bc950';
     availBtn.style.display = '';
+  } else if (pilotPresence === 2) {
+    availBtn.textContent = '🟣 Down bottom';
+    availBtn.style.background = 'rgba(139,92,246,0.18)';
+    availBtn.style.borderColor = '#8b5cf6';
+    availBtn.style.color = '#c4b5fd';
+    availBtn.style.display = '';
   } else {
-    availBtn.textContent = '🔴 Not Available';
+    availBtn.textContent = '🔴 Signed out';
     availBtn.style.background = 'var(--surface)';
     availBtn.style.borderColor = 'var(--border)';
     availBtn.style.color = 'var(--muted)';
@@ -2120,27 +2180,110 @@ function updateStatusBadge() {
   }
 }
 
-async function toggleAvailability() {
-  const newState = !pilotAvailable;
+function pilotPresenceLabel() {
+  if (myStatus.status === 'airborne') return 'Flying';
+  if (pilotPresence === 1) return 'Available';
+  if (pilotPresence === 2) return 'Down bottom';
+  return 'Signed out';
+}
+
+/** Block unsafe sign-out / presence change; returns true if OK */
+function canSetPilotPresence(next) {
+  if (myStatus.status === 'airborne') {
+    toast('Land or cancel your timer before changing status');
+    return false;
+  }
+  const timerEnd = myStatus.timer_expires_at ? new Date(myStatus.timer_expires_at).getTime() : 0;
+  if (next === 0 && timerEnd > Date.now()) {
+    toast('Cancel or let your away timer finish before signing out');
+    return false;
+  }
+  if (next === 0 && !pilotDayFlightsCompleteForSignOut()) {
+    toast('Complete your flight log for today before signing out — missing fields or hours');
+    return false;
+  }
+  return true;
+}
+
+function pilotDayFlightsCompleteForSignOut() {
+  const t = todayStr();
+  const dayFlights = myFlights.filter(f => f.date === t);
+  if (dayFlights.length === 0) return true;
+  for (const f of dayFlights) {
+    const pending = f.notes && String(f.notes).includes('PENDING_PILOT_FILL');
+    if (pending) return false;
+    if (f.weight == null || f.takeoff == null || String(f.takeoff).trim() === '' || f.landing == null || String(f.landing).trim() === '' || f.time == null) return false;
+    if (f.wing_reg == null || String(f.wing_reg).trim() === '') return false;
+  }
+  const last = dayFlights.slice().sort((a, b) => (b.flight_num || 0) - (a.flight_num || 0))[0];
+  if (last && (last.hours_worked == null || last.hours_worked === '')) return false;
+  return true;
+}
+
+async function setPilotPresenceClient(next, opts = {}) {
+  const skipGuard = opts.skipGuard;
+  if (!skipGuard && !canSetPilotPresence(next)) return;
   try {
-    const res = await apiFetch('/api/pilot/available', {
+    const res = await apiFetch('/api/pilot/presence', {
       method: 'PUT',
-      body: JSON.stringify({ available: newState })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ presence: next })
     });
-    if (!res.ok) throw new Error(await res.text());
-    pilotAvailable = newState;
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || res.statusText);
+    }
+    const data = await res.json();
+    pilotPresence = data.presence;
+    pilotAvailable = pilotPresence === 1;
     updateStatusBadge();
     renderDashboard();
-    toast(newState ? '🟢 You\'re now available — office can send you away' : '🔴 Signed out — you won\'t appear for office');
-    // Piggyback on this user gesture to request push permission if not yet done
-    if (newState && 'Notification' in window && Notification.permission === 'default') {
+    const msgs = { 0: '🔴 Signed out', 1: '🟢 Available for dispatch', 2: '🟣 Down bottom (off dispatch)' };
+    toast(msgs[pilotPresence] || 'Status updated');
+    if (pilotPresence === 1 && 'Notification' in window && Notification.permission === 'default') {
       requestAndSubscribePush(null);
-    } else if (newState && 'Notification' in window && Notification.permission === 'granted') {
-      subscribeToPush(); // re-subscribe silently if already permitted
+    } else if (pilotPresence === 1 && 'Notification' in window && Notification.permission === 'granted') {
+      subscribeToPush();
     }
   } catch (e) {
-    toast('Could not update availability: ' + e.message);
+    toast('Could not update status: ' + e.message);
   }
+}
+
+async function cyclePilotPresenceHeader() {
+  if (myStatus.status === 'airborne') {
+    toast('Land or cancel your timer first');
+    return;
+  }
+  const order = [0, 1, 2];
+  const i = order.indexOf(pilotPresence);
+  const next = order[(i + 1) % order.length];
+  await setPilotPresenceClient(next);
+}
+
+async function toggleDownBottomFromDashboard() {
+  if (myStatus.status === 'airborne') {
+    toast('Land or cancel your timer first');
+    return;
+  }
+  if (pilotPresence === 2) {
+    const back = localStorage.getItem('gforce_presence_before_db');
+    const p = back === '1' ? 1 : 0;
+    await setPilotPresenceClient(p);
+    localStorage.removeItem('gforce_presence_before_db');
+    return;
+  }
+  localStorage.setItem('gforce_presence_before_db', String(pilotPresence));
+  await setPilotPresenceClient(2);
+}
+
+async function toggleAvailability() {
+  if (myStatus.status === 'airborne') {
+    toast('Land or cancel your timer first');
+    return;
+  }
+  const next = pilotPresence === 1 ? 0 : 1;
+  await setPilotPresenceClient(next);
 }
 
 function renderFlyingList(excludeSelf = false) {
@@ -2199,11 +2342,16 @@ function renderDashboard() {
     el.innerHTML = `
       <div class="dashboard-status-icon">🏢</div>
       <div class="dashboard-status-label">Status</div>
-      <div class="dashboard-status-value">${pilotAvailable ? 'Available' : 'Not Available'}</div>
-      <p style="color:var(--muted);font-size:14px;margin-top:8px;">${pilotAvailable ? 'Office can send you away' : 'Sign in to appear for office'}</p>
-      <button onclick="toggleAvailability()" style="margin-top:16px;padding:12px 32px;background:${pilotAvailable ? 'rgba(239,83,80,0.15)' : 'rgba(74,143,30,0.2)'};border:1px solid ${pilotAvailable ? 'var(--danger)' : '#4a8f1e'};border-radius:9999px;color:${pilotAvailable ? 'var(--danger)' : '#7bc950'};font-size:15px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;letter-spacing:0.5px;">
-        ${pilotAvailable ? 'Sign Out' : 'Sign In'}
-      </button>
+      <div class="dashboard-status-value">${pilotPresenceLabel()}</div>
+      <p style="color:var(--muted);font-size:14px;margin-top:8px;">${pilotPresence === 1 ? 'Office can send you away' : pilotPresence === 2 ? 'At landing — not on dispatch list' : 'Signed out — not on dispatch list'}</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:16px;">
+        <button type="button" onclick="toggleAvailability()" style="padding:12px 18px;background:${pilotPresence === 1 ? 'rgba(239,83,80,0.15)' : 'rgba(74,143,30,0.2)'};border:1px solid ${pilotPresence === 1 ? 'var(--danger)' : '#4a8f1e'};border-radius:9999px;color:${pilotPresence === 1 ? 'var(--danger)' : '#7bc950'};font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
+          ${pilotPresence === 1 ? 'Sign out' : 'Available'}
+        </button>
+        <button type="button" onclick="toggleDownBottomFromDashboard()" style="padding:12px 18px;background:rgba(139,92,246,0.15);border:1px solid #8b5cf6;border-radius:9999px;color:#c4b5fd;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
+          ${pilotPresence === 2 ? 'Leave down bottom' : 'Down bottom'}
+        </button>
+      </div>
       ${notifPrompt}
       ${renderFlyingList(false)}
     `;
@@ -2277,7 +2425,7 @@ const NZ_TZ = 'Pacific/Auckland';
 function todayStr() { return new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ }); }
 function fmtDate(s) {
   const d = new Date(s + 'T12:00:00');
-  return d.toLocaleDateString('en-NZ', { weekday:'short', day:'numeric', month:'short' });
+  return d.toLocaleDateString('en-NZ', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
 }
 function getWeekStart(dateStr) {
   const d = new Date(dateStr + 'T12:00:00');
@@ -2441,6 +2589,32 @@ function togglePeakDrive() {
   }
 }
 
+function clearLogPostSaveWatch() {
+  if (window._logPostSaveTimer) {
+    clearTimeout(window._logPostSaveTimer);
+    window._logPostSaveTimer = null;
+  }
+}
+
+function startLogPostSaveWatch(flightId) {
+  clearLogPostSaveWatch();
+  window._logPostSaveTimer = setTimeout(() => {
+    window._logPostSaveTimer = null;
+    if (editingId === flightId) {
+      resetForm();
+      toast('Form reset — start a new flight when you are ready');
+    }
+  }, 15 * 60 * 1000);
+}
+
+function startFreshFlightForm() {
+  clearLogPostSaveWatch();
+  resetForm();
+  const dateEl = document.getElementById('f-date');
+  if (dateEl) updateFlightNumForDate(dateEl.value);
+  toast('New flight form');
+}
+
 // ─── Save Flight ──────────────────────────────────────────────────────────────
 async function saveFlight() {
   const date = document.getElementById('f-date').value;
@@ -2477,6 +2651,14 @@ async function saveFlight() {
     return;
   }
 
+  if (editingId === null) {
+    const dup = myFlights.find(f => f.date === date && Number(f.flight_num) === Number(flightNum));
+    if (dup) {
+      toast('You already have a flight with this number on that day');
+      return;
+    }
+  }
+
   setServerStatus('syncing');
   try {
     if (editingId !== null) {
@@ -2487,6 +2669,10 @@ async function saveFlight() {
       });
       if (!res.ok) throw new Error(await res.text());
       toast('Flight updated!');
+      clearLogPostSaveWatch();
+      resetForm();
+      await loadMyData();
+      updateFlightNumForDate(document.getElementById('f-date').value);
     } else {
       const wingReg = (document.getElementById('f-wing')?.value || '').trim().toUpperCase() || null;
       if (wingReg && wingReg !== currentWing) currentWing = wingReg;
@@ -2494,12 +2680,26 @@ async function saveFlight() {
         method: 'POST',
         body: JSON.stringify({ date, flight_num: flightNum, weight, takeoff, landing, time, notes, wing_reg: wingReg })
       });
+      if (res.status === 409) {
+        const err = await res.json().catch(() => ({}));
+        toast(err.error || 'Duplicate flight');
+        setServerStatus('synced');
+        return;
+      }
       if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
       toast('Flight logged! Office notified.');
+      await loadMyData();
+      if (data.id) {
+        editFlight(data.id);
+        const ct = document.getElementById('card-title');
+        if (ct) ct.textContent = 'Saved flight';
+        startLogPostSaveWatch(data.id);
+      } else {
+        resetForm();
+        updateFlightNumForDate(document.getElementById('f-date').value);
+      }
     }
-    resetForm();
-    await loadMyData();
-    updateFlightNumForDate(document.getElementById('f-date').value);
   } catch (e) {
     toast('Save failed: ' + e.message);
     setServerStatus('offline');
@@ -2507,6 +2707,7 @@ async function saveFlight() {
 }
 
 function resetForm() {
+  clearLogPostSaveWatch();
   editingId = null;
   // Reset peak drive mode
   isPeakDrive = false;
@@ -2593,7 +2794,8 @@ function renderFlights() {
       </div>
       <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
         <span style="font-size:11px;color:var(--muted);">🕐</span>
-        <input type="number" min="0" max="16" step="0.5"
+        <input type="number" min="0" max="16" step="0.5" class="duty-hrs-input"
+          data-date="${date}"
           value="${hoursVal}"
           placeholder="hrs"
           title="Hours worked today"
@@ -2604,15 +2806,16 @@ function renderFlights() {
       </div>
     </div>`;
     dayFlights.forEach(f => {
+      const pendingFill = f.notes && String(f.notes).includes('PENDING_PILOT_FILL');
       const sentAwayAt = f.sent_away_at
         ? new Date(f.sent_away_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
         : null;
       const loggedAt = f.landed_at
         ? new Date(f.landed_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
         : null;
-      html += `<div class="flight-item">
+      html += `<div class="flight-item${pendingFill ? ' flight-item-pending' : ''}">
         <div>
-          <div style="font-size:14px;font-weight:600">Flight ${f.flight_num} · ${f.weight}kg · ${f.time}min</div>
+          <div style="font-size:14px;font-weight:600">${pendingFill ? '<span class="flight-badge" style="margin-right:6px;">Complete</span>' : ''}Flight ${f.flight_num} · ${f.weight}kg · ${f.time}min</div>
           <div class="flight-meta">${esc(f.takeoff)} → ${esc(f.landing)}${f.notes ? ' · ' + esc(f.notes) : ''}</div>
           ${f.client_name ? `<div class="flight-meta" style="color:#fff">👤 ${esc(f.client_name)}</div>` : ''}
           ${sentAwayAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">✈️ Away ${esc(sentAwayAt)}</div>` : ''}
@@ -2626,6 +2829,7 @@ function renderFlights() {
     });
   });
   el.innerHTML = html;
+  void prefillDutyHoursSuggestions();
   const today = myFlights.filter(f => f.date === todayStr());
   const flightsSub = document.getElementById('header-flights-sub');
   if (flightsSub) flightsSub.textContent = `${myFlights.length} total · ${today.length} today`;
@@ -2657,6 +2861,34 @@ async function saveHours(date, value) {
   }, 600);
 }
 
+async function prefillDutyHoursSuggestions() {
+  const inputs = document.querySelectorAll('#flights-list input.duty-hrs-input');
+  for (const inp of inputs) {
+    if ((inp.value || '').trim() !== '') continue;
+    const date = inp.getAttribute('data-date');
+    if (!date) continue;
+    try {
+      const res = await apiFetch(`/api/pilot/duty-hours-suggestion?date=${encodeURIComponent(date)}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data.suggested_hours == null) continue;
+      const hours = data.suggested_hours;
+      const put = await apiFetch('/api/pilot/hours', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, hours })
+      });
+      if (!put.ok) continue;
+      const saved = await put.json();
+      inp.value = String(hours);
+      if (saved.flight_id) {
+        const f = myFlights.find(x => x.id === saved.flight_id);
+        if (f) f.hours_worked = saved.hours;
+      }
+    } catch (_) {}
+  }
+}
+
 async function deleteFlight(id) {
   if (!confirm('Delete this flight? This cannot be undone.')) return;
   try {
@@ -2686,7 +2918,7 @@ async function deleteDrive(id) {
 async function updateWing(val) {
   const reg = (val || '').trim().toUpperCase();
   currentWing = reg;
-  if (reg) localStorage.setItem(LS_LAST_GLIDER_REG, reg);
+  if (reg) localStorage.setItem(lastGliderRegKey(), reg);
   if (!reg) return;
   try {
     await apiFetch('/api/pilot/wing', { method: 'PUT', body: JSON.stringify({ wing_reg: reg }) });
@@ -2741,6 +2973,40 @@ function exportFullLogbookCSV() {
   downloadPilotCSV(csv, `gforce_logbook_${tag}.csv`);
 }
 
+/** Georges export: every flight needs core fields; each day with flights needs duty on last flight of that day. */
+function validateWeeklyExportStrict(monday) {
+  const sunday = addDaysYmd(monday, 6);
+  const weekFlights = myFlights.filter(f => f.date >= monday && f.date <= sunday)
+    .sort((a, b) => (a.date !== b.date ? a.date.localeCompare(b.date) : (a.flight_num || 0) - (b.flight_num || 0)));
+  if (!weekFlights.length) {
+    return { ok: false, message: `No flights in this week (${monday}–${sunday}).` };
+  }
+  for (const f of weekFlights) {
+    if (!f.date) return { ok: false, message: 'A flight is missing a date.' };
+    if (f.weight == null || f.weight === '') return { ok: false, message: `Missing weight on ${f.date} (flight ${f.flight_num}).` };
+    const to = f.takeoff != null ? String(f.takeoff).trim() : '';
+    const la = f.landing != null ? String(f.landing).trim() : '';
+    if (!to) return { ok: false, message: `Missing takeoff on ${f.date} (flight ${f.flight_num}).` };
+    if (!la) return { ok: false, message: `Missing landing on ${f.date} (flight ${f.flight_num}).` };
+    if (f.time == null || f.time === '') return { ok: false, message: `Missing flight time on ${f.date} (flight ${f.flight_num}).` };
+    const wr = f.wing_reg != null ? String(f.wing_reg).trim() : '';
+    if (!wr) return { ok: false, message: `Missing wing registration on ${f.date} (flight ${f.flight_num}).` };
+  }
+  const byDate = {};
+  weekFlights.forEach(f => {
+    if (!byDate[f.date]) byDate[f.date] = [];
+    byDate[f.date].push(f);
+  });
+  for (const date of Object.keys(byDate).sort()) {
+    const sameDay = byDate[date];
+    const last = sameDay.slice().sort((a, b) => (b.flight_num || 0) - (a.flight_num || 0))[0];
+    if (last.hours_worked == null || last.hours_worked === '') {
+      return { ok: false, message: `Missing duty hours on the last flight of ${date}.` };
+    }
+  }
+  return { ok: true };
+}
+
 /**
  * Weekly company CSV (Gforce Weekly Log layout).
  * Row 1: A GFORCE, B full name, C size/model, D Glider:, E weight range, F registration, G space
@@ -2748,6 +3014,11 @@ function exportFullLogbookCSV() {
  * Data: Date = DD/MM/YYYY (first row per day); Duty only on last flight of each day
  */
 function exportWeeklyCompanyCSVForWeek(monday) {
+  const check = validateWeeklyExportStrict(monday);
+  if (!check.ok) {
+    toast(check.message);
+    return;
+  }
   const sunday = addDaysYmd(monday, 6);
   const weekFlights = myFlights.filter(f => f.date >= monday && f.date <= sunday)
     .sort((a, b) => (a.date !== b.date ? a.date.localeCompare(b.date) : (a.flight_num || 0) - (b.flight_num || 0)));
@@ -2758,7 +3029,7 @@ function exportWeeklyCompanyCSVForWeek(monday) {
   const fullName = getPilotFullName() || pilotName || '';
   const lastWithWing = weekFlights.slice().reverse().find(f => f.wing_reg && String(f.wing_reg).trim());
   const regForExport = (currentWing || (lastWithWing && lastWithWing.wing_reg) || '').trim().toUpperCase();
-  let g = getGliderByRegistration(regForExport) || getGliderByRegistration(localStorage.getItem(LS_LAST_GLIDER_REG));
+  let g = getGliderByRegistration(regForExport) || getGliderByRegistration(localStorage.getItem(lastGliderRegKey()));
   const c1 = g
     ? ((g.size || g.model || '').trim() || wingTypeCodeFromReg(regForExport))
     : wingTypeCodeFromReg(regForExport);
@@ -2790,7 +3061,9 @@ function exportWeeklyCompanyCSVForWeek(monday) {
       duty
     ]));
   });
-  void shareCsvOrDownload(lines.join('\n'), weeklyCompanyCsvFilename(monday));
+  const fn = weeklyCompanyCsvFilename(monday);
+  if (!confirm(`Export weekly log for ${monday} through ${sunday} as:\n\n${fn}\n\nContinue?`)) return;
+  void shareCsvOrDownload(lines.join('\n'), fn);
 }
 
 /** Company weekly CSV for the most recent completed Mon–Sun week (see getLastCompletedWeekMondayNZ). */
@@ -2930,6 +3203,23 @@ function renderStats() {
   const wingPct = Math.min(100, (wingUsed / 1000) * 100);
   const wingBarClass = wingRemaining <= 50 ? 'wing-bar-danger' : wingRemaining <= 100 ? 'wing-bar-warn' : 'wing-bar-ok';
 
+  const tNz = todayStr();
+  const winStart = addDaysYmd(tNz, -364);
+  const wingFlightsLastYear = currentWing ? flights.filter(f => f.wing_reg === currentWing && f.date >= winStart && f.date <= tNz) : [];
+  const nWin = wingFlightsLastYear.length;
+  const avgPerDayWing = nWin / 365;
+  let replDays = null;
+  let replDateStr = '';
+  let replNote = '';
+  if (currentWing && wingRemaining > 0 && avgPerDayWing > 0) {
+    replDays = Math.min(365 * 5, Math.ceil(wingRemaining / avgPerDayWing));
+    const replYmd = addDaysYmd(tNz, replDays);
+    replDateStr = new Date(replYmd + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric', timeZone: NZ_TZ });
+    replNote = `Based on ${nWin} flights on this wing in the last 365 days (~${avgPerDayWing.toFixed(3)} flights per day).`;
+  } else if (currentWing && wingRemaining > 0) {
+    replNote = 'Not enough flights on this wing in the last 365 days to estimate a replacement date.';
+  }
+
   // Compliance: unique days worked in last 14
   const last14 = [];
   for (let i = 13; i >= 0; i--) {
@@ -2998,6 +3288,20 @@ function renderStats() {
         : wingRemaining <= 100 ? '<div style="margin-top:8px;font-size:13px;font-weight:600;color:#c07000">⚡ Under 100 flights remaining</div>' : ''}
     </div>` :
     `<div class="card stat-section" style="color:var(--muted);font-size:13px">No wing set — enter registration in Log tab to track usage.</div>`;
+
+  const wingPredictionCard = currentWing && wingRemaining > 0
+    ? (replDays != null
+      ? `<div class="card stat-section">
+      <div class="stat-section-title">Wing replacement (estimate)</div>
+      <p style="font-size:14px;color:var(--muted);margin:0 0 10px;line-height:1.45;">${replNote}</p>
+      <div style="font-size:26px;font-weight:800;color:var(--text);font-family:'Montserrat',sans-serif;">${replDateStr}</div>
+      <p style="margin:10px 0 0;font-size:13px;color:var(--muted);line-height:1.45;">About <strong>${replDays}</strong> calendar days from today at this rate (${wingRemaining} flights remaining on the 1000-flight wing life). Assumes similar usage going forward.</p>
+    </div>`
+      : `<div class="card stat-section">
+      <div class="stat-section-title">Wing replacement (estimate)</div>
+      <p style="font-size:14px;color:var(--muted);margin:0;line-height:1.45;">${replNote}</p>
+    </div>`)
+    : '';
 
   // Compliance card
   const compCard = `
@@ -3128,7 +3432,7 @@ function renderStats() {
       </div>
     </div>` : '';
 
-  document.getElementById('stats-breakdown').innerHTML = rowCards + wingCard + compCard + takeoffCard + landingCard + chartCard + drivesCard + exportCard;
+  document.getElementById('stats-breakdown').innerHTML = rowCards + wingCard + wingPredictionCard + compCard + takeoffCard + landingCard + chartCard + drivesCard + exportCard;
 }
 
 function showPage(name) {
@@ -3325,12 +3629,19 @@ async function loadOfficeData() {
   }
 }
 
+/** Office list: 0 signed out, 1 available, 2 down bottom */
+function officePresenceVal(p) {
+  const v = Number(p.presence);
+  if (Number.isFinite(v)) return v;
+  return Number(p.available) === 1 ? 1 : 0;
+}
+
 // ─── Groups Tab ───────────────────────────────────────────────────────────────
 function renderGroupsTab() {
   _groupSelected.clear();
   const el = document.getElementById('groups-panel');
   const alpha = (a, b) => a.name.localeCompare(b.name);
-  const available = officePilots.filter(p => p.status !== 'airborne' && Number(p.available) === 1).sort(alpha);
+  const available = officePilots.filter(p => p.status !== 'airborne' && officePresenceVal(p) === 1).sort(alpha);
   const airborne = officePilots.filter(p => p.status === 'airborne').sort(alpha);
 
   let html = `
@@ -3368,7 +3679,6 @@ function renderGroupsTab() {
   html += `
         </div>
       </div>
-      <button onclick="submitGroupAway()" style="width:100%;padding:14px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;font-family:Montserrat,sans-serif;text-transform:uppercase;letter-spacing:1px;">Send Pilot(s) Away</button>
     </div>`;
 
   if (airborne.length > 0) {
@@ -3420,7 +3730,7 @@ function toggleGroupPilot(id) {
 async function submitGroupAway() {
   const name = document.getElementById('group-name-input').value.trim() || 'Group';
   if (_groupSelected.size === 0) { toast('Select at least one pilot'); return; }
-  const availablePilots = officePilots.filter(p => p.status !== 'airborne' && Number(p.available) === 1);
+  const availablePilots = officePilots.filter(p => p.status !== 'airborne' && officePresenceVal(p) === 1);
   const pilot_ids = availablePilots.filter(p => _groupSelected.has(p.id)).map(p => p.id);
   const pilot_names = availablePilots.filter(p => _groupSelected.has(p.id)).map(p => p.name);
   try {
@@ -3447,14 +3757,16 @@ function renderOfficeTab() {
 
   const flying       = officePilots.filter(p => p.status === 'airborne');
   // Sort available by last_landed_at ascending — longest wait first (null = never flown, top priority)
-  const signedIn     = officePilots.filter(p => p.status !== 'airborne' && Number(p.available) === 1)
+  const signedIn     = officePilots.filter(p => p.status !== 'airborne' && officePresenceVal(p) === 1)
     .sort((a, b) => {
       if (!a.last_landed_at && !b.last_landed_at) return a.name.localeCompare(b.name);
       if (!a.last_landed_at) return -1;
       if (!b.last_landed_at) return -1;
       return new Date(a.last_landed_at) - new Date(b.last_landed_at);
     });
-  const notAvailable = officePilots.filter(p => p.status !== 'airborne' && Number(p.available) !== 1)
+  const downBottomPilots = officePilots.filter(p => p.status !== 'airborne' && officePresenceVal(p) === 2)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const signedOutOnly = officePilots.filter(p => p.status !== 'airborne' && officePresenceVal(p) === 0)
     .sort((a, b) => a.name.localeCompare(b.name));
 
   // ── Flying section: group by group_id ──
@@ -3479,7 +3791,7 @@ function renderOfficeTab() {
       flyingHtml += `<div class="pilot-card airborne" style="margin-bottom:0;">
         <div style="font-weight:700;color:var(--accent);font-size:14px;margin-bottom:6px;">📋 ${esc(g.name)}</div>`;
       g.pilots.forEach(p => {
-        flyingHtml += `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);">
+        flyingHtml += `<div id="pilot-card-${p.id}" class="pilot-card airborne" style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);">
           <div>
             <span style="font-weight:600;font-size:13px;">${esc(p.name)}</span>
             <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at || '')}" style="font-size:13px;margin:0;">--:--</div>
@@ -3501,7 +3813,7 @@ function renderOfficeTab() {
 
     // Ungrouped solo flights
     ungrouped.forEach(p => {
-      flyingHtml += `<div class="pilot-card airborne" style="margin-bottom:0;">
+      flyingHtml += `<div id="pilot-card-${p.id}" class="pilot-card airborne" style="margin-bottom:0;">
         <div style="display:flex;align-items:center;justify-content:space-between;">
           <div>
             <div style="font-weight:600;font-size:14px;">${esc(p.name)}</div>
@@ -3535,7 +3847,7 @@ function renderOfficeTab() {
     signedIn.forEach(p => {
       const lastFlight = p.last_landed_at ? fmtRelative(p.last_landed_at) : 'no flights';
       const activeGroups = getActiveGroups();
-      availHtml += `<div class="pilot-card" style="margin-bottom:0;padding:10px;">
+      availHtml += `<div class="pilot-card office-card-available" style="margin-bottom:0;padding:10px;border:2px solid rgba(74,143,30,0.45);">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
           <div style="display:flex;align-items:center;gap:8px;min-width:0;">
             <div class="pilot-avatar" style="width:32px;height:32px;font-size:13px;" data-pilot-avatar="${p.id}" data-name="${esc(p.name)}">${esc(p.name.charAt(0))}</div>
@@ -3562,13 +3874,34 @@ function renderOfficeTab() {
     availHtml += `<div class="section-title">✅ Available <span style="color:var(--border);font-weight:400">— none</span></div>`;
   }
 
-  // ── Not Available section: 2 columns, minimal ──
+  // ── Down bottom (off dispatch) ──
+  let dbHtml = '';
+  if (downBottomPilots.length > 0) {
+    dbHtml += `<div class="section-title">🟣 Down bottom (${downBottomPilots.length})</div>`;
+    dbHtml += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">`;
+    downBottomPilots.forEach(p => {
+      dbHtml += `<div class="pilot-card office-card-downbottom" style="margin-bottom:0;padding:10px 12px;border:2px solid rgba(139,92,246,0.5);">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div class="pilot-avatar" style="width:30px;height:30px;font-size:13px;border-color:#8b5cf6;" data-pilot-avatar="${p.id}" data-name="${esc(p.name)}">${esc(p.name.charAt(0))}</div>
+            <span style="font-weight:500;font-size:13px;">${esc(p.name)}</span>
+          </div>
+          <button class="btn-leave" style="background:var(--surface);border:1px solid #8b5cf6;color:#c4b5fd;font-size:11px;padding:5px 10px;" onclick="officeSignIn('${p.id}', '${p.name.replace(/'/g, "\\'")}')" >Available</button>
+        </div>
+      </div>`;
+    });
+    dbHtml += `</div>`;
+  } else {
+    dbHtml += `<div class="section-title">🟣 Down bottom <span style="color:var(--border);font-weight:400">— none</span></div>`;
+  }
+
+  // ── Signed out section ──
   let naHtml = '';
-  if (notAvailable.length > 0) {
-    naHtml += `<div class="section-title">🔴 Not Available (${notAvailable.length})</div>`;
+  if (signedOutOnly.length > 0) {
+    naHtml += `<div class="section-title">🔴 Signed out (${signedOutOnly.length})</div>`;
     naHtml += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">`;
-    notAvailable.forEach(p => {
-      naHtml += `<div class="pilot-card" style="margin-bottom:0;padding:10px 12px;opacity:0.6;">
+    signedOutOnly.forEach(p => {
+      naHtml += `<div class="pilot-card office-card-signedout" style="margin-bottom:0;padding:10px 12px;opacity:0.65;">
         <div style="display:flex;align-items:center;justify-content:space-between;">
           <div style="display:flex;align-items:center;gap:8px;">
             <div class="pilot-avatar" style="width:30px;height:30px;font-size:13px;border-color:var(--border);" data-pilot-avatar="${p.id}" data-name="${esc(p.name)}">${esc(p.name.charAt(0))}</div>
@@ -3580,10 +3913,10 @@ function renderOfficeTab() {
     });
     naHtml += `</div>`;
   } else {
-    naHtml += `<div class="section-title">🔴 Not Available <span style="color:var(--border);font-weight:400">— none</span></div>`;
+    naHtml += `<div class="section-title">🔴 Signed out <span style="color:var(--border);font-weight:400">— none</span></div>`;
   }
 
-  el.innerHTML = flyingHtml + availHtml + naHtml;
+  el.innerHTML = flyingHtml + availHtml + dbHtml + naHtml;
   updateTimers();
   hydrateOfficePilotAvatars();
 }
@@ -3602,7 +3935,7 @@ async function doLeaveOffice(pilotId) {
 
 // Land a pilot from the office side — creates flight record with pilot's current wing and office adjustment notes
 async function doLandPilot(pilotId, pilotName) {
-  if (!confirm(`Land ${pilotName} from office? This will log a flight with their current wing.`)) return;
+  if (!confirm(`Land ${pilotName} from office? This creates a placeholder flight for them to complete in the app.`)) return;
   try {
     const res = await officeFetch('/api/office/land-pilot', {
       method: 'POST',
@@ -3754,7 +4087,12 @@ function renderTodayTab() {
   }
 
   const summary = document.getElementById('today-summary');
-  summary.textContent = sorted.length === 0 ? '' : `${sorted.length} flight${sorted.length !== 1 ? 's' : ''} logged today`;
+  summary.innerHTML = sorted.length === 0
+    ? ''
+    : `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <span>${sorted.length} flight${sorted.length !== 1 ? 's' : ''} logged today</span>
+        <button type="button" onclick="loadOfficeData()" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">↻ Refresh</button>
+      </div>`;
 
   const el = document.getElementById('office-today-list');
   if (sorted.length === 0) {
@@ -3802,7 +4140,7 @@ function sortToday(col) {
   if (todaySort.col === col) {
     todaySort.dir = todaySort.dir === 'asc' ? 'desc' : 'asc';
   } else {
-    todaySort = { col, dir: 'asc' };
+    todaySort = { col, dir: col === 'time' ? 'desc' : 'asc' };
   }
   renderTodayTab();
 }
@@ -3845,36 +4183,62 @@ function renderFlightsTab() {
     return;
   }
 
-  const byDate = {};
-  filteredFlights.forEach(f => {
-    if (!byDate[f.date]) byDate[f.date] = [];
-    byDate[f.date].push(f);
+  const sortedFlights = [...filteredFlights].sort((a, b) => {
+    const la = new Date(a.landed_at || a.created_at || `${a.date}T12:00:00`).getTime();
+    const lb = new Date(b.landed_at || b.created_at || `${b.date}T12:00:00`).getTime();
+    return lb - la;
   });
 
+  const colOrder = getOfficeFlightColOrder();
   let html = `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table class="flight-table" style="min-width:560px;">
-    <thead><tr>
-      <th>Date</th><th>Pilot</th><th>Client</th><th>#</th>
-      <th>kg</th><th>Site</th><th>Min</th><th>Notes</th><th></th>
-    </tr></thead><tbody>`;
-
-  Object.keys(byDate).sort().reverse().forEach(date => {
-    byDate[date].forEach(f => {
-      html += `<tr>
-        <td class="time-col">${esc(officeFmtDate(date))}</td>
-        <td class="pilot-col">${esc(f.pilot_name)}</td>
-        <td class="client-col">${esc(f.client_name || '—')}</td>
-        <td>${f.flight_num}</td>
-        <td>${f.weight}</td>
-        <td style="white-space:nowrap">${esc(f.takeoff)}→${esc(f.landing)}</td>
-        <td>${f.time}</td>
-        <td class="time-col" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.notes || '')}</td>
-        <td style="white-space:nowrap"><button class="btn-edit" onclick="officeEditFlight('${f.id}')" style="margin-right:4px;">✏️ Edit</button><button class="btn-danger" onclick="officeDeleteFlight('${f.id}', '${(f.pilot_name||'').replace(/'/g,"\\'")}')" >🗑</button></td>
-      </tr>`;
-    });
+    <thead>${officeFlightTableHead(colOrder)}</thead><tbody>`;
+  sortedFlights.forEach(f => {
+    html += officeFlightTableRow(f, colOrder);
   });
 
   html += '</tbody></table></div>';
   el.innerHTML = html;
+}
+
+const OFFICE_FLIGHT_COL_KEYS = ['date', 'pilot', 'client', 'num', 'kg', 'sites', 'time', 'notes', 'actions'];
+function getOfficeFlightColOrder() {
+  try {
+    const j = JSON.parse(localStorage.getItem('gforce_office_flight_cols') || 'null');
+    if (Array.isArray(j) && j.length === OFFICE_FLIGHT_COL_KEYS.length && j.every(k => OFFICE_FLIGHT_COL_KEYS.includes(k))) {
+      return j;
+    }
+  } catch (_) {}
+  return [...OFFICE_FLIGHT_COL_KEYS];
+}
+function cycleOfficeFlightColumns() {
+  const o = getOfficeFlightColOrder();
+  const rot = [...o.slice(1), o[0]];
+  localStorage.setItem('gforce_office_flight_cols', JSON.stringify(rot));
+  renderFlightsTab();
+  toast('Column order updated');
+}
+function officeFmtDateWithYear(s) {
+  const d = new Date(s + 'T00:00:00');
+  return d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+function officeFlightTableHead(order) {
+  const labels = { date: 'Date', pilot: 'Pilot', client: 'Client', num: '#', kg: 'kg', sites: 'Site', time: 'Min', notes: 'Notes', actions: '' };
+  return '<tr>' + order.map(k => `<th>${labels[k] || ''}</th>`).join('') + '</tr>';
+}
+function officeFlightTableRow(f, order) {
+  const pid = (f.pilot_name || '').replace(/'/g, "\\'");
+  const cells = {
+    date: `<td class="time-col">${esc(officeFmtDateWithYear(f.date))}</td>`,
+    pilot: `<td class="pilot-col">${esc(f.pilot_name)}</td>`,
+    client: `<td class="client-col">${esc(f.client_name || '—')}</td>`,
+    num: `<td>${f.flight_num}</td>`,
+    kg: `<td>${f.weight}</td>`,
+    sites: `<td style="white-space:nowrap">${esc(f.takeoff)}→${esc(f.landing)}</td>`,
+    time: `<td>${f.time}</td>`,
+    notes: `<td class="time-col" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.notes || '')}</td>`,
+    actions: `<td style="white-space:nowrap"><button class="btn-edit" onclick="officeEditFlight('${f.id}')" style="margin-right:4px;">✏️ Edit</button><button class="btn-danger" onclick="officeDeleteFlight('${f.id}', '${pid}')" >🗑</button></td>`
+  };
+  return '<tr>' + order.map(k => cells[k]).join('') + '</tr>';
 }
 
 function searchFlights(val) {
@@ -3940,7 +4304,10 @@ function updateTimers() {
         el.textContent = 'EXPIRED';
         el.classList.add('urgent');
         const card = document.getElementById(`pilot-card-${p.id}`);
-        if (card) { card.classList.add('alert'); card.classList.remove('airborne'); }
+        if (card) {
+          card.classList.add('alert', 'office-timer-expired');
+          card.classList.remove('airborne');
+        }
         showAlert(p.name);
       } else {
         const mins = Math.floor(remaining / 60000);
@@ -4093,12 +4460,16 @@ function connectWS() {
         toast(`${data.pilot_name}: timer adjusted`);
         loadOfficeData();
         break;
+      case 'PRESENCE_UPDATED':
+        if (pilotId && data.pilot_id === pilotId) {
+          void loadMyData();
+        }
+        loadOfficeData();
+        break;
       case 'PILOT_SIGNED_OUT': {
         const p = officePilots.find(p => p.id === data.pilot_id);
         if (pilotId && data.pilot_id === pilotId) {
-          pilotAvailable = false;
-          renderDashboard();
-          updateStatusBadge();
+          void loadMyData();
           toast('Office signed you out');
         } else {
           toast(`${p ? p.name : 'Pilot'} signed out`);
@@ -4109,9 +4480,7 @@ function connectWS() {
       case 'PILOT_SIGNED_IN': {
         const p = officePilots.find(p => p.id === data.pilot_id);
         if (pilotId && data.pilot_id === pilotId) {
-          pilotAvailable = true;
-          renderDashboard();
-          updateStatusBadge();
+          void loadMyData();
           toast('Office signed you in');
         } else {
           toast(`${p ? p.name : 'Pilot'} signed in`);
@@ -4296,6 +4665,36 @@ function notifyPilotSentAway() {
 // ─── Settings page ────────────────────────────────────────────────────────────
 async function renderSettingsPage() {
   updateThemeButtons();
+  const verEl = document.getElementById('settings-version-display');
+  if (verEl) {
+    verEl.textContent = '—';
+    void fetch(new URL('version.json', location.href).href + '?t=' + Date.now())
+      .then(r => r.json())
+      .then(j => { verEl.textContent = j.version ? `Version ${j.version}` : '—'; })
+      .catch(() => { verEl.textContent = '—'; });
+  }
+  const chEl = document.getElementById('settings-changelog');
+  if (chEl) {
+    chEl.innerHTML = 'Loading…';
+    void fetch(new URL('changelog.json', location.href).href + '?t=' + Date.now())
+      .then(r => r.json())
+      .then(data => {
+        const list = (data && data.versions) ? data.versions : [];
+        if (!list.length) {
+          chEl.innerHTML = '<p style="margin:0;color:var(--muted);">No entries yet.</p>';
+          return;
+        }
+        chEl.innerHTML = list.map(v => {
+          const items = (v.items || []).map(t => `<li style="margin:0 0 6px 12px;">${esc(t)}</li>`).join('');
+          return `<div style="margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border);">
+            <div style="font-weight:700;font-size:15px;margin-bottom:4px;">v${esc(v.version || '')}</div>
+            ${v.date ? `<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">${esc(v.date)}</div>` : ''}
+            <ul style="margin:0;padding:0;list-style:disc;color:var(--text-2);font-size:14px;">${items}</ul>
+          </div>`;
+        }).join('');
+      })
+      .catch(() => { chEl.innerHTML = '<p style="margin:0;color:var(--muted);">Could not load changelog.</p>'; });
+  }
   const fnEl = document.getElementById('settings-full-name');
   if (fnEl) fnEl.value = getPilotFullName();
   renderGlidersSettingsList();

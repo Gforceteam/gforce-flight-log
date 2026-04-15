@@ -1,6 +1,6 @@
 # Gforce Flight Log — project handoff
 
-Canonical onboarding for this product: architecture, deployment, API, data, UI conventions, and agent-facing constraints. **Do not commit secrets**; store values in private credentials (for example `TOOLS.md` on your machine).
+Canonical onboarding for this product: architecture, deployment, API, data, UI conventions, and agent-facing constraints. **Do not commit secrets**; store values in a password manager or other private credentials store.
 
 ## Overview
 
@@ -59,7 +59,7 @@ fly deploy --app gforce-api
 
 ## Secrets and environment (names only)
 
-Configure on Fly and locally as needed. **Values** belong in private storage (for example `~/.openclaw/workspace/TOOLS.md` or your secrets manager), not in this repo.
+Configure on Fly and locally as needed. **Values** belong in a password manager or other private storage, not in this repo.
 
 **Fly.io (app: `gforce-api`)**
 

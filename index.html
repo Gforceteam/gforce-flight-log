@@ -1259,7 +1259,20 @@
 
 <script>
 // ─── Config ──────────────────────────────────────────────────────────────────
-const API_BASE = 'https://gforce-api.fly.dev';
+// Local dev: run API on port 3000 (`cd api && npm start`) and serve this PWA on another port (e.g. 8080) so CORS allows the browser origin.
+const LOCAL_API_PORT = 3000;
+const IS_LOCAL = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(location.hostname);
+function localApiHost() {
+  const h = location.hostname;
+  if (h === '::1' || h === '[::1]') return '[::1]';
+  return h || 'localhost';
+}
+const API_BASE = IS_LOCAL
+  ? `http://${localApiHost()}:${LOCAL_API_PORT}`
+  : 'https://gforce-api.fly.dev';
+const WS_URL = IS_LOCAL
+  ? `ws://${localApiHost()}:${LOCAL_API_PORT}`
+  : 'wss://gforce-api.fly.dev';
 const VAPID_PUBLIC_KEY = 'BGpwh5XQFo1PLmfcYqAwO3sFt8Y4JNMX89x594oX76yTW4cttHEgvcIndfNa-IM3RyjXW0-n_W3A2svCME2fySQ';
 
 // ─── HTML escaping ────────────────────────────────────────────────────────────
@@ -4013,7 +4026,7 @@ async function officeResetPassword() {
 
 // ─── WebSocket ────────────────────────────────────────────────────────────────
 function connectWS() {
-  ws = new WebSocket('wss://gforce-api.fly.dev');
+  ws = new WebSocket(WS_URL);
   ws.onopen = () => {
     document.getElementById('ws-indicator').classList.add('connected');
     document.getElementById('ws-indicator').title = 'Connected';

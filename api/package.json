@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "migrate": "node migrate.js"
+    "migrate": "node migrate.js",
+    "test": "node --check server.js && node --check migrate.js"
   },
   "dependencies": {
     "@libsql/client": "^0.14.0",

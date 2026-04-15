@@ -20,26 +20,30 @@ Tandem paragliding flight logger: pilot PWA (with **built-in office mode**), API
 | `api/` | Node API for Fly.io (`fly deploy` from `api/`) |
 | `flight-data-backups/` | Historical flight CSV exports (committed backups) |
 
-Local-only pilot exports still go under `backups/` (gitignored), same as before.
+Local-only pilot exports still go under `backups/` (gitignored). Committed history lives under `flight-data-backups/`.
 
 ## Development
 
-```bash
-# PWA (pilot + office) — from repo root
-npx serve .
+Run the **API** on port **3000** and the **static PWA** on a **different** port so they do not clash (for example **8080**). The browser origin must be allowed by API CORS (localhost on common dev ports is included).
 
-# API
+```bash
+# Terminal 1 — API (Turso: set TURSO_URL + TURSO_AUTH_TOKEN in api/.env)
 cd api && npm install && npm start
+
+# Terminal 2 — PWA from repo root (example: port 8080)
+npx serve -l 8080 .
 ```
 
-Configure `api/.env` from `api/.env.example` for local API work.
+Then open `http://localhost:8080` (or your chosen port). From `localhost`, the app uses `http://localhost:3000` for REST and `ws://localhost:3000` for WebSocket. **Production** (GitHub Pages) uses `https://gforce-api.fly.dev` / `wss://gforce-api.fly.dev` automatically.
+
+Copy `api/.env.example` to `api/.env` and fill in Turso and auth values. Run `cd api && npm test` for a quick syntax check.
 
 ## Pilot app: standalone vs portal
 
 - **Standalone:** Offline, `localStorage`. No account.
 - **Portal:** Logs into the API; flights sync and notify office via WebSocket.
 
-The pilot app picks the API URL from context (localhost vs GitHub Pages). To change it, edit the `API_BASE` constant in root `index.html`.
+The pilot app **selects the API and WebSocket URLs from `location.hostname`**: localhost (or `127.0.0.1`) → local API on port 3000; otherwise → Fly production. To point at another host, set the `ALLOWED_ORIGINS` env var on the API and adjust the client config in `index.html` if needed.
 
 ## Deploy
 

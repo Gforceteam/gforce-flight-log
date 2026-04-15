@@ -4,8 +4,8 @@
     {
       "name": "gforce-flight-log",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["serve", "-p", "3000", "."],
-      "port": 3000
+      "runtimeArgs": ["serve", "-l", "8080", "."],
+      "port": 8080
     }
   ]
 }

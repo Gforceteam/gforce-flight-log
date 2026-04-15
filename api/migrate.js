@@ -1,7 +1,9 @@
-// One-time migration: loads backup.json from GitHub → inserts into Turso
-// Run once: node migrate.js
+// One-time migration: loads backup.json → inserts into Turso
+// Run once: node migrate.js (requires TURSO_URL and TURSO_AUTH_TOKEN in `.env`)
 require('dotenv').config();
+const fs = require('fs');
 const https = require('https');
+const path = require('path');
 const { createClient } = require('@libsql/client');
 
 const db = createClient({
@@ -9,15 +11,29 @@ const db = createClient({
   authToken: process.env.TURSO_AUTH_TOKEN
 });
 
-function fetchBackup() {
+const FALLBACK_RAW_URL =
+  'https://raw.githubusercontent.com/brookewhatnall/gforce-flight-log/main/api/data/backup.json';
+
+function fetchBackupJson() {
+  const localPath = path.join(__dirname, 'data', 'backup.json');
+  if (fs.existsSync(localPath)) {
+    const raw = fs.readFileSync(localPath, 'utf8');
+    return Promise.resolve(JSON.parse(raw));
+  }
   return new Promise((resolve, reject) => {
-    const url = 'https://raw.githubusercontent.com/brookewhatnall/gforce-api/main/data/backup.json';
-    https.get(url, res => {
+    https.get(FALLBACK_RAW_URL, res => {
+      if (res.statusCode !== 200) {
+        reject(new Error(`HTTP ${res.statusCode} fetching ${FALLBACK_RAW_URL}`));
+        return;
+      }
       let body = '';
-      res.on('data', c => body += c);
+      res.on('data', c => (body += c));
       res.on('end', () => {
-        try { resolve(JSON.parse(body)); }
-        catch (e) { reject(e); }
+        try {
+          resolve(JSON.parse(body));
+        } catch (e) {
+          reject(e);
+        }
       });
     }).on('error', reject);
   });
@@ -41,8 +57,8 @@ async function createTables() {
 
 async function migrate() {
   await createTables();
-  console.log('📦 Fetching backup.json from GitHub...');
-  const backup = await fetchBackup();
+  console.log('📦 Loading backup.json (./data/backup.json or GitHub fallback)...');
+  const backup = await fetchBackupJson();
   console.log(`📦 Found ${backup.pilots?.length || 0} pilots, ${backup.flights?.length || 0} flights`);
 
   // Pilots

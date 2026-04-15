@@ -5,39 +5,34 @@
 **Name:** Gforce Flight Log
 **Type:** Tandem paragliding flight operations management PWA
 **Live App:** https://brookewhatnall.github.io/gforce-flight-log/
+**Staff:** https://brookewhatnall.github.io/gforce-flight-log/staff-dashboard/
 **API:** https://gforce-api.fly.dev | WebSocket: wss://gforce-api.fly.dev
 **Description:** Two-role PWA for GForce Paragliding (Queenstown, NZ). Pilots log tandem flights, receive timer alerts when office sends them away. Office dispatches pilots, tracks timers, manages the duty roster.
 
 ## Architecture
 
 ```
-Frontend (PWA, GitHub Pages)
-├── index.html     — single-page app (3634 lines, vanilla JS)
-├── sw.js          — service worker (118 lines)
-├── manifest.json  — PWA manifest (/checklist/ path)
-└── Icons          — icon-192.png, icon-512.png
-
-Backend (Node.js/Express, Fly.io Tokyo)
-├── server.js      — REST API + WebSocket (1338 lines)
-└── Turso DB       — LibSQL/SQLite (gforce-api-nzgforce.aws-ap-northeast-1.turso.io)
+Monorepo (https://github.com/brookewhatnall/gforce-flight-log)
+├── index.html, sw.js, manifest.json — pilot PWA (GitHub Pages = repo root)
+├── staff-dashboard/ — office dashboard (static HTML)
+├── api/server.js    — REST API + WebSocket (Fly.io Tokyo)
+└── Turso DB         — LibSQL/SQLite (gforce-api-nzgforce.aws-ap-northeast-1.turso.io)
 ```
 
-## Repos
+## Repo
 
-- **Frontend:** https://github.com/brookewhatnall/gforce-flight-log
-- **Backend:** https://github.com/brookewhatnall/gforce-api
-- **Local frontend:** ~/Projects/gforce-flight-log/
-- **Local backend:** ~/Projects/gforce-api/
+- **Monorepo:** https://github.com/brookewhatnall/gforce-flight-log (pilot app + staff + `api/` + `flight-data-backups/`)
+- **Local clone:** e.g. ~/Developer/Gforce Flight Log/gforce-flight-log/
 
 ## Deploy Commands
 
 ```bash
-# Frontend (GitHub Pages)
-cd ~/Projects/gforce-flight-log
+# GitHub Pages (pilot + staff under same origin)
+cd ~/Developer/Gforce\ Flight\ Log/gforce-flight-log
 git add . && git commit -m "msg" && git push origin main
 
 # Backend (Fly.io)
-cd ~/Projects/gforce-api
+cd ~/Developer/Gforce\ Flight\ Log/gforce-flight-log/api
 git add server.js && git commit -m "msg" && git push origin main
 fly deploy --app gforce-api
 ```

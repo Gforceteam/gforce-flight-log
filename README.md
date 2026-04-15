@@ -1,79 +1,65 @@
-# Gforce Flight Log
+# Gforce Flight Log (monorepo)
 
-Tandem paragliding flight logger PWA.
+Tandem paragliding flight logger: pilot PWA, office staff dashboard, API server code, and committed CSV backups live in **this single repository**. GitHub Pages serves the **repository root** so the pilot app URL is unchanged.
 
-## Pilot Portal Mode (API)
+## URLs
 
-The app now works in two modes:
+| App | URL |
+|-----|-----|
+| Pilot PWA | https://brookewhatnall.github.io/gforce-flight-log/ |
+| Staff dashboard | https://brookewhatnall.github.io/gforce-flight-log/staff-dashboard/ |
+| API (Fly.io) | https://gforce-api.fly.dev |
+| WebSocket | wss://gforce-api.fly.dev |
 
-**Standalone mode:** Works offline, stores flights in browser localStorage. No account needed.
+## Repo layout
 
-**Portal mode:** Logs into a shared API server. Flights sync to a central database and notify office staff in real time.
+| Path | Purpose |
+|------|---------|
+| Repo root (`index.html`, `sw.js`, `manifest.json`, icons) | Pilot PWA — **must stay at root** for the same GitHub Pages URL |
+| `staff-dashboard/` | Office dashboard (static HTML) |
+| `api/` | Node API for Fly.io (`fly deploy` from `api/`) |
+| `flight-data-backups/` | Historical flight CSV exports (committed backups) |
 
-### URLs
-
-- **Pilot app:** https://brookewhatnall.github.io/gforce-flight-log
-- **Staff dashboard:** https://brookewhatnall.github.io/gforce-staff-dashboard
-- **API server:** Deploy the `gforce-api` repo to Render
+Local-only pilot exports still go under `backups/` (gitignored), same as before.
 
 ## Development
 
 ```bash
-# Pilot app (static, just open index.html or serve with any static server)
+# Pilot app (static) — from repo root
 npx serve .
 
-# Staff dashboard (static)
-cd ../gforce-staff-dashboard && npx serve .
+# Staff dashboard
+npx serve . --listen 8080
+# Then open http://localhost:8080/staff-dashboard/
 
-# API server
-cd ../gforce-api && npm install && npm start
+# API
+cd api && npm install && npm start
 ```
 
-## Pilot App: Standalone vs Portal Mode
+Configure `api/.env` from `api/.env.example` for local API work.
 
-The pilot app detects the API URL automatically:
-- On localhost → uses `http://localhost:3000`
-- On GitHub Pages → uses the deployed API URL
+## Pilot app: standalone vs portal
 
-To change the API URL, edit the `API_BASE` constant in `index.html`.
+- **Standalone:** Offline, `localStorage`. No account.
+- **Portal:** Logs into the API; flights sync and notify office via WebSocket.
 
-## Portal Mode: How It Works
+The pilot app picks the API URL from context (localhost vs GitHub Pages). To change it, edit the `API_BASE` constant in root `index.html`.
 
-1. Pilot logs in with their name and PIN
-2. When a flight is logged, the office staff dashboard receives a live WebSocket notification and the 90-minute timer stops
-3. Office staff can start a "left office" timer for any pilot
-4. If the timer expires without a landing report, an alert fires on the staff dashboard
+## Deploy
 
-## Deploying the API to Render
+**GitHub Pages:** Repository **Settings → Pages**: build from **`main`**, folder **`/` (root)**. Do **not** switch to `/docs` only unless you move the PWA into `docs/` (that would change URLs).
 
-1. Create account at [render.com](https://render.com)
-2. Connect your `gforce-api` GitHub repo
-3. Set build command: `npm install`
-4. Set start command: `npm start`
-5. Add environment variables:
-   - `JWT_SECRET` = a long random string
-   - `OFFICE_PASSWORD` = your office staff password
-6. Deploy
+**API (Fly.io):**
 
-The free tier on Render works fine for development and small teams. The server sleeps after 15 minutes of inactivity and wakes on the first request.
-
-## Adding Pilots
-
-Connect to the SQLite database and run:
-
-```sql
--- Generate a PIN hash in Node first:
--- require('bcryptjs').hashSync('1234', 10)
-
-INSERT INTO pilots (id, name, pin_hash) VALUES (
-  lower(hex(randomblob(16))),
-  'New Pilot',
-  '$2a$10$YOUR_HASH_HERE'
-);
+```bash
+cd api
+fly deploy --app gforce-api
 ```
 
-## Seeded Demo Account
+## Legacy separate repos
 
-- Pilot: **Brooke**
-- PIN: **1234**
-- Office password: **office123** (set in `OFFICE_PASSWORD` env var)
+The former split repos (`gforce-api`, `gforce-staff-dashboard`, `gforce-flight-data-backups`) can be archived on GitHub after this monorepo is pushed and the team uses the new staff URL.
+
+## Adding pilots
+
+See `Project.md` for SQL and PIN hashing. **Do not commit secrets.**

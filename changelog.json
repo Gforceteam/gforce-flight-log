@@ -1,11 +1,19 @@
 {
   "versions": [
     {
-      "version": "1.1.2",
+      "version": "1.2.0",
       "date": "2026-04-15",
       "items": [
-        "Settings: replace export name text input with display + Edit button that opens a native prompt (instant keyboard on iOS).",
-        "Header pilot name tap also opens the prompt directly instead of navigating to Settings."
+        "Stats: gondola time and vertical climb cards now show on the Stats page (were computed but never displayed).",
+        "Stats: single-pass flight aggregation (month/today/week/takeoff/landing counts in one loop); Set-based compliance lookup.",
+        "Dashboard: skip full re-render when poll data hasn't changed (reduces DOM thrash every 15s).",
+        "Toast: fix overlapping hide timers; add null guard to renderDashboard.",
+        "Fix: clear dashboard countdown timer on logout (prevents stray interval).",
+        "Security: FF table pilot names are now HTML-escaped; JWT verify uses explicit HS256 algorithm.",
+        "API: bcrypt compare/hash switched from sync to async (unblocks event loop under load).",
+        "API: push notifications sent in parallel per pilot; WebSocket ping/pong prunes dead connections.",
+        "API: gzip compression (from 1.1.0) confirmed; scroll handler DOM lookup cached.",
+        "Removed dead code: unused CSS (.status-badge, .pilot-status), unused variables (pilotAvailable), dead functions (updateClientName, downloadPilotCSV, avgPaxCard)."
       ]
     },
     {

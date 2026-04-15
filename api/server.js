@@ -286,7 +286,7 @@ function verifyToken(req, res, next) {
     return res.status(401).json({ error: 'No token provided' });
   }
   try {
-    const decoded = jwt.verify(auth.slice(7), JWT_SECRET);
+    const decoded = jwt.verify(auth.slice(7), JWT_SECRET, { algorithms: ['HS256'] });
     if (decoded.type === 'office') {
       return res.status(403).json({ error: 'Pilot token required' });
     }
@@ -306,7 +306,7 @@ function verifyOffice(req, res, next) {
     return res.status(401).json({ error: 'No token provided' });
   }
   try {
-    const office = jwt.verify(auth.slice(7), JWT_SECRET);
+    const office = jwt.verify(auth.slice(7), JWT_SECRET, { algorithms: ['HS256'] });
     if (office.type !== 'office') return res.status(403).json({ error: 'Not office staff' });
     req.office = office;
     next();
@@ -322,7 +322,7 @@ function verifyPilotOrOffice(req, res, next) {
     return res.status(401).json({ error: 'No token provided' });
   }
   try {
-    const decoded = jwt.verify(auth.slice(7), JWT_SECRET);
+    const decoded = jwt.verify(auth.slice(7), JWT_SECRET, { algorithms: ['HS256'] });
     if (decoded.type === 'office') {
       req.office = decoded;
       return next();
@@ -368,6 +368,21 @@ function broadcast(data) {
     if (client.readyState === WebSocket.OPEN) client.send(msg);
   });
 }
+
+// ─── WebSocket connection handler (ping/pong to prune dead clients) ──────────
+wss.on('connection', (ws) => {
+  ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; });
+  ws.on('error', () => { ws.terminate(); });
+});
+const _wsPingInterval = setInterval(() => {
+  wss.clients.forEach(ws => {
+    if (!ws.isAlive) return ws.terminate();
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, 30000);
+wss.on('close', () => clearInterval(_wsPingInterval));
 
 // ─── Middleware ────────────────────────────────────────────────────────────────
 const ALLOWED_ORIGINS = [
@@ -417,7 +432,7 @@ app.post('/api/auth/pilot', async (req, res) => {
     const credential = password || pin;
     if (!name || !credential) return res.status(400).json({ error: 'Name and password required' });
     const pilot = await queryOne('SELECT * FROM pilots WHERE name = ?', [name]);
-    if (!pilot || !bcrypt.compareSync(credential, pilot.pin_hash)) {
+    if (!pilot || !(await bcrypt.compare(credential, pilot.pin_hash))) {
       return res.status(401).json({ error: 'Invalid name or password' });
     }
     clearRateLimit(ip); // reset on successful login
@@ -773,18 +788,18 @@ app.get('/api/pilot/avatar/:pilotId', verifyPilotOrOffice, async (req, res) => {
 async function sendPushToPilot(pilotId, payload) {
   if (!process.env.VAPID_PUBLIC_KEY) return;
   const subs = await queryAll('SELECT id, subscription FROM push_subscriptions WHERE pilot_id = ?', [pilotId]);
-  for (const row of subs) {
+  const body = JSON.stringify(payload);
+  await Promise.allSettled(subs.map(async (row) => {
     try {
-      await webpush.sendNotification(JSON.parse(row.subscription), JSON.stringify(payload));
+      await webpush.sendNotification(JSON.parse(row.subscription), body);
     } catch (e) {
-      // 410 Gone / 404 = subscription expired, clean it up
       if (e.statusCode === 410 || e.statusCode === 404) {
         await run('DELETE FROM push_subscriptions WHERE id = ?', [row.id]);
       } else {
         console.error('Push send failed:', e.statusCode, e.message);
       }
     }
-  }
+  }));
 }
 
 app.post('/api/pilot/push-subscription', verifyToken, async (req, res) => {
@@ -907,11 +922,11 @@ app.put('/api/pilot/password', verifyToken, async (req, res) => {
     if (new_password.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' });
     if (new_password.length > 128) return res.status(400).json({ error: 'Password too long' });
     const pilot = await queryOne('SELECT * FROM pilots WHERE id = ?', [req.pilot.id]);
-    if (!pilot || !bcrypt.compareSync(current_password, pilot.pin_hash)) {
+    if (!pilot || !(await bcrypt.compare(current_password, pilot.pin_hash))) {
       return res.status(401).json({ error: 'Current password is incorrect' });
     }
     clearRateLimit(ip);
-    const newHash = bcrypt.hashSync(new_password, 10);
+    const newHash = await bcrypt.hash(new_password, 10);
     await run('UPDATE pilots SET pin_hash = ? WHERE id = ?', [newHash, req.pilot.id]);
     res.json({ message: 'Password changed successfully' });
   } catch (e) {
@@ -929,7 +944,7 @@ app.put('/api/office/pilot-password', verifyOffice, async (req, res) => {
     if (new_password.length > 128) return res.status(400).json({ error: 'Password too long' });
     const pilot = await queryOne('SELECT id, name FROM pilots WHERE id = ?', [pilot_id]);
     if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
-    const newHash = bcrypt.hashSync(new_password, 10);
+    const newHash = await bcrypt.hash(new_password, 10);
     await run('UPDATE pilots SET pin_hash = ? WHERE id = ?', [newHash, pilot_id]);
     res.json({ message: `Password reset for ${pilot.name}` });
   } catch (e) {

@@ -181,12 +181,6 @@
     }
     .pilot-name-sm.pilot-name-tappable:active { opacity: 0.85; }
     .status-right { display: flex; align-items: center; gap: 8px; }
-    .status-badge {
-      font-size: 12px; font-weight: 700; padding: 4px 10px;
-      border-radius: 20px;
-    }
-    .status-badge.in-office { background: var(--accent); color: #fff; }
-    .status-badge.airborne { background: var(--warning); color: #1a1200; }
     .server-badge {
       font-size: 11px; padding: 3px 8px; border-radius: 10px; font-weight: 600;
     }
@@ -654,9 +648,6 @@
     .glider-editor-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
     .pilot-info { flex: 1; min-width: 0; }
     .pilot-name { font-size: 16px; font-weight: 700; color: var(--text); }
-    .pilot-status { font-size: 13px; margin-top: 3px; font-weight: 500; color: var(--text-2); }
-    .pilot-status.in-office { color: var(--accent); font-weight: 600; }
-    .pilot-status.airborne { color: var(--warning); font-weight: 600; }
     .pilot-client { font-size: 13px; color: var(--accent); margin-top: 3px; font-weight: 600; }
 
     .timer-display {
@@ -1346,7 +1337,6 @@ let myDrives = [];
 let flyingPilots = []; // pilots currently airborne — shown on dashboard
 let statsMonthOffset = 0; // 0 = current month, -1 = last month, etc.
 let myStatus = { status: 'in_office', client_name: null, timer_expires_at: null };
-let pilotAvailable = false; // true only when presence === 1 (available for dispatch)
 /** 0 signed out, 1 available, 2 down bottom */
 let pilotPresence = 0;
 let pilotHasAvatar = false;
@@ -1857,10 +1847,10 @@ async function doLogin() {
 
 // ─── Pilot Logout ─────────────────────────────────────────────────────────────
 function doLogout() {
-  unsubscribeFromPush(); // remove push subscription from server
+  unsubscribeFromPush();
   pilotToken = pilotId = pilotName = null;
   clearInterval(window._statusPoll);
-  // Kill the visibility-change listener set up by startStatusPoll
+  clearInterval(window._dashboardTimer);
   if (window._statusPollAbort) { window._statusPollAbort.abort(); window._statusPollAbort = null; }
   localStorage.removeItem('gforce_pilot_token');
   localStorage.removeItem('gforce_pilot_id');
@@ -1921,7 +1911,6 @@ function startStatusPoll() {
       myStatus = { status: newStatus.status, client_name: newStatus.client_name, timer_expires_at: newStatus.timer_expires_at, group_name: newStatus.group_name || null, group_pilots: newStatus.group_pilots || [], group_id: newStatus.group_id || null, is_peak_trip: newStatus.is_peak_trip || false };
       pilotPresence = Number(newStatus.presence);
       if (!Number.isFinite(pilotPresence)) pilotPresence = newStatus.available === true ? 1 : 0;
-      pilotAvailable = pilotPresence === 1;
       const prevHa = pilotHasAvatar;
       pilotHasAvatar = !!newStatus.has_avatar;
       if (prevHa !== pilotHasAvatar) refreshPilotHeaderAvatar();
@@ -2230,7 +2219,6 @@ async function loadMyData() {
     myStatus = statusData;
     pilotPresence = Number(statusData.presence);
     if (!Number.isFinite(pilotPresence)) pilotPresence = statusData.available === true ? 1 : 0;
-    pilotAvailable = pilotPresence === 1;
     pilotHasAvatar = !!statusData.has_avatar;
     if (statusData.current_wing) {
       currentWing = statusData.current_wing;
@@ -2344,7 +2332,6 @@ async function setPilotPresenceClient(next, opts = {}) {
     }
     const data = await res.json();
     pilotPresence = data.presence;
-    pilotAvailable = pilotPresence === 1;
     updateStatusBadge();
     renderDashboard();
     const msgs = { 0: '🔴 Signed out', 1: '🟢 Available for dispatch', 2: '🟣 Down Below (off dispatch)' };
@@ -2420,8 +2407,14 @@ function renderFlyingList(excludeSelf = false) {
     </div>`;
 }
 
+let _lastDashboardKey = '';
 function renderDashboard() {
   const el = document.getElementById('dashboard-content');
+  if (!el) return;
+  // Skip full rebuild if nothing relevant changed (timer updates handled by startDashboardCountdown)
+  const key = JSON.stringify({ s: myStatus.status, p: pilotPresence, g: myStatus.group_pilots, fp: flyingPilots.length });
+  if (key === _lastDashboardKey && myStatus.status !== 'airborne') { return; }
+  _lastDashboardKey = key;
   if (myStatus.status === 'airborne') {
     const expires = myStatus.timer_expires_at ? new Date(myStatus.timer_expires_at).getTime() : 0;
     el.innerHTML = `
@@ -3104,7 +3097,7 @@ function exportMonthCSV() {
     f.landed_at ? new Date(f.landed_at).toLocaleString('en-NZ', { timeZone: NZ_TZ }) : ''
   ]);
   const csv = [header, ...rows].map(r => csvEscapeRow(r)).join('\n');
-  downloadPilotCSV(csv, `my_flights_${monthLabel}.csv`);
+  downloadCSV(csv, `my_flights_${monthLabel}.csv`);
 }
 
 /** All flights, oldest first, full logbook CSV. */
@@ -3127,7 +3120,7 @@ function exportFullLogbookCSV() {
   ]);
   const csv = [header, ...rows].map(r => csvEscapeRow(r)).join('\n');
   const tag = todayStr();
-  downloadPilotCSV(csv, `gforce_logbook_${tag}.csv`);
+  downloadCSV(csv, `gforce_logbook_${tag}.csv`);
 }
 
 /** Georges export: every flight needs core fields; each day with flights needs duty on last flight of that day. */
@@ -3280,9 +3273,6 @@ async function shareCsvOrDownload(csv, filename) {
   downloadCSV(csv, filename);
 }
 
-// Shared CSV download helper — works for both pilot and office contexts
-function downloadPilotCSV(csv, filename) { downloadCSV(csv, filename); }
-
 function renderStats() {
   const flights = myFlights;
   const drives = myDrives || [];
@@ -3303,7 +3293,6 @@ function renderStats() {
   const nextBtn = document.getElementById('stats-next-btn');
   if (nextBtn) nextBtn.disabled = isCurrentMonth;
 
-  const monthFlights = flights.filter(f => f.date >= monthStartStr && f.date <= monthEndStr);
   const monthDrives  = drives.filter(d => d.date >= monthStartStr && d.date <= monthEndStr);
 
   const t = todayStr();
@@ -3319,13 +3308,25 @@ function renderStats() {
   const ws = getWeekStart(t);
   const we = getWeekEnd(ws);
 
-  const todayFlights = flights.filter(f => f.date === t);
-  const weekFlights  = flights.filter(f => f.date >= ws && f.date <= we);
+  // Single pass over flights for all aggregates
+  const todayFlights = [];
+  const weekFlights = [];
+  const monthFlights = [];
+  const takeoffCounts = {};
+  const landingCounts = {};
+  let totalWeight = 0;
+  for (const f of flights) {
+    totalWeight += Number(f.weight);
+    if (f.date === t) todayFlights.push(f);
+    if (f.date >= ws && f.date <= we) weekFlights.push(f);
+    if (f.date >= monthStartStr && f.date <= monthEndStr) monthFlights.push(f);
+    if (f.takeoff) takeoffCounts[f.takeoff] = (takeoffCounts[f.takeoff] || 0) + 1;
+    if (f.landing) landingCounts[f.landing] = (landingCounts[f.landing] || 0) + 1;
+  }
 
-  const avgWeight = flights.length ? (flights.reduce((sum, f) => sum + Number(f.weight), 0) / flights.length).toFixed(1) : '0';
+  const avgWeight = flights.length ? (totalWeight / flights.length).toFixed(1) : '0';
   const avgPerDay = monthFlights.length && daysElapsed ? (monthFlights.length / daysElapsed).toFixed(1) : '0';
 
-  // Gondola time: each flight = 6 min gondola ride back up
   const gondolaMins = flights.length * 6;
   function fmtGondola(mins) {
     if (mins < 60) return { val: mins, unit: mins === 1 ? 'minute' : 'minutes', sub: '' };
@@ -3360,10 +3361,9 @@ function renderStats() {
   const wingPct = Math.min(100, (wingUsed / 1000) * 100);
   const wingBarClass = wingRemaining <= 50 ? 'wing-bar-danger' : wingRemaining <= 100 ? 'wing-bar-warn' : 'wing-bar-ok';
 
-  const tNz = todayStr();
-  const winStart = addDaysYmd(tNz, -364);
+  const winStart = addDaysYmd(t, -364);
   /** All logged flights in last 365 NZ calendar days — rate is pilot-wide, not per registration */
-  const pilotFlightsLastYear = flights.filter(f => f.date >= winStart && f.date <= tNz);
+  const pilotFlightsLastYear = flights.filter(f => f.date >= winStart && f.date <= t);
   const nPilotYear = pilotFlightsLastYear.length;
   const avgFlightsPerDay = nPilotYear / 365;
   let replDays = null;
@@ -3372,7 +3372,7 @@ function renderStats() {
   let wingPredBody = '';
   if (currentWing && wingRemaining > 0 && avgFlightsPerDay > 0) {
     replDays = Math.min(365 * 5, Math.ceil(wingRemaining / avgFlightsPerDay));
-    const replYmd = addDaysYmd(tNz, replDays);
+    const replYmd = addDaysYmd(t, replDays);
     replMonthYear = new Date(replYmd + 'T12:00:00').toLocaleDateString('en-NZ', { month: 'long', year: 'numeric', timeZone: NZ_TZ });
     const r = avgFlightsPerDay;
     ratePhrase = r >= 0.95 && r < 1.05
@@ -3385,25 +3385,19 @@ function renderStats() {
     wingPredBody = 'Not enough flights in the past year to estimate a rate yet — keep logging.';
   }
 
-  // Compliance: unique days worked in last 14
+  // Compliance: unique days worked in last 14 (Set for O(1) lookup)
   const last14 = [];
   for (let i = 13; i >= 0; i--) {
     const d = new Date(); d.setDate(d.getDate() - i);
     last14.push(d.toLocaleDateString('en-CA', { timeZone: NZ_TZ }));
   }
-  const daysWorked = last14.filter(d => flights.some(f => f.date === d)).length;
+  const flightDates = new Set(flights.map(f => f.date));
+  const daysWorked = last14.filter(d => flightDates.has(d)).length;
   const daysLeft = 14 - daysWorked; // days remaining (need min 2 off)
   const daysRemaining = Math.max(0, daysLeft);
   const compPct = (daysWorked / 14) * 100;
   const compBarClass = daysLeft <= 2 ? 'wing-bar-danger' : daysLeft <= 3 ? 'wing-bar-warn' : daysLeft <= 5 ? 'wing-bar-warn' : 'wing-bar-ok';
 
-  // Takeoff and landing location breakdowns
-  const takeoffCounts = {};
-  const landingCounts = {};
-  flights.forEach(f => {
-    if (f.takeoff) takeoffCounts[f.takeoff] = (takeoffCounts[f.takeoff] || 0) + 1;
-    if (f.landing) landingCounts[f.landing] = (landingCounts[f.landing] || 0) + 1;
-  });
   const topTakeoffs = Object.entries(takeoffCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const topLandings = Object.entries(landingCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
@@ -3480,14 +3474,6 @@ function renderStats() {
         : daysLeft <= 3 ? '<div style="margin-top:8px;font-size:13px;font-weight:600;color:#c05800">⚠️ Only 1 rest day remaining</div>'
         : daysLeft <= 5 ? '<div style="margin-top:8px;font-size:13px;font-weight:600;color:#c07000">⚡ Getting close — 2 rest days needed in 14</div>' : ''}
     </div>`;
-
-  // Average pax weight card (career total, not per month)
-  const avgPaxCard = flights.length ? `
-    <div class="card stat-section">
-      <div class="stat-section-title">⚖️ Average Pax Weight</div>
-      <div style="font-size:32px;font-weight:700">${avgWeight}<span style="font-size:16px;font-weight:500;margin-left:4px;">kg</span></div>
-      <div style="margin-top:4px;font-size:13px;color:var(--muted);">Career average across ${flights.length} flights</div>
-    </div>` : '';
 
   // Gondola time card
   const gondolaCard = flights.length ? `
@@ -3590,7 +3576,7 @@ function renderStats() {
       </div>
     </div>` : '';
 
-  document.getElementById('stats-breakdown').innerHTML = rowCards + wingCard + wingPredictionCard + compCard + chartCard + takeoffCard + landingCard + drivesCard + exportCard;
+  document.getElementById('stats-breakdown').innerHTML = rowCards + wingCard + wingPredictionCard + compCard + chartCard + takeoffCard + landingCard + gondolaCard + climbCard + drivesCard + exportCard;
 }
 
 function showPage(name) {
@@ -3617,11 +3603,13 @@ function showPage(name) {
 }
 
 // Collapse stats header on scroll
-window.addEventListener('scroll', () => {
-  const hdr = document.getElementById('header-stats');
-  if (!hdr || hdr.style.display === 'none') return;
-  hdr.classList.toggle('stats-scrolled', window.scrollY > 30);
-}, { passive: true });
+{
+  const _statsHdr = document.getElementById('header-stats');
+  window.addEventListener('scroll', () => {
+    if (!_statsHdr || _statsHdr.style.display === 'none') return;
+    _statsHdr.classList.toggle('stats-scrolled', window.scrollY > 30);
+  }, { passive: true });
+}
 
 // Swipe left/right on stats page to change month
 (function () {
@@ -3656,7 +3644,7 @@ function buildFFTable(dates, pilots) {
     const daysLeft = 14 - p.daysWorked;
     const cls = daysLeft <= 2 ? 'ff-limit' : daysLeft <= 3 ? 'ff-warn-hard' : daysLeft <= 5 ? 'ff-warn' : 'ff-ok';
     html += `<tr>
-      <td class="ff-pilot-name">${p.name}</td>
+      <td class="ff-pilot-name">${esc(p.name)}</td>
       ${dates.map(d => {
         const cnt = p.dayCounts[d];
         return `<td class="${d === today ? 'ff-today-col' : ''}">${cnt ? `<span class="ff-day-val">${cnt}</span>` : ''}</td>`;
@@ -4233,12 +4221,6 @@ async function officeDeleteFlight(flightId, pilotName) {
   } catch (e) { toast('Network error: ' + e.message); }
 }
 
-async function updateClientName(pilotId, clientName) {
-  await officeFetch('/api/office/leave', {
-    method: 'POST',
-    body: JSON.stringify({ pilot_id: pilotId, client_name: clientName })
-  });
-}
 
 // ─── Today Tab ────────────────────────────────────────────────────────────────
 function renderTodayTab() {
@@ -4700,11 +4682,14 @@ function fmtRelative(isoString) {
 }
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
+let _toastTimer = null;
 function toast(msg) {
   const el = document.getElementById('toast');
+  if (!el) return;
   el.textContent = msg;
   el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 2500);
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { el.classList.remove('show'); _toastTimer = null; }, 2500);
 }
 
 // ─── Push Subscription ───────────────────────────────────────────────────────

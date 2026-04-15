@@ -55,6 +55,8 @@ git push origin main
 fly deploy --app gforce-api
 ```
 
+**GitHub Actions:** `.github/workflows/fly-deploy-api.yml` deploys from `api/` on pushes to `main`. Set the **`FLY_API_TOKEN`** secret on the **`gforce-flight-log`** repository. In the Fly.io dashboard, disconnect any deploy hook that still targets the old **`gforce-api`** GitHub repo so only this workflow (or your manual `fly deploy`) runs.
+
 ## Secrets and environment (names only)
 
 Configure on Fly and locally as needed. **Values** belong in private storage (for example `~/.openclaw/workspace/TOOLS.md` or your secrets manager), not in this repo.

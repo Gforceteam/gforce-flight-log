@@ -1,0 +1,32 @@
+# Deploy Node API (api/) to Fly.io when server code changes.
+# Requires repo secret: FLY_API_TOKEN (fly tokens create from https://fly.io/dashboard)
+name: Deploy API to Fly.io
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/**'
+      - '.github/workflows/fly-deploy-api.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: fly-deploy-gforce-api
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy gforce-api
+        working-directory: api
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

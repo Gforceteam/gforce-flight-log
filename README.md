@@ -47,10 +47,14 @@ The pilot app picks the API URL from context (localhost vs GitHub Pages). To cha
 
 **API (Fly.io):**
 
+Manual deploy from a clone of this repo:
+
 ```bash
 cd api
 fly deploy --app gforce-api
 ```
+
+**CI (GitHub → Fly):** Pushes to `main` that touch `api/` run `.github/workflows/fly-deploy-api.yml`. Add a repository secret **`FLY_API_TOKEN`** (create with `fly tokens create` or **Fly.io dashboard → Access tokens**). If you previously connected Fly’s GitHub integration to the old **`gforce-api`** repo only, remove or disable that so deploys are not duplicated or pointed at the wrong repo.
 
 ## Legacy separate repos
 

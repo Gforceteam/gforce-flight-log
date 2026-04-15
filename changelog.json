@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "version": "1.0.8",
+      "date": "2026-04-15",
+      "items": [
+        "Settings → glider editor: first day this wing was flown + Apply to log (fills empty wing_reg on past flights from that date for Stats)."
+      ]
+    },
+    {
       "version": "1.0.7",
       "date": "2026-04-15",
       "items": [

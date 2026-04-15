@@ -1023,6 +1023,12 @@
               <label for="glider-f-wr">Weight range</label>
               <input type="text" id="glider-f-wr" class="settings-input" placeholder="e.g. 90–120 kg" maxlength="64" autocomplete="off" />
             </div>
+            <div style="grid-column:1/-1;padding-top:4px;border-top:1px solid var(--border);margin-top:4px;">
+              <label for="glider-f-first-flown">First day this wing was flown</label>
+              <input type="date" id="glider-f-first-flown" class="settings-input" style="margin-bottom:8px;" />
+              <p style="font-size:12px;color:var(--muted);margin:0 0 10px;line-height:1.45;">Optional. Use <strong>Apply to log</strong> to set this wing on all your flights from that date onward that still have no wing saved — updates Stats.</p>
+              <button type="button" class="settings-btn settings-btn-secondary" id="glider-apply-wing-btn">Apply to log</button>
+            </div>
           </div>
           <div class="glider-editor-actions">
             <button type="button" class="settings-btn settings-btn-primary" id="glider-editor-save">Save glider</button>
@@ -1433,13 +1439,16 @@ function loadGliders() {
   }
 }
 function normalizeGlider(g) {
+  let firstFlownDate = (g.firstFlownDate || '').trim();
+  if (firstFlownDate && !/^\d{4}-\d{2}-\d{2}$/.test(firstFlownDate)) firstFlownDate = '';
   return {
     id: g.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2)),
     manufacturer: (g.manufacturer || '').trim(),
     model: (g.model || '').trim(),
     size: (g.size || '').trim(),
     weightRange: (g.weightRange || '').trim(),
-    registration: (g.registration || '').trim().toUpperCase()
+    registration: (g.registration || '').trim().toUpperCase(),
+    firstFlownDate
   };
 }
 function saveGliders(list) {
@@ -1550,6 +1559,7 @@ function openGliderEditor(idOrNew) {
   const model = document.getElementById('glider-f-model');
   const size = document.getElementById('glider-f-size');
   const wr = document.getElementById('glider-f-wr');
+  const firstFlown = document.getElementById('glider-f-first-flown');
   if (!wrap || !titleEl || !idField || !reg) return;
   if (idOrNew === 'new') {
     titleEl.textContent = 'New glider';
@@ -1559,6 +1569,7 @@ function openGliderEditor(idOrNew) {
     model.value = '';
     size.value = '';
     wr.value = '';
+    if (firstFlown) firstFlown.value = '';
   } else {
     const g = loadGliders().find(x => x.id === idOrNew);
     if (!g) return;
@@ -1569,6 +1580,7 @@ function openGliderEditor(idOrNew) {
     model.value = g.model || '';
     size.value = g.size || '';
     wr.value = g.weightRange || '';
+    if (firstFlown) firstFlown.value = g.firstFlownDate || '';
   }
   wrap.style.display = 'block';
   wrap.setAttribute('aria-hidden', 'false');
@@ -1592,13 +1604,15 @@ function saveGliderFromEditor() {
     toast('Registration is required');
     return;
   }
+  const ff = (document.getElementById('glider-f-first-flown')?.value || '').trim();
   const payload = {
     id: idField?.value || '',
     manufacturer: (document.getElementById('glider-f-man')?.value || '').trim(),
     model: (document.getElementById('glider-f-model')?.value || '').trim(),
     size: (document.getElementById('glider-f-size')?.value || '').trim(),
     weightRange: (document.getElementById('glider-f-wr')?.value || '').trim(),
-    registration: reg
+    registration: reg,
+    firstFlownDate: ff
   };
   let list = loadGliders();
   if (payload.id) {
@@ -1621,11 +1635,44 @@ function deleteGliderById(id) {
   toast('Glider removed');
 }
 
+async function applyGliderWingFromDate() {
+  const reg = (document.getElementById('glider-f-reg')?.value || '').trim().toUpperCase();
+  const fromDate = (document.getElementById('glider-f-first-flown')?.value || '').trim();
+  if (!reg) {
+    toast('Enter a registration first');
+    return;
+  }
+  if (!fromDate || !/^\d{4}-\d{2}-\d{2}$/.test(fromDate)) {
+    toast('Choose the first day this wing was flown');
+    return;
+  }
+  if (!pilotToken) {
+    toast('Sign in as a pilot to update flights');
+    return;
+  }
+  if (!confirm(`Set wing ${reg} on all your flights from ${fromDate} that don’t have a wing saved yet?`)) return;
+  try {
+    const res = await apiFetch('/api/pilot/flights/apply-wing-from-date', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wing_reg: reg, from_date: fromDate })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    toast(data.updated === 0 ? 'No flights needed updating (all already have a wing, or no flights in range).' : `Updated ${data.updated} flight${data.updated === 1 ? '' : 's'}`);
+    await loadMyData();
+    if (typeof renderStats === 'function' && document.getElementById('page-stats')?.classList.contains('active')) renderStats();
+  } catch (e) {
+    toast('Could not apply: ' + e.message);
+  }
+}
+
 function setupGliderSettingsEvents() {
   const addBtn = document.getElementById('settings-add-glider-btn');
   if (addBtn) addBtn.addEventListener('click', () => openGliderEditor('new'));
   document.getElementById('glider-editor-save')?.addEventListener('click', saveGliderFromEditor);
   document.getElementById('glider-editor-cancel')?.addEventListener('click', closeGliderEditor);
+  document.getElementById('glider-apply-wing-btn')?.addEventListener('click', () => void applyGliderWingFromDate());
   document.getElementById('settings-gliders-saved')?.addEventListener('click', e => {
     const edit = e.target.closest('.glider-edit-btn');
     const del = e.target.closest('.glider-del-btn');

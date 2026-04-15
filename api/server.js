@@ -681,6 +681,34 @@ app.put('/api/flights/:id', verifyToken, async (req, res) => {
   }
 });
 
+/** Set wing_reg on flights from from_date onward where wing is still empty (fill-only). */
+app.post('/api/pilot/flights/apply-wing-from-date', verifyToken, async (req, res) => {
+  try {
+    const { wing_reg, from_date } = req.body;
+    if (!from_date || !/^\d{4}-\d{2}-\d{2}$/.test(from_date)) {
+      return res.status(400).json({ error: 'from_date (YYYY-MM-DD) required' });
+    }
+    const cleanWing = sanitize(wing_reg, 10);
+    if (!cleanWing) return res.status(400).json({ error: 'wing_reg required' });
+    const pilotId = req.pilot.id;
+    const pending = await queryOne(
+      `SELECT COUNT(*) AS c FROM flights WHERE pilot_id = ? AND date >= ? AND (wing_reg IS NULL OR TRIM(wing_reg) = '')`,
+      [pilotId, from_date]
+    );
+    const n = Number(pending?.c) || 0;
+    if (n > 0) {
+      await run(
+        `UPDATE flights SET wing_reg = ? WHERE pilot_id = ? AND date >= ? AND (wing_reg IS NULL OR TRIM(wing_reg) = '')`,
+        [cleanWing, pilotId, from_date]
+      );
+    }
+    res.json({ updated: n, wing_reg: cleanWing, from_date });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to apply wing to flights' });
+  }
+});
+
 app.delete('/api/flights/:id', verifyToken, async (req, res) => {
   try {
     const { id } = req.params;

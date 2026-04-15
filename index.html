@@ -750,17 +750,32 @@
     .wing-bar-danger { background: var(--danger); }
     .month-chart { margin-top: 4px; }
     .month-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-    .stats-loc-entry { margin-bottom: 10px; }
+    /* Takeoff/landing: same 3 columns as monthly (label | bar | count), title sits above bar+count */
+    .stats-loc-entry {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr) 2.25rem;
+      column-gap: 10px;
+      row-gap: 6px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
     .stats-loc-entry:last-child { margin-bottom: 0; }
     .stats-loc-title {
+      grid-column: 2;
+      grid-row: 1;
+      min-width: 0;
       font-size: 12px; font-weight: 600; color: var(--text);
-      margin-bottom: 4px; padding-left: 0;
+      line-height: 1.25;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
+    .stats-loc-entry > .month-label { grid-column: 1; grid-row: 2; align-self: center; }
+    .stats-loc-entry > .month-bar-wrap { grid-column: 2; grid-row: 2; min-width: 0; align-self: center; }
+    .stats-loc-entry > .month-count { grid-column: 3; grid-row: 2; align-self: center; }
     .month-label { width: 28px; color: var(--muted); font-size: 11px; text-align: right; flex-shrink: 0; font-weight: 600; }
     .month-bar-wrap { flex: 1; background: var(--surface); border-radius: 4px; height: 18px; overflow: hidden; }
     .month-bar { background: linear-gradient(90deg, var(--accent), #e5681f); height: 100%; border-radius: 4px; transition: width 0.5s; min-width: 0; }
     .month-count { width: 24px; font-size: 12px; font-weight: 700; color: var(--text); text-align: right; flex-shrink: 0; }
+    .stats-loc-entry > .month-count { width: auto; min-width: 2.25rem; }
     #f-wing { text-transform: uppercase; }
 
     /* ── FLIGHT FOLLOWING ──────────────────────────────────────────────── */
@@ -984,8 +999,8 @@
             <h2>Name on export</h2>
           </div>
         </div>
-        <p class="settings-card-desc">Your full name appears in the company weekly log file (cell B1).</p>
-        <input type="text" id="settings-full-name" class="settings-input" placeholder="e.g. Brooke Whatnall" maxlength="120" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" inputmode="text" />
+        <p class="settings-card-desc">Your full name appears in the company weekly log file (cell B1). Stored for <strong>this pilot</strong> on this device only — each login has its own name.</p>
+        <input type="text" id="settings-full-name" class="settings-input" placeholder="e.g. Alex Taylor" maxlength="120" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" inputmode="text" />
         <button type="button" class="settings-btn settings-btn-secondary" style="margin-top:12px;" onclick="savePilotFullNameSetting()">Save name</button>
       </section>
 
@@ -1116,7 +1131,7 @@
   </button>
   <button onclick="showPage('ff')" id="nav-ff">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="14" x2="21" y2="14"/><line x1="8" y1="4" x2="8" y2="20"/></svg>
-    FF
+    D/Sheet
   </button>
   <button onclick="showPage('settings')" id="nav-settings">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
@@ -1399,7 +1414,9 @@ let flightsSearch = '';
 let currentWing = '';
 
 // ─── Pilot profile & gliders (local only, for exports + log dropdown) ─────────
-const LS_PILOT_FULL_NAME = 'gforce_pilot_full_name';
+function pilotFullNameStorageKey() {
+  return pilotId ? `gforce_pilot_full_name_${pilotId}` : 'gforce_pilot_full_name';
+}
 
 function glidersStorageKey() {
   return pilotId ? `gforce_gliders_${pilotId}` : 'gforce_gliders';
@@ -1422,12 +1439,22 @@ function migrateLegacyGliderKeys() {
   }
 }
 
+/** Copy legacy global export name into per-pilot key once */
+function migrateLegacyPilotFullName() {
+  if (!pilotId) return;
+  const nk = pilotFullNameStorageKey();
+  const legacy = localStorage.getItem('gforce_pilot_full_name');
+  if (legacy && !localStorage.getItem(nk)) {
+    localStorage.setItem(nk, legacy);
+  }
+}
+
 function getPilotFullName() {
-  return (localStorage.getItem(LS_PILOT_FULL_NAME) || '').trim();
+  return (localStorage.getItem(pilotFullNameStorageKey()) || '').trim();
 }
 function savePilotFullNameSetting() {
   const el = document.getElementById('settings-full-name');
-  if (el) localStorage.setItem(LS_PILOT_FULL_NAME, el.value.trim());
+  if (el) localStorage.setItem(pilotFullNameStorageKey(), el.value.trim());
   toast('Name saved');
 }
 function loadGliders() {
@@ -2164,6 +2191,7 @@ async function hydrateOfficePilotAvatars() {
 async function loadMyData() {
   try {
     migrateLegacyGliderKeys();
+    migrateLegacyPilotFullName();
     const [statusRes, flightsRes, drivesRes, flyingRes] = await Promise.all([
       apiFetch('/api/my-status'),
       apiFetch('/api/flights'),
@@ -2197,6 +2225,7 @@ async function loadMyData() {
       const dateEl = document.getElementById('f-date');
       if (dateEl) updateFlightNumForDate(dateEl.value);
     }
+    scheduleLogPostSaveTimeout();
   } catch {
     setServerStatus('offline');
   }
@@ -2643,26 +2672,64 @@ function togglePeakDrive() {
   }
 }
 
-function clearLogPostSaveWatch() {
+function logPostsaveDeadlineKey() {
+  return pilotId ? `gforce_log_postsave_deadline_${pilotId}` : 'gforce_log_postsave_deadline';
+}
+function logPostsaveFlightIdKey() {
+  return pilotId ? `gforce_log_postsave_flight_id_${pilotId}` : 'gforce_log_postsave_flight_id';
+}
+
+function clearLogPostSaveTimerOnly() {
   if (window._logPostSaveTimer) {
     clearTimeout(window._logPostSaveTimer);
     window._logPostSaveTimer = null;
   }
 }
 
-function startLogPostSaveWatch(flightId) {
-  clearLogPostSaveWatch();
+/** Clear 15‑min “saved flight” window (timer + storage). */
+function clearLogPostSaveState() {
+  clearLogPostSaveTimerOnly();
+  localStorage.removeItem(logPostsaveDeadlineKey());
+  localStorage.removeItem(logPostsaveFlightIdKey());
+}
+
+/** Arm deadline from first successful NEW flight save only (15 min from then). Updates do not extend/reset it. */
+function armLogPostSaveDeadline(flightId) {
+  const deadline = Date.now() + 15 * 60 * 1000;
+  localStorage.setItem(logPostsaveDeadlineKey(), String(deadline));
+  localStorage.setItem(logPostsaveFlightIdKey(), flightId);
+  scheduleLogPostSaveTimeout();
+}
+
+/** Schedule timeout from stored deadline (call after load / arm). */
+function scheduleLogPostSaveTimeout() {
+  clearLogPostSaveTimerOnly();
+  const deadline = Number(localStorage.getItem(logPostsaveDeadlineKey()));
+  const fid = localStorage.getItem(logPostsaveFlightIdKey());
+  if (!deadline || !fid || !Number.isFinite(deadline)) return;
+  const ms = deadline - Date.now();
+  if (ms <= 0) {
+    if (editingId === fid) {
+      resetForm();
+      toast('Form reset — start a new flight when you are ready');
+    } else {
+      clearLogPostSaveState();
+    }
+    return;
+  }
   window._logPostSaveTimer = setTimeout(() => {
     window._logPostSaveTimer = null;
-    if (editingId === flightId) {
+    const curFid = localStorage.getItem(logPostsaveFlightIdKey());
+    if (editingId === curFid) {
       resetForm();
       toast('Form reset — start a new flight when you are ready');
     }
-  }, 15 * 60 * 1000);
+    clearLogPostSaveState();
+  }, ms);
 }
 
 function startFreshFlightForm() {
-  clearLogPostSaveWatch();
+  clearLogPostSaveState();
   resetForm();
   const dateEl = document.getElementById('f-date');
   if (dateEl) updateFlightNumForDate(dateEl.value);
@@ -2717,16 +2784,24 @@ async function saveFlight() {
   try {
     if (editingId !== null) {
       const wingReg = (document.getElementById('f-wing')?.value || '').trim().toUpperCase() || null;
+      const savedEditingId = editingId;
       const res = await apiFetch(`/api/flights/${editingId}`, {
         method: 'PUT',
         body: JSON.stringify({ date, flight_num: flightNum, weight, takeoff, landing, time, notes, wing_reg: wingReg })
       });
       if (!res.ok) throw new Error(await res.text());
       toast('Flight updated!');
-      clearLogPostSaveWatch();
-      resetForm();
       await loadMyData();
-      updateFlightNumForDate(document.getElementById('f-date').value);
+      if (savedEditingId) {
+        editFlight(savedEditingId);
+        const ct = document.getElementById('card-title');
+        const psId = localStorage.getItem(logPostsaveFlightIdKey());
+        const dl = Number(localStorage.getItem(logPostsaveDeadlineKey()));
+        if (ct && psId === savedEditingId && Number.isFinite(dl) && dl > Date.now()) {
+          ct.textContent = 'Saved flight';
+        }
+      }
+      scheduleLogPostSaveTimeout();
     } else {
       const wingReg = (document.getElementById('f-wing')?.value || '').trim().toUpperCase() || null;
       if (wingReg && wingReg !== currentWing) currentWing = wingReg;
@@ -2748,7 +2823,7 @@ async function saveFlight() {
         editFlight(data.id);
         const ct = document.getElementById('card-title');
         if (ct) ct.textContent = 'Saved flight';
-        startLogPostSaveWatch(data.id);
+        armLogPostSaveDeadline(data.id);
       } else {
         resetForm();
         updateFlightNumForDate(document.getElementById('f-date').value);
@@ -2761,7 +2836,7 @@ async function saveFlight() {
 }
 
 function resetForm() {
-  clearLogPostSaveWatch();
+  clearLogPostSaveState();
   editingId = null;
   // Reset peak drive mode
   isPeakDrive = false;
@@ -2801,6 +2876,8 @@ function setServerStatus(status) {
 }
 
 function editFlight(id) {
+  const psId = localStorage.getItem(logPostsaveFlightIdKey());
+  if (psId && id !== psId) clearLogPostSaveState();
   const f = myFlights.find(fl => fl.id === id);
   if (!f) return;
   editingId = id;
@@ -3412,11 +3489,9 @@ function renderStats() {
         ${topTakeoffs.map(([loc, cnt]) => `
           <div class="stats-loc-entry">
             <div class="stats-loc-title" title="${esc(loc)}">${esc(loc)}</div>
-            <div class="month-row">
-              <div class="month-label" aria-hidden="true"></div>
-              <div class="month-bar-wrap"><div class="month-bar" style="width:${(cnt/topTakeoffs[0][1])*100}%"></div></div>
-              <div class="month-count">${cnt}</div>
-            </div>
+            <div class="month-label" aria-hidden="true"></div>
+            <div class="month-bar-wrap"><div class="month-bar" style="width:${(cnt/topTakeoffs[0][1])*100}%"></div></div>
+            <div class="month-count">${cnt}</div>
           </div>`).join('')}
       </div>
     </div>` : '';
@@ -3429,11 +3504,9 @@ function renderStats() {
         ${topLandings.map(([loc, cnt]) => `
           <div class="stats-loc-entry">
             <div class="stats-loc-title" title="${esc(loc)}">${esc(loc)}</div>
-            <div class="month-row">
-              <div class="month-label" aria-hidden="true"></div>
-              <div class="month-bar-wrap"><div class="month-bar" style="width:${(cnt/topLandings[0][1])*100}%"></div></div>
-              <div class="month-count">${cnt}</div>
-            </div>
+            <div class="month-label" aria-hidden="true"></div>
+            <div class="month-bar-wrap"><div class="month-bar" style="width:${(cnt/topLandings[0][1])*100}%"></div></div>
+            <div class="month-count">${cnt}</div>
           </div>`).join('')}
       </div>
     </div>` : '';

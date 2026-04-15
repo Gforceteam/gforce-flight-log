@@ -1,6 +1,15 @@
 {
   "versions": [
     {
+      "version": "1.2.1",
+      "date": "2026-04-15",
+      "items": [
+        "Settings: “Edit” for export name no longer overflows the card (inline button width + ellipsis on long names).",
+        "Stats: vertical climbed uses 62 m × flights with a short explanation of the rough vertical-to-launch estimate.",
+        "Stats: gondola time helper text uses readable colours on dark cards (no more near-invisible border-colour text)."
+      ]
+    },
+    {
       "version": "1.2.0",
       "date": "2026-04-15",
       "items": [

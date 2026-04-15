@@ -170,6 +170,16 @@
     }
     .pilot-greeting { font-size: 11px; color: var(--muted); letter-spacing: 0.3px; }
     .pilot-name-sm { font-size: 14px; font-weight: 600; color: var(--text); }
+    .pilot-name-sm.pilot-name-tappable {
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+      text-decoration: underline;
+      text-decoration-color: var(--border-hi);
+      text-underline-offset: 3px;
+    }
+    .pilot-name-sm.pilot-name-tappable:active { opacity: 0.85; }
     .status-right { display: flex; align-items: center; gap: 8px; }
     .status-badge {
       font-size: 12px; font-weight: 700; padding: 4px 10px;
@@ -750,32 +760,20 @@
     .wing-bar-danger { background: var(--danger); }
     .month-chart { margin-top: 4px; }
     .month-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-    /* Takeoff/landing: same 3 columns as monthly (label | bar | count), title sits above bar+count */
-    .stats-loc-entry {
-      display: grid;
-      grid-template-columns: 28px minmax(0, 1fr) 2.25rem;
-      column-gap: 10px;
-      row-gap: 6px;
-      align-items: center;
-      margin-bottom: 10px;
+    .month-row:last-child { margin-bottom: 0; }
+    /* Takeoff/landing: same row layout as Monthly Flights; labels can be longer than month abbreviations */
+    .month-chart.stats-loc-chart .month-label {
+      width: auto;
+      min-width: 28px;
+      max-width: 96px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .stats-loc-entry:last-child { margin-bottom: 0; }
-    .stats-loc-title {
-      grid-column: 2;
-      grid-row: 1;
-      min-width: 0;
-      font-size: 12px; font-weight: 600; color: var(--text);
-      line-height: 1.25;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .stats-loc-entry > .month-label { grid-column: 1; grid-row: 2; align-self: center; }
-    .stats-loc-entry > .month-bar-wrap { grid-column: 2; grid-row: 2; min-width: 0; align-self: center; }
-    .stats-loc-entry > .month-count { grid-column: 3; grid-row: 2; align-self: center; }
     .month-label { width: 28px; color: var(--muted); font-size: 11px; text-align: right; flex-shrink: 0; font-weight: 600; }
     .month-bar-wrap { flex: 1; background: var(--surface); border-radius: 4px; height: 18px; overflow: hidden; }
     .month-bar { background: linear-gradient(90deg, var(--accent), #e5681f); height: 100%; border-radius: 4px; transition: width 0.5s; min-width: 0; }
     .month-count { width: 24px; font-size: 12px; font-weight: 700; color: var(--text); text-align: right; flex-shrink: 0; }
-    .stats-loc-entry > .month-count { width: auto; min-width: 2.25rem; }
     #f-wing { text-transform: uppercase; }
 
     /* ── FLIGHT FOLLOWING ──────────────────────────────────────────────── */
@@ -842,7 +840,10 @@
       <div class="pilot-avatar-sm" id="pilot-avatar">B</div>
       <div>
         <div class="pilot-greeting">Pilot</div>
-        <div class="pilot-name-sm" id="pilot-name-display">Brooke</div>
+        <div class="pilot-name-sm pilot-name-tappable" id="pilot-name-display" role="button" tabindex="0"
+          title="Edit name on export (Settings)"
+          onclick="openPilotExportNameSettings()"
+          onkeydown="if(event.key==='Enter'||event.key===' ') { event.preventDefault(); openPilotExportNameSettings(); }">Brooke</div>
       </div>
     </div>
     <div class="status-right">
@@ -996,7 +997,7 @@
         <div class="settings-card-head">
           <div>
             <p class="settings-card-title" id="settings-h-name">Weekly CSV</p>
-            <h2>Name on export</h2>
+            <h2><label for="settings-full-name" style="cursor:pointer;">Name on export</label></h2>
           </div>
         </div>
         <p class="settings-card-desc">Your full name appears in the company weekly log file (cell B1). Stored for <strong>this pilot</strong> on this device only — each login has its own name.</p>
@@ -1403,6 +1404,8 @@ document.addEventListener('click', () => { ensureAudioCtx(); }, { once: true });
 // ─── Office State ─────────────────────────────────────────────────────────────
 let officeToken = localStorage.getItem('gforce_office_token');
 let ws = null;
+/** Which office dashboard tab is visible — only this panel is re-rendered on periodic refresh */
+let officeActiveTab = 'groups';
 let officePilots = [];
 let officeRefreshInterval = null;
 let allFlights = [];
@@ -1854,6 +1857,18 @@ function doLogout() {
 }
 
 // ─── Pilot App Shell ──────────────────────────────────────────────────────────
+/** Header shows the server pilot name; tap opens Settings to edit the weekly CSV “name on export” (local only). */
+function openPilotExportNameSettings() {
+  showPage('settings');
+  window.setTimeout(() => {
+    const el = document.getElementById('settings-full-name');
+    if (el) {
+      el.focus();
+      try { el.select(); } catch (e) {}
+    }
+  }, 100);
+}
+
 function showApp(name) {
   document.getElementById('login-page').style.display = 'none';
   document.getElementById('app-page').style.display = 'block';
@@ -1884,10 +1899,13 @@ function startStatusPoll() {
     if (document.hidden) return; // don't poll while the tab is backgrounded
     _polling = true;
     try {
-      const res = await apiFetch('/api/my-status');
-      if (!res) { doLogout(); return; } // session expired
-      if (!res.ok) return;
-      const newStatus = await res.json();
+      const [statusRes, flyingRes] = await Promise.all([
+        apiFetch('/api/my-status'),
+        apiFetch('/api/flying')
+      ]);
+      if (!statusRes) { doLogout(); return; } // session expired
+      if (!statusRes.ok) return;
+      const newStatus = await statusRes.json();
       const prevStatus = myStatus.status;
       const prevGroupPilots = (myStatus.group_pilots || []).join(',');
       myStatus = { status: newStatus.status, client_name: newStatus.client_name, timer_expires_at: newStatus.timer_expires_at, group_name: newStatus.group_name || null, group_pilots: newStatus.group_pilots || [], group_id: newStatus.group_id || null, is_peak_trip: newStatus.is_peak_trip || false };
@@ -1902,8 +1920,6 @@ function startStatusPoll() {
         localStorage.setItem(lastGliderRegKey(), currentWing);
         refreshWingDropdown();
       }
-      // Also refresh who's flying (lightweight — runs every poll)
-      const flyingRes = await apiFetch('/api/flying');
       if (flyingRes && flyingRes.ok) flyingPilots = await flyingRes.json();
 
       const groupPilotsChanged = (newStatus.group_pilots || []).join(',') !== prevGroupPilots;
@@ -2167,7 +2183,7 @@ async function onSettingsAvatarFile(ev) {
 
 async function hydrateOfficePilotAvatars() {
   const nodes = document.querySelectorAll('#pilots-list [data-pilot-avatar]');
-  for (const node of nodes) {
+  await Promise.all([...nodes].map(async (node) => {
     const pid = node.getAttribute('data-pilot-avatar');
     const name = node.getAttribute('data-name') || '?';
     const p = officePilots.find(x => x.id === pid);
@@ -2175,7 +2191,7 @@ async function hydrateOfficePilotAvatars() {
     if (!needs) {
       node.classList.remove('has-photo');
       node.textContent = name.charAt(0).toUpperCase();
-      continue;
+      return;
     }
     const url = await officeFetchAvatarCached(pid);
     if (url) {
@@ -2185,7 +2201,7 @@ async function hydrateOfficePilotAvatars() {
       node.classList.remove('has-photo');
       node.textContent = name.charAt(0).toUpperCase();
     }
-  }
+  }));
 }
 
 async function loadMyData() {
@@ -3481,37 +3497,7 @@ function renderStats() {
       ${totalMeters >= 8849 ? '' : `<div style="margin-top:2px;font-size:12px;color:var(--border);">${flights.length} flights × 100m to eastern takeoff</div>`}
     </div>` : '';
 
-  // Takeoff locations card
-  const takeoffCard = topTakeoffs.length ? `
-    <div class="card stat-section">
-      <div class="stat-section-title">🛫 Takeoff Locations</div>
-      <div class="month-chart">
-        ${topTakeoffs.map(([loc, cnt]) => `
-          <div class="stats-loc-entry">
-            <div class="stats-loc-title" title="${esc(loc)}">${esc(loc)}</div>
-            <div class="month-label" aria-hidden="true"></div>
-            <div class="month-bar-wrap"><div class="month-bar" style="width:${(cnt/topTakeoffs[0][1])*100}%"></div></div>
-            <div class="month-count">${cnt}</div>
-          </div>`).join('')}
-      </div>
-    </div>` : '';
-
-  // Landing locations card
-  const landingCard = topLandings.length ? `
-    <div class="card stat-section">
-      <div class="stat-section-title">🛬 Landing Locations</div>
-      <div class="month-chart">
-        ${topLandings.map(([loc, cnt]) => `
-          <div class="stats-loc-entry">
-            <div class="stats-loc-title" title="${esc(loc)}">${esc(loc)}</div>
-            <div class="month-label" aria-hidden="true"></div>
-            <div class="month-bar-wrap"><div class="month-bar" style="width:${(cnt/topLandings[0][1])*100}%"></div></div>
-            <div class="month-count">${cnt}</div>
-          </div>`).join('')}
-      </div>
-    </div>` : '';
-
-  // Monthly chart card
+  // Monthly chart card (reference layout for takeoff/landing rows below)
   const chartCard = `
     <div class="card stat-section">
       <div class="stat-section-title">Monthly Flights</div>
@@ -3524,6 +3510,34 @@ function renderStats() {
           </div>`).join('')}
       </div>
     </div>`;
+
+  // Takeoff locations card — same .month-row structure as Monthly Flights
+  const takeoffCard = topTakeoffs.length ? `
+    <div class="card stat-section">
+      <div class="stat-section-title">Takeoff Locations</div>
+      <div class="month-chart stats-loc-chart">
+        ${topTakeoffs.map(([loc, cnt]) => `
+          <div class="month-row">
+            <div class="month-label" title="${esc(loc)}">${esc(loc)}</div>
+            <div class="month-bar-wrap"><div class="month-bar" style="width:${(cnt/topTakeoffs[0][1])*100}%"></div></div>
+            <div class="month-count">${cnt}</div>
+          </div>`).join('')}
+      </div>
+    </div>` : '';
+
+  // Landing locations card
+  const landingCard = topLandings.length ? `
+    <div class="card stat-section">
+      <div class="stat-section-title">Landing Locations</div>
+      <div class="month-chart stats-loc-chart">
+        ${topLandings.map(([loc, cnt]) => `
+          <div class="month-row">
+            <div class="month-label" title="${esc(loc)}">${esc(loc)}</div>
+            <div class="month-bar-wrap"><div class="month-bar" style="width:${(cnt/topLandings[0][1])*100}%"></div></div>
+            <div class="month-count">${cnt}</div>
+          </div>`).join('')}
+      </div>
+    </div>` : '';
 
   // Drives card — all drives (not filtered by month, so you can see history)
   const allDrives = drives;
@@ -3566,7 +3580,7 @@ function renderStats() {
       </div>
     </div>` : '';
 
-  document.getElementById('stats-breakdown').innerHTML = rowCards + wingCard + wingPredictionCard + compCard + takeoffCard + landingCard + chartCard + drivesCard + exportCard;
+  document.getElementById('stats-breakdown').innerHTML = rowCards + wingCard + wingPredictionCard + compCard + chartCard + takeoffCard + landingCard + drivesCard + exportCard;
 }
 
 function showPage(name) {
@@ -3743,6 +3757,19 @@ function officeDoLogout() {
 }
 
 // ─── Office Data ──────────────────────────────────────────────────────────────
+/** Re-render only the visible office tab after a data load (avoids 3× redundant DOM work on each poll). */
+function refreshOfficeUiAfterLoad() {
+  switch (officeActiveTab) {
+    case 'pilots': renderOfficeTab(); break;
+    case 'today': renderTodayTab(); break;
+    case 'flights': renderFlightsTab(); break;
+    case 'groups': renderGroupsTab(); break;
+    case 'ff': renderOfficeFF(); break;
+    case 'settings': break;
+    default: renderGroupsTab();
+  }
+}
+
 async function loadOfficeData() {
   try {
     const [pilotsRes, flightsRes] = await Promise.all([
@@ -3754,10 +3781,7 @@ async function loadOfficeData() {
     if (pilotsRes.status === 401) { officeDoLogout(); return; }
     officePilots = await pilotsRes.json();
     allFlights = (flightsRes && flightsRes.ok) ? await flightsRes.json() : [];
-    renderOfficeTab();
-    renderTodayTab();
-    renderFlightsTab();
-    renderGroupsTab();
+    refreshOfficeUiAfterLoad();
   } catch (e) {
     toast('Cannot connect to server');
   }
@@ -4375,12 +4399,23 @@ function officeFlightTableRow(f, order) {
   return '<tr>' + order.map(k => cells[k]).join('') + '</tr>';
 }
 
+let _flightsSearchDebounce = null;
 function searchFlights(val) {
   flightsSearch = val;
+  clearTimeout(_flightsSearchDebounce);
+  _flightsSearchDebounce = setTimeout(() => { _flightsSearchDebounce = null; renderFlightsTab(); }, 120);
+}
+
+function flushFlightsSearchRender() {
+  if (!_flightsSearchDebounce) return;
+  clearTimeout(_flightsSearchDebounce);
+  _flightsSearchDebounce = null;
   renderFlightsTab();
 }
 
 function filterByPilot(name) {
+  clearTimeout(_flightsSearchDebounce);
+  _flightsSearchDebounce = null;
   flightsSearch = flightsSearch.toLowerCase() === name.toLowerCase() ? '' : name;
   const inp = document.getElementById('flights-search');
   if (inp) inp.value = flightsSearch;
@@ -4393,6 +4428,7 @@ function officeFmtDate(s) {
 }
 
 function exportAllCSV() {
+  flushFlightsSearchRender();
   // Exports whatever is currently visible — filtered by pilot, text, or date if active; all flights otherwise
   const toExport = filteredFlights.length > 0 || flightsSearch.trim() ? filteredFlights : allFlights;
   const label = flightsSearch.trim()
@@ -4480,12 +4516,16 @@ function dismissAlert(pilotName) {
 
 // ─── Office Tabs ──────────────────────────────────────────────────────────────
 function showOfficeTab(name) {
+  officeActiveTab = name;
   document.querySelectorAll('.office-tab-content').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.office-tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById(`office-tab-${name}`).classList.add('active');
   document.getElementById(`office-tab-${name}-btn`).classList.add('active');
   if (name === 'ff') renderOfficeFF();
-  if (name === 'groups') loadOfficeData();
+  if (name === 'pilots') renderOfficeTab();
+  if (name === 'today') renderTodayTab();
+  if (name === 'flights') renderFlightsTab();
+  if (name === 'groups') renderGroupsTab();
   if (name === 'settings') populateOfficeResetPilots();
 }
 

@@ -10,6 +10,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
+const compression = require('compression');
 const webpush = require('web-push');
 const crypto = require('crypto');
 
@@ -390,6 +391,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+app.use(compression());
 app.use(express.json({ limit: '2mb' }));
 
 // ─── Public Routes ────────────────────────────────────────────────────────────

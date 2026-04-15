@@ -1,6 +1,25 @@
 {
   "versions": [
     {
+      "version": "1.1.0",
+      "date": "2026-04-15",
+      "items": [
+        "Pilot app: status poll runs my-status and flying requests in parallel for lower latency.",
+        "Office dashboard: periodic refresh updates only the visible tab instead of re-rendering all four panels every 20s.",
+        "Office: switching tabs paints the matching list from current data; Flight Log search is debounced with a flush before CSV export.",
+        "Office pilot list: avatar thumbnails load in parallel.",
+        "API: gzip compression enabled for JSON responses (smaller payloads over slow links)."
+      ]
+    },
+    {
+      "version": "1.0.10",
+      "date": "2026-04-15",
+      "items": [
+        "Stats: Takeoff and Landing location charts use the same row layout as Monthly Flights; sections are grouped together.",
+        "Tap pilot name in the header (or the “Name on export” title in Settings) to focus the weekly CSV name field."
+      ]
+    },
+    {
       "version": "1.0.9",
       "date": "2026-04-15",
       "items": [

@@ -2,22 +2,35 @@
 /**
  * One-off: delete all flights for a pilot by exact name (as stored in pilots.name).
  *
- * Usage (from api/ with TURSO_URL and TURSO_AUTH_TOKEN in .env):
- *   node scripts/delete-pilot-flights-by-name.js "Dom"
+ * Requires api/.env with TURSO_URL and TURSO_AUTH_TOKEN (same DB as production API).
+ * Run from anywhere:  node api/scripts/delete-pilot-flights-by-name.js Dom
  *
  * Turso shell equivalent:
  *   DELETE FROM flights WHERE pilot_id = (SELECT id FROM pilots WHERE name = 'Dom');
  */
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const { createClient } = require('@libsql/client');
+
+function requireTursoEnv() {
+  const envFile = path.join(__dirname, '..', '.env');
+  const url = process.env.TURSO_URL;
+  if (!url || url.startsWith('file:')) {
+    console.error('This script needs your live Turso database, not a local empty file.');
+    console.error(`Set TURSO_URL (and TURSO_AUTH_TOKEN) in:\n  ${envFile}`);
+    console.error('Copy them from the Turso dashboard → your database → Connect, or from your team secrets.');
+    process.exit(1);
+  }
+}
 
 async function main() {
   const name = (process.argv[2] || '').trim();
-  if (!name) {
+  if (!name || name.startsWith('-')) {
     console.error('Usage: node scripts/delete-pilot-flights-by-name.js <PilotName>');
     process.exit(1);
   }
-  const url = process.env.TURSO_URL || 'file:local.db';
+  requireTursoEnv();
+  const url = process.env.TURSO_URL;
   const authToken = process.env.TURSO_AUTH_TOKEN;
   const db = createClient({ url, authToken });
 

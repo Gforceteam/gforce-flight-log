@@ -798,7 +798,9 @@ app.put('/api/pilot/presence', verifyToken, async (req, res) => {
     if (![0, 1, 2].includes(p)) return res.status(400).json({ error: 'presence must be 0, 1, or 2' });
     await setPilotPresence(req.pilot.id, p);
     broadcast({ type: 'PRESENCE_UPDATED', pilot_id: req.pilot.id, presence: p });
-    broadcast({ type: p === 1 ? 'PILOT_SIGNED_IN' : 'PILOT_SIGNED_OUT', pilot_id: req.pilot.id });
+    if (p === 1) broadcast({ type: 'PILOT_SIGNED_IN', pilot_id: req.pilot.id });
+    else if (p === 0) broadcast({ type: 'PILOT_SIGNED_OUT', pilot_id: req.pilot.id });
+    else if (p === 2) broadcast({ type: 'PILOT_DOWN_BELOW', pilot_id: req.pilot.id });
     res.json({ message: 'Presence updated', presence: p, available: p === 1 });
   } catch (e) {
     console.error(e); res.status(500).json({ error: 'Internal server error' });

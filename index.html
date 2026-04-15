@@ -750,6 +750,13 @@
     .wing-bar-danger { background: var(--danger); }
     .month-chart { margin-top: 4px; }
     .month-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .stats-loc-entry { margin-bottom: 10px; }
+    .stats-loc-entry:last-child { margin-bottom: 0; }
+    .stats-loc-title {
+      font-size: 12px; font-weight: 600; color: var(--text);
+      margin-bottom: 4px; padding-left: 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
     .month-label { width: 28px; color: var(--muted); font-size: 11px; text-align: right; flex-shrink: 0; font-weight: 600; }
     .month-bar-wrap { flex: 1; background: var(--surface); border-radius: 4px; height: 18px; overflow: hidden; }
     .month-bar { background: linear-gradient(90deg, var(--accent), #e5681f); height: 100%; border-radius: 4px; transition: width 0.5s; min-width: 0; }
@@ -824,7 +831,7 @@
       </div>
     </div>
     <div class="status-right">
-      <button type="button" id="availability-btn" title="Tap to cycle: Signed out → Available → Down bottom"
+      <button type="button" id="availability-btn" title="Tap to cycle: Signed out → Available → Down Below"
         style="background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;font-weight:600;cursor:pointer;">🔴 Signed out</button>
       <span class="server-badge" id="server-badge">...</span>
       <button onclick="doLogout()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;padding:4px 10px;cursor:pointer">Logout</button>
@@ -2166,7 +2173,7 @@ function updateStatusBadge() {
     availBtn.style.color = '#7bc950';
     availBtn.style.display = '';
   } else if (pilotPresence === 2) {
-    availBtn.textContent = '🟣 Down bottom';
+    availBtn.textContent = '🟣 Down Below';
     availBtn.style.background = 'rgba(139,92,246,0.18)';
     availBtn.style.borderColor = '#8b5cf6';
     availBtn.style.color = '#c4b5fd';
@@ -2183,7 +2190,7 @@ function updateStatusBadge() {
 function pilotPresenceLabel() {
   if (myStatus.status === 'airborne') return 'Flying';
   if (pilotPresence === 1) return 'Available';
-  if (pilotPresence === 2) return 'Down bottom';
+  if (pilotPresence === 2) return 'Down Below';
   return 'Signed out';
 }
 
@@ -2238,7 +2245,7 @@ async function setPilotPresenceClient(next, opts = {}) {
     pilotAvailable = pilotPresence === 1;
     updateStatusBadge();
     renderDashboard();
-    const msgs = { 0: '🔴 Signed out', 1: '🟢 Available for dispatch', 2: '🟣 Down bottom (off dispatch)' };
+    const msgs = { 0: '🔴 Signed out', 1: '🟢 Available for dispatch', 2: '🟣 Down Below (off dispatch)' };
     toast(msgs[pilotPresence] || 'Status updated');
     if (pilotPresence === 1 && 'Notification' in window && Notification.permission === 'default') {
       requestAndSubscribePush(null);
@@ -2343,13 +2350,13 @@ function renderDashboard() {
       <div class="dashboard-status-icon">🏢</div>
       <div class="dashboard-status-label">Status</div>
       <div class="dashboard-status-value">${pilotPresenceLabel()}</div>
-      <p style="color:var(--muted);font-size:14px;margin-top:8px;">${pilotPresence === 1 ? 'Office can send you away' : pilotPresence === 2 ? 'At landing — not on dispatch list' : 'Signed out — not on dispatch list'}</p>
+      <p style="color:var(--muted);font-size:14px;margin-top:8px;">${pilotPresence === 1 ? 'Office can send you away' : pilotPresence === 2 ? 'Waiting down below — not on dispatch list' : 'Signed out — not on dispatch list'}</p>
       <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:16px;">
         <button type="button" onclick="toggleAvailability()" style="padding:12px 18px;background:${pilotPresence === 1 ? 'rgba(239,83,80,0.15)' : 'rgba(74,143,30,0.2)'};border:1px solid ${pilotPresence === 1 ? 'var(--danger)' : '#4a8f1e'};border-radius:9999px;color:${pilotPresence === 1 ? 'var(--danger)' : '#7bc950'};font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
           ${pilotPresence === 1 ? 'Sign out' : 'Available'}
         </button>
         <button type="button" onclick="toggleDownBottomFromDashboard()" style="padding:12px 18px;background:rgba(139,92,246,0.15);border:1px solid #8b5cf6;border-radius:9999px;color:#c4b5fd;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
-          ${pilotPresence === 2 ? 'Leave down bottom' : 'Down bottom'}
+          ${pilotPresence === 2 ? 'Coming Up Condola' : 'Down Below'}
         </button>
       </div>
       ${notifPrompt}
@@ -3210,15 +3217,22 @@ function renderStats() {
   const nPilotYear = pilotFlightsLastYear.length;
   const avgFlightsPerDay = nPilotYear / 365;
   let replDays = null;
-  let replDateStr = '';
-  let replNote = '';
+  let replMonthYear = '';
+  let ratePhrase = '';
+  let wingPredBody = '';
   if (currentWing && wingRemaining > 0 && avgFlightsPerDay > 0) {
     replDays = Math.min(365 * 5, Math.ceil(wingRemaining / avgFlightsPerDay));
     const replYmd = addDaysYmd(tNz, replDays);
-    replDateStr = new Date(replYmd + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric', timeZone: NZ_TZ });
-    replNote = `Based on ${nPilotYear} flights in the last 365 days (all wings, ~${avgFlightsPerDay.toFixed(3)} flights per day). Forecast uses flights remaining on ${currentWing} at that overall pace.`;
+    replMonthYear = new Date(replYmd + 'T12:00:00').toLocaleDateString('en-NZ', { month: 'long', year: 'numeric', timeZone: NZ_TZ });
+    const r = avgFlightsPerDay;
+    ratePhrase = r >= 0.95 && r < 1.05
+      ? '~1 flight/day'
+      : r < 1
+        ? `~${r.toFixed(2)} flights/day`
+        : `~${r.toFixed(1)} flights/day`;
+    wingPredBody = `Based on ${nPilotYear} flights in the past year. At your current rate of ${ratePhrase}, <strong>${esc(currentWing)}</strong> has about ${wingRemaining} flights left (of 1000). Forecast replacement: <strong>${replMonthYear}</strong> (roughly ${replDays} days away).`;
   } else if (currentWing && wingRemaining > 0) {
-    replNote = 'Not enough flights in the last 365 days to estimate your average rate — log more flying history first.';
+    wingPredBody = 'Not enough flights in the past year to estimate a rate yet — keep logging.';
   }
 
   // Compliance: unique days worked in last 14
@@ -3291,17 +3305,10 @@ function renderStats() {
     `<div class="card stat-section" style="color:var(--muted);font-size:13px">No wing set — enter registration in Log tab to track usage.</div>`;
 
   const wingPredictionCard = currentWing && wingRemaining > 0
-    ? (replDays != null
-      ? `<div class="card stat-section">
+    ? `<div class="card stat-section">
       <div class="stat-section-title">Wing replacement (estimate)</div>
-      <p style="font-size:14px;color:var(--muted);margin:0 0 10px;line-height:1.45;">${replNote}</p>
-      <div style="font-size:26px;font-weight:800;color:var(--text);font-family:'Montserrat',sans-serif;">${replDateStr}</div>
-      <p style="margin:10px 0 0;font-size:13px;color:var(--muted);line-height:1.45;">About <strong>${replDays}</strong> calendar days from today at your overall flying rate (${wingRemaining} flights remaining on ${currentWing} of 1000). Assumes similar total activity going forward.</p>
+      <p style="font-size:14px;color:var(--text-2);margin:0;line-height:1.5;">${wingPredBody}</p>
     </div>`
-      : `<div class="card stat-section">
-      <div class="stat-section-title">Wing replacement (estimate)</div>
-      <p style="font-size:14px;color:var(--muted);margin:0;line-height:1.45;">${replNote}</p>
-    </div>`)
     : '';
 
   // Compliance card
@@ -3356,10 +3363,13 @@ function renderStats() {
       <div class="stat-section-title">🛫 Takeoff Locations</div>
       <div class="month-chart">
         ${topTakeoffs.map(([loc, cnt]) => `
-          <div class="month-row">
-            <div style="flex:0 0 110px;font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${loc}</div>
-            <div class="month-bar-wrap"><div class="month-bar" style="width:${(cnt/topTakeoffs[0][1])*100}%"></div></div>
-            <div class="month-count">${cnt}</div>
+          <div class="stats-loc-entry">
+            <div class="stats-loc-title" title="${esc(loc)}">${esc(loc)}</div>
+            <div class="month-row">
+              <div class="month-label" aria-hidden="true"></div>
+              <div class="month-bar-wrap"><div class="month-bar" style="width:${(cnt/topTakeoffs[0][1])*100}%"></div></div>
+              <div class="month-count">${cnt}</div>
+            </div>
           </div>`).join('')}
       </div>
     </div>` : '';
@@ -3370,10 +3380,13 @@ function renderStats() {
       <div class="stat-section-title">🛬 Landing Locations</div>
       <div class="month-chart">
         ${topLandings.map(([loc, cnt]) => `
-          <div class="month-row">
-            <div style="flex:0 0 110px;font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${loc}</div>
-            <div class="month-bar-wrap"><div class="month-bar" style="width:${(cnt/topLandings[0][1])*100}%"></div></div>
-            <div class="month-count">${cnt}</div>
+          <div class="stats-loc-entry">
+            <div class="stats-loc-title" title="${esc(loc)}">${esc(loc)}</div>
+            <div class="month-row">
+              <div class="month-label" aria-hidden="true"></div>
+              <div class="month-bar-wrap"><div class="month-bar" style="width:${(cnt/topLandings[0][1])*100}%"></div></div>
+              <div class="month-count">${cnt}</div>
+            </div>
           </div>`).join('')}
       </div>
     </div>` : '';
@@ -3421,8 +3434,8 @@ function renderStats() {
   const exportCard = flights.length ? `
     <div class="card stat-section">
       <div class="stat-section-title">Export</div>
-      <p style="font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.45;">
-        <strong>Logs for Georges</strong> uses the Gforce Weekly Log layout. Row 1 uses your <strong>Name on weekly export</strong> and the <strong>glider</strong> selected on the Log tab (from Settings). It always targets the latest finished Mon–Sun week: on a Sunday that is the week ending that day; on any other day it is the previous Mon–Sun week so you can still send the file after Monday.
+      <p style="font-size:13px;color:var(--text-2);margin:0 0 12px;line-height:1.5;">
+        <strong>Weekly company CSV</strong> (Gforce layout). Uses your <strong>name on export</strong> and <strong>current wing</strong> from Settings. The highlighted button is the <strong>last completed Mon–Sun</strong> week (so you can send it after the week ends).
       </p>
       <div style="display:flex;flex-direction:column;gap:10px;">
         <button type="button" onclick="exportFullLogbookCSV()" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:9999px;color:var(--text);padding:12px 20px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">⬇ Full logbook CSV (${flights.length})</button>
@@ -3875,10 +3888,10 @@ function renderOfficeTab() {
     availHtml += `<div class="section-title">✅ Available <span style="color:var(--border);font-weight:400">— none</span></div>`;
   }
 
-  // ── Down bottom (off dispatch) ──
+  // ── Down Below (off dispatch) ──
   let dbHtml = '';
   if (downBottomPilots.length > 0) {
-    dbHtml += `<div class="section-title">🟣 Down bottom (${downBottomPilots.length})</div>`;
+    dbHtml += `<div class="section-title">🟣 Down Below (${downBottomPilots.length})</div>`;
     dbHtml += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">`;
     downBottomPilots.forEach(p => {
       dbHtml += `<div class="pilot-card office-card-downbottom" style="margin-bottom:0;padding:10px 12px;border:2px solid rgba(139,92,246,0.5);">
@@ -3893,7 +3906,7 @@ function renderOfficeTab() {
     });
     dbHtml += `</div>`;
   } else {
-    dbHtml += `<div class="section-title">🟣 Down bottom <span style="color:var(--border);font-weight:400">— none</span></div>`;
+    dbHtml += `<div class="section-title">🟣 Down Below <span style="color:var(--border);font-weight:400">— none</span></div>`;
   }
 
   // ── Signed out section ──
@@ -4467,6 +4480,16 @@ function connectWS() {
         }
         loadOfficeData();
         break;
+      case 'PILOT_DOWN_BELOW': {
+        const p = officePilots.find(x => x.id === data.pilot_id);
+        if (pilotId && data.pilot_id === pilotId) {
+          void loadMyData();
+        } else {
+          toast(`${p ? p.name : 'Pilot'} is waiting down below`);
+        }
+        loadOfficeData();
+        break;
+      }
       case 'PILOT_SIGNED_OUT': {
         const p = officePilots.find(p => p.id === data.pilot_id);
         if (pilotId && data.pilot_id === pilotId) {

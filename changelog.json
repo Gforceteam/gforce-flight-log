@@ -1,6 +1,13 @@
 {
   "versions": [
     {
+      "version": "1.1.1",
+      "date": "2026-04-15",
+      "items": [
+        "Settings: defer heavy work so the export name field can focus immediately on iPhone (fixes long keyboard delay)."
+      ]
+    },
+    {
       "version": "1.1.0",
       "date": "2026-04-15",
       "items": [

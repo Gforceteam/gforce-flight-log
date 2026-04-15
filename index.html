@@ -997,7 +997,7 @@
         <div class="settings-card-head">
           <div>
             <p class="settings-card-title" id="settings-h-name">Weekly CSV</p>
-            <h2><label for="settings-full-name" style="cursor:pointer;">Name on export</label></h2>
+            <h2><label for="settings-full-name" style="cursor:pointer;" onclick="focusExportNameFieldImmediate();">Name on export</label></h2>
           </div>
         </div>
         <p class="settings-card-desc">Your full name appears in the company weekly log file (cell B1). Stored for <strong>this pilot</strong> on this device only — each login has its own name.</p>
@@ -1860,13 +1860,25 @@ function doLogout() {
 /** Header shows the server pilot name; tap opens Settings to edit the weekly CSV “name on export” (local only). */
 function openPilotExportNameSettings() {
   showPage('settings');
-  window.setTimeout(() => {
-    const el = document.getElementById('settings-full-name');
-    if (el) {
-      el.focus();
-      try { el.select(); } catch (e) {}
-    }
-  }, 100);
+  // Focus in the same tap turn *before* deferred Settings DOM work runs — avoids iOS waiting on heavy layout.
+  focusExportNameFieldImmediate();
+}
+
+/** Scroll export name into view and focus (call right after showPage('settings') from a user gesture). */
+function focusExportNameFieldImmediate() {
+  const page = document.getElementById('page-settings');
+  const el = document.getElementById('settings-full-name');
+  if (!el) return;
+  if (page) page.scrollTop = 0;
+  try {
+    el.scrollIntoView({ block: 'center', behavior: 'instant' });
+  } catch (_) {}
+  try {
+    el.focus({ preventScroll: true });
+  } catch (_) {
+    try { el.focus(); } catch (_) {}
+  }
+  try { el.select(); } catch (_) {}
 }
 
 function showApp(name) {
@@ -3598,7 +3610,11 @@ function showPage(name) {
     document.getElementById('header-stats').classList.remove('stats-scrolled');
   }
   if (name === 'ff') renderPilotFF();
-  if (name === 'settings') void renderSettingsPage();
+  if (name === 'settings') {
+    const sp = document.getElementById('page-settings');
+    if (sp) sp.scrollTop = 0;
+    void renderSettingsPage();
+  }
   if (name === 'log') refreshWingDropdown();
 }
 
@@ -4847,8 +4863,15 @@ function notifyPilotSentAway() {
 }
 
 // ─── Settings page ────────────────────────────────────────────────────────────
-async function renderSettingsPage() {
+/** Fast path: theme + export name only. Heavy DOM/network runs next task so taps/focus are not stuck behind layout (iOS keyboard). */
+function renderSettingsPage() {
   updateThemeButtons();
+  const fnEl = document.getElementById('settings-full-name');
+  if (fnEl) fnEl.value = getPilotFullName();
+  setTimeout(renderSettingsPageDeferred, 0);
+}
+
+function renderSettingsPageDeferred() {
   const verEl = document.getElementById('settings-version-display');
   if (verEl) {
     verEl.textContent = '—';
@@ -4859,7 +4882,7 @@ async function renderSettingsPage() {
   }
   const chEl = document.getElementById('settings-changelog');
   if (chEl) {
-    chEl.innerHTML = 'Loading…';
+    chEl.innerHTML = '<p style="margin:0;color:var(--muted);">Loading…</p>';
     void fetch(new URL('changelog.json', location.href).href + '?t=' + Date.now())
       .then(r => r.json())
       .then(data => {
@@ -4879,16 +4902,12 @@ async function renderSettingsPage() {
       })
       .catch(() => { chEl.innerHTML = '<p style="margin:0;color:var(--muted);">Could not load changelog.</p>'; });
   }
-  const fnEl = document.getElementById('settings-full-name');
-  if (fnEl) fnEl.value = getPilotFullName();
   renderGlidersSettingsList();
   closeGliderEditor();
-  // Do not await — network delay was blocking Settings (keyboard could take 30s+ to appear).
   if (pilotHasAvatar && pilotId && !avatarCache[pilotId]) {
     void fetchPilotAvatarCached(pilotId).then(() => updateSettingsAvatarPreview()).catch(() => {});
   }
   updateSettingsAvatarPreview();
-  // Notification status
   const statusEl = document.getElementById('settings-notif-status');
   const btnEl = document.getElementById('settings-notif-btn');
   if (statusEl && btnEl) {

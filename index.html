@@ -1243,7 +1243,6 @@
       <div class="section-title" style="margin-top:0">All Flights</div>
       <div class="export-bar">
         <button class="btn-export-all" onclick="exportAllCSV()">Export All CSV</button>
-        <button type="button" class="btn-export-all" onclick="cycleOfficeFlightColumns()" title="Rotate column order">Columns</button>
         <div id="pilot-export-btns"></div>
       </div>
       <div class="flights-search-bar">
@@ -4329,6 +4328,26 @@ function sortToday(col) {
 }
 
 // ─── Flights Tab ──────────────────────────────────────────────────────────────
+let officeFlightsSort = { col: 'date', dir: 'desc' };
+let officeFlightsShowing = 500;
+const FLIGHTS_PAGE_SIZE = 500;
+
+function sortOfficeFlightsByCol(col) {
+  if (officeFlightsSort.col === col) {
+    officeFlightsSort.dir = officeFlightsSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    officeFlightsSort.col = col;
+    // Date defaults newest-first; everything else a-z / low-high
+    officeFlightsSort.dir = col === 'date' ? 'desc' : 'asc';
+  }
+  officeFlightsShowing = FLIGHTS_PAGE_SIZE;
+  renderFlightsTab();
+}
+function loadMoreOfficeFlights() {
+  officeFlightsShowing += FLIGHTS_PAGE_SIZE;
+  renderFlightsTab();
+}
+
 function renderFlightsTab() {
   const term = flightsSearch.trim().toLowerCase();
 
@@ -4350,83 +4369,107 @@ function renderFlightsTab() {
         f.date.includes(term) ||
         officeFmtDate(f.date).toLowerCase().includes(term)
       )
-    : allFlights;
+    : [...allFlights];
 
-  // Update export button label to reflect what will be exported
+  // Export button reflects filter but never pagination
   const exportBtn = document.querySelector('#office-tab-flights .btn-export-all');
   if (exportBtn) {
     exportBtn.textContent = term ? `Export Filtered CSV (${filteredFlights.length})` : 'Export All CSV';
   }
 
   const countEl = document.getElementById('flights-result-count');
-  countEl.textContent = term ? `${filteredFlights.length} of ${allFlights.length} flights` : '';
+  countEl.textContent = term
+    ? `${filteredFlights.length} of ${allFlights.length} flights`
+    : `${allFlights.length} flights total`;
 
   if (filteredFlights.length === 0) {
     el.innerHTML = '<div class="empty-state">No flights match your search</div>';
     return;
   }
 
-  const sortedFlights = [...filteredFlights].sort((a, b) => {
-    const la = new Date(a.landed_at || a.created_at || `${a.date}T12:00:00`).getTime();
-    const lb = new Date(b.landed_at || b.created_at || `${b.date}T12:00:00`).getTime();
-    return lb - la;
+  // Sort
+  const { col, dir } = officeFlightsSort;
+  const sorted = [...filteredFlights].sort((a, b) => {
+    let av, bv;
+    switch (col) {
+      case 'date':   av = a.date;                              bv = b.date; break;
+      case 'pilot':  av = (a.pilot_name  || '').toLowerCase(); bv = (b.pilot_name  || '').toLowerCase(); break;
+      case 'client': av = (a.client_name || '').toLowerCase(); bv = (b.client_name || '').toLowerCase(); break;
+      case 'num':    av = Number(a.flight_num);                bv = Number(b.flight_num); break;
+      case 'kg':     av = Number(a.weight);                    bv = Number(b.weight); break;
+      case 'sites':  av = (a.takeoff || '').toLowerCase();     bv = (b.takeoff || '').toLowerCase(); break;
+      case 'time':   av = Number(a.time);                      bv = Number(b.time); break;
+      case 'notes':  av = (a.notes || '').toLowerCase();       bv = (b.notes || '').toLowerCase(); break;
+      default:       av = a.date; bv = b.date;
+    }
+    if (av < bv) return dir === 'asc' ? -1 : 1;
+    if (av > bv) return dir === 'asc' ?  1 : -1;
+    return 0;
   });
 
-  const colOrder = getOfficeFlightColOrder();
+  // Paginate — only slice for rendering; export is unaffected
+  const page = sorted.slice(0, officeFlightsShowing);
+  const remaining = sorted.length - page.length;
+
   let html = `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table class="flight-table" style="min-width:560px;">
-    <thead>${officeFlightTableHead(colOrder)}</thead><tbody>`;
-  sortedFlights.forEach(f => {
-    html += officeFlightTableRow(f, colOrder);
-  });
-
+    <thead>${officeFlightTableHead()}</thead><tbody>`;
+  for (const f of page) html += officeFlightTableRow(f);
   html += '</tbody></table></div>';
+
+  if (remaining > 0) {
+    html += `<div style="text-align:center;padding:20px 16px 8px;">
+      <button class="btn-export-all" onclick="loadMoreOfficeFlights()">
+        Load ${Math.min(FLIGHTS_PAGE_SIZE, remaining)} more&ensp;<span style="opacity:0.7;font-weight:500">(${remaining} not shown)</span>
+      </button>
+    </div>`;
+  }
+
   el.innerHTML = html;
 }
 
-const OFFICE_FLIGHT_COL_KEYS = ['date', 'pilot', 'client', 'num', 'kg', 'sites', 'time', 'notes', 'actions'];
-function getOfficeFlightColOrder() {
-  try {
-    const j = JSON.parse(localStorage.getItem('gforce_office_flight_cols') || 'null');
-    if (Array.isArray(j) && j.length === OFFICE_FLIGHT_COL_KEYS.length && j.every(k => OFFICE_FLIGHT_COL_KEYS.includes(k))) {
-      return j;
-    }
-  } catch (_) {}
-  return [...OFFICE_FLIGHT_COL_KEYS];
-}
-function cycleOfficeFlightColumns() {
-  const o = getOfficeFlightColOrder();
-  const rot = [...o.slice(1), o[0]];
-  localStorage.setItem('gforce_office_flight_cols', JSON.stringify(rot));
-  renderFlightsTab();
-  toast('Column order updated');
-}
 function officeFmtDateWithYear(s) {
   const d = new Date(s + 'T00:00:00');
   return d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' });
 }
-function officeFlightTableHead(order) {
-  const labels = { date: 'Date', pilot: 'Pilot', client: 'Client', num: '#', kg: 'kg', sites: 'Site', time: 'Min', notes: 'Notes', actions: '' };
-  return '<tr>' + order.map(k => `<th>${labels[k] || ''}</th>`).join('') + '</tr>';
+function officeFlightTableHead() {
+  const cols = [
+    { key: 'date',   label: 'Date' },
+    { key: 'pilot',  label: 'Pilot' },
+    { key: 'client', label: 'Client' },
+    { key: 'num',    label: '#' },
+    { key: 'kg',     label: 'kg' },
+    { key: 'sites',  label: 'Site' },
+    { key: 'time',   label: 'Min' },
+    { key: 'notes',  label: 'Notes' },
+  ];
+  const { col: activeCol, dir } = officeFlightsSort;
+  const ths = cols.map(({ key, label }) => {
+    const isActive = activeCol === key;
+    const arrow = isActive ? (dir === 'asc' ? ' ▲' : ' ▼') : '';
+    return `<th style="cursor:pointer;user-select:none;white-space:nowrap;" onclick="sortOfficeFlightsByCol('${key}')">${label}${arrow}</th>`;
+  });
+  ths.push('<th></th>');
+  return '<tr>' + ths.join('') + '</tr>';
 }
-function officeFlightTableRow(f, order) {
+function officeFlightTableRow(f) {
   const pid = (f.pilot_name || '').replace(/'/g, "\\'");
-  const cells = {
-    date: `<td class="time-col">${esc(officeFmtDateWithYear(f.date))}</td>`,
-    pilot: `<td class="pilot-col">${esc(f.pilot_name)}</td>`,
-    client: `<td class="client-col">${esc(f.client_name || '—')}</td>`,
-    num: `<td>${f.flight_num}</td>`,
-    kg: `<td>${f.weight}</td>`,
-    sites: `<td style="white-space:nowrap">${esc(f.takeoff)}→${esc(f.landing)}</td>`,
-    time: `<td>${f.time}</td>`,
-    notes: `<td class="time-col" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.notes || '')}</td>`,
-    actions: `<td style="white-space:nowrap"><button class="btn-edit" onclick="officeEditFlight('${f.id}')" style="margin-right:4px;">✏️ Edit</button><button class="btn-danger" onclick="officeDeleteFlight('${f.id}', '${pid}')" >🗑</button></td>`
-  };
-  return '<tr>' + order.map(k => cells[k]).join('') + '</tr>';
+  return `<tr>
+    <td class="time-col">${esc(officeFmtDateWithYear(f.date))}</td>
+    <td class="pilot-col">${esc(f.pilot_name)}</td>
+    <td class="client-col">${esc(f.client_name || '—')}</td>
+    <td>${f.flight_num}</td>
+    <td>${f.weight}</td>
+    <td style="white-space:nowrap">${esc(f.takeoff)}→${esc(f.landing)}</td>
+    <td>${f.time}</td>
+    <td class="time-col" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.notes || '')}</td>
+    <td style="white-space:nowrap"><button class="btn-edit" onclick="officeEditFlight('${f.id}')" style="margin-right:4px;">✏️ Edit</button><button class="btn-danger" onclick="officeDeleteFlight('${f.id}', '${pid}')">🗑</button></td>
+  </tr>`;
 }
 
 let _flightsSearchDebounce = null;
 function searchFlights(val) {
   flightsSearch = val;
+  officeFlightsShowing = FLIGHTS_PAGE_SIZE;
   clearTimeout(_flightsSearchDebounce);
   _flightsSearchDebounce = setTimeout(() => { _flightsSearchDebounce = null; renderFlightsTab(); }, 120);
 }
@@ -4441,6 +4484,7 @@ function flushFlightsSearchRender() {
 function filterByPilot(name) {
   clearTimeout(_flightsSearchDebounce);
   _flightsSearchDebounce = null;
+  officeFlightsShowing = FLIGHTS_PAGE_SIZE;
   flightsSearch = flightsSearch.toLowerCase() === name.toLowerCase() ? '' : name;
   const inp = document.getElementById('flights-search');
   if (inp) inp.value = flightsSearch;
@@ -4454,8 +4498,8 @@ function officeFmtDate(s) {
 
 function exportAllCSV() {
   flushFlightsSearchRender();
-  // Exports whatever is currently visible — filtered by pilot, text, or date if active; all flights otherwise
-  const toExport = filteredFlights.length > 0 || flightsSearch.trim() ? filteredFlights : allFlights;
+  // Always exports the full set — pagination never limits the export
+  const toExport = flightsSearch.trim() ? filteredFlights : allFlights;
   const label = flightsSearch.trim()
     ? `gforce_flights_${flightsSearch.trim().replace(/[^a-zA-Z0-9]/g, '_')}.csv`
     : 'gforce_flights_all.csv';

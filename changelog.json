@@ -1,6 +1,15 @@
 {
   "versions": [
     {
+      "version": "1.2.2",
+      "date": "2026-04-15",
+      "items": [
+        "Office flight log: removed Columns button. Column headers (Date, Pilot, Client, #, kg, Site, Min, Notes) are now tappable to sort ascending/descending — active column shows ▲/▼ arrow.",
+        "Office flight log: table renders 500 flights at a time; a "Load 500 more" button at the bottom loads the next batch. Sorting or searching resets back to the first 500.",
+        "Office flight log: Export All CSV always exports the full logbook (or all filtered results) — pagination never limits what gets exported."
+      ]
+    },
+    {
       "version": "1.2.1",
       "date": "2026-04-15",
       "items": [

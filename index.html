@@ -997,12 +997,14 @@
         <div class="settings-card-head">
           <div>
             <p class="settings-card-title" id="settings-h-name">Weekly CSV</p>
-            <h2><label for="settings-full-name" style="cursor:pointer;" onclick="focusExportNameFieldImmediate();">Name on export</label></h2>
+            <h2>Name on export</h2>
           </div>
         </div>
         <p class="settings-card-desc">Your full name appears in the company weekly log file (cell B1). Stored for <strong>this pilot</strong> on this device only — each login has its own name.</p>
-        <input type="text" id="settings-full-name" class="settings-input" placeholder="e.g. Alex Taylor" maxlength="120" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" inputmode="text" />
-        <button type="button" class="settings-btn settings-btn-secondary" style="margin-top:12px;" onclick="savePilotFullNameSetting()">Save name</button>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
+          <span id="settings-full-name-display" style="flex:1;font-size:16px;font-weight:600;color:var(--text);min-height:20px;"></span>
+          <button type="button" class="settings-btn settings-btn-secondary" style="margin:0;flex-shrink:0;" onclick="editPilotExportName()">Edit</button>
+        </div>
       </section>
 
       <!-- Gliders -->
@@ -1455,9 +1457,24 @@ function migrateLegacyPilotFullName() {
 function getPilotFullName() {
   return (localStorage.getItem(pilotFullNameStorageKey()) || '').trim();
 }
-function savePilotFullNameSetting() {
-  const el = document.getElementById('settings-full-name');
-  if (el) localStorage.setItem(pilotFullNameStorageKey(), el.value.trim());
+function savePilotFullName(name) {
+  localStorage.setItem(pilotFullNameStorageKey(), (name || '').trim());
+  refreshExportNameDisplay();
+}
+
+function refreshExportNameDisplay() {
+  const el = document.getElementById('settings-full-name-display');
+  if (!el) return;
+  const v = getPilotFullName();
+  el.textContent = v || '(not set)';
+  el.style.color = v ? 'var(--text)' : 'var(--muted)';
+}
+
+function editPilotExportName() {
+  const current = getPilotFullName();
+  const val = prompt('Name on weekly CSV export:', current);
+  if (val === null) return;
+  savePilotFullName(val);
   toast('Name saved');
 }
 function loadGliders() {
@@ -1859,26 +1876,7 @@ function doLogout() {
 // ─── Pilot App Shell ──────────────────────────────────────────────────────────
 /** Header shows the server pilot name; tap opens Settings to edit the weekly CSV “name on export” (local only). */
 function openPilotExportNameSettings() {
-  showPage('settings');
-  // Focus in the same tap turn *before* deferred Settings DOM work runs — avoids iOS waiting on heavy layout.
-  focusExportNameFieldImmediate();
-}
-
-/** Scroll export name into view and focus (call right after showPage('settings') from a user gesture). */
-function focusExportNameFieldImmediate() {
-  const page = document.getElementById('page-settings');
-  const el = document.getElementById('settings-full-name');
-  if (!el) return;
-  if (page) page.scrollTop = 0;
-  try {
-    el.scrollIntoView({ block: 'center', behavior: 'instant' });
-  } catch (_) {}
-  try {
-    el.focus({ preventScroll: true });
-  } catch (_) {
-    try { el.focus(); } catch (_) {}
-  }
-  try { el.select(); } catch (_) {}
+  editPilotExportName();
 }
 
 function showApp(name) {
@@ -4866,8 +4864,7 @@ function notifyPilotSentAway() {
 /** Fast path: theme + export name only. Heavy DOM/network runs next task so taps/focus are not stuck behind layout (iOS keyboard). */
 function renderSettingsPage() {
   updateThemeButtons();
-  const fnEl = document.getElementById('settings-full-name');
-  if (fnEl) fnEl.value = getPilotFullName();
+  refreshExportNameDisplay();
   setTimeout(renderSettingsPageDeferred, 0);
 }
 

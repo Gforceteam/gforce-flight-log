@@ -1,10 +1,11 @@
 {
   "versions": [
     {
-      "version": "1.1.1",
+      "version": "1.1.2",
       "date": "2026-04-15",
       "items": [
-        "Settings: defer heavy work so the export name field can focus immediately on iPhone (fixes long keyboard delay)."
+        "Settings: replace export name text input with display + Edit button that opens a native prompt (instant keyboard on iOS).",
+        "Header pilot name tap also opens the prompt directly instead of navigating to Settings."
       ]
     },
     {

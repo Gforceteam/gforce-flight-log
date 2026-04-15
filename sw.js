@@ -1,4 +1,4 @@
-const CACHE = 'gforce-v15';
+const CACHE = 'gforce-v16';
 
 // Resolve all assets relative to this service worker (works on GitHub Pages /repo-name/ and at domain root).
 const SW_DIR = new URL('.', self.location);

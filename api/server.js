@@ -31,42 +31,47 @@ if (!OFFICE_PASSWORD) {
   console.error('FATAL: OFFICE_PASSWORD env var not set. Set it with: fly secrets set OFFICE_PASSWORD=<password>');
   process.exit(1);
 }
+if (!process.env.OFFICE_REFRESH_SECRET) {
+  console.error('FATAL: OFFICE_REFRESH_SECRET env var not set. Set it with: fly secrets set OFFICE_REFRESH_SECRET=<long-random-string>');
+  process.exit(1);
+}
 
 // ─── Security helpers ─────────────────────────────────────────────────────────
 // Constant-time string comparison (prevents timing attacks)
 function safeCompare(a, b) {
-  const bufA = Buffer.from(String(a));
-  const bufB = Buffer.from(String(b));
-  if (bufA.length !== bufB.length) {
-    // Still do a comparison to avoid timing leak on length
-    crypto.timingSafeEqual(bufA, bufA);
-    return false;
-  }
-  return crypto.timingSafeEqual(bufA, bufB);
+  // Hash both to fixed 32-byte digests so timingSafeEqual always runs on equal-length buffers,
+  // preventing timing attacks on both content and length differences.
+  const key = Buffer.alloc(32);
+  const hashA = crypto.createHmac('sha256', key).update(String(a)).digest();
+  const hashB = crypto.createHmac('sha256', key).update(String(b)).digest();
+  return crypto.timingSafeEqual(hashA, hashB);
 }
 
-// In-memory rate limiter — 5 failed attempts per IP per 15 minutes on auth routes
-const _loginAttempts = new Map();
-function checkRateLimit(ip) {
+// In-memory rate limiter — strict (5/15min) for auth, general (200/15min) for all other API routes
+const _rateLimitBuckets = new Map();
+function _checkLimit(ip, key, max, windowMs) {
   const now = Date.now();
-  const WINDOW = 15 * 60 * 1000; // 15 min
-  const MAX = 5;
-  let entry = _loginAttempts.get(ip);
+  const mapKey = `${key}:${ip}`;
+  let entry = _rateLimitBuckets.get(mapKey);
   if (!entry || now > entry.resetAt) {
-    entry = { count: 0, resetAt: now + WINDOW };
+    entry = { count: 0, resetAt: now + windowMs };
   }
   entry.count++;
-  _loginAttempts.set(ip, entry);
-  if (entry.count > MAX) {
+  _rateLimitBuckets.set(mapKey, entry);
+  if (entry.count > max) {
     return { blocked: true, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
   }
   return { blocked: false };
 }
-function clearRateLimit(ip) { _loginAttempts.delete(ip); }
-// Clean up old entries every 30 min to prevent unbounded memory growth
+function checkRateLimit(ip) { return _checkLimit(ip, 'auth', 5, 15 * 60 * 1000); }
+function checkGlobalRateLimit(ip) { return _checkLimit(ip, 'global', 200, 15 * 60 * 1000); }
+function clearRateLimit(ip) {
+  for (const k of _rateLimitBuckets.keys()) { if (k.endsWith(`:${ip}`)) _rateLimitBuckets.delete(k); }
+}
+// Clean up old entries every 30 min
 setInterval(() => {
   const now = Date.now();
-  for (const [ip, e] of _loginAttempts) { if (now > e.resetAt) _loginAttempts.delete(ip); }
+  for (const [k, e] of _rateLimitBuckets) { if (now > e.resetAt) _rateLimitBuckets.delete(k); }
 }, 30 * 60 * 1000);
 
 // Input sanitisation — trim and cap length
@@ -88,7 +93,7 @@ async function checkTimerNotifications() {
     `);
     for (const timer of timers) {
       const remainingMs = new Date(timer.expires_at).getTime() - now;
-      const remainingMins = remainingMs / 60000;
+      const remainingMins = Math.floor(remainingMs / 60000);
 
       // 10-minute warning — send once when remaining is between 5 and 11 minutes
       if (remainingMins > 5 && remainingMins <= 11 && !Number(timer.notif_10min)) {
@@ -370,7 +375,21 @@ function broadcast(data) {
 }
 
 // ─── WebSocket connection handler (ping/pong to prune dead clients) ──────────
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
+  // Require a valid JWT passed as ?token= query param
+  const url = new URL(req.url, 'http://localhost');
+  const token = url.searchParams.get('token');
+  let authenticated = false;
+  if (token) {
+    try {
+      jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
+      authenticated = true;
+    } catch (_) {}
+  }
+  if (!authenticated) {
+    ws.close(1008, 'Unauthorized');
+    return;
+  }
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
   ws.on('error', () => { ws.terminate(); });
@@ -409,6 +428,14 @@ app.use(cors({
 }));
 app.use(compression());
 app.use(express.json({ limit: '2mb' }));
+
+// Global rate limit — 200 requests per IP per 15 min across all API routes
+app.use('/api/', (req, res, next) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  const rl = checkGlobalRateLimit(ip);
+  if (rl.blocked) return res.status(429).json({ error: `Too many requests. Try again in ${Math.ceil(rl.retryAfter / 60)} minutes.` });
+  next();
+});
 
 // ─── Public Routes ────────────────────────────────────────────────────────────
 app.get('/api/public/pilots', async (req, res) => {
@@ -461,8 +488,7 @@ app.post('/api/auth/office', async (req, res) => {
     }
     clearRateLimit(ip);
     const token = jwt.sign({ type: 'office' }, JWT_SECRET, { expiresIn: '8h' });
-    const refreshSecret = process.env.OFFICE_REFRESH_SECRET || OFFICE_PASSWORD + '_refresh'; // fallback
-    res.json({ token, refresh_token: refreshSecret });
+    res.json({ token, refresh_token: process.env.OFFICE_REFRESH_SECRET });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Login failed' });
@@ -618,8 +644,25 @@ app.post('/api/flights', verifyToken, async (req, res) => {
     if (!date || !flight_num || !weight || !takeoff || !landing || !time) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
-    // Basic date format check
+    // Validate date is a real calendar date
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Invalid date format' });
+    const parsedDate = new Date(date + 'T00:00:00Z');
+    if (isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date) {
+      return res.status(400).json({ error: 'Invalid date' });
+    }
+    // Validate numeric fields
+    const numWeight = Number(weight);
+    const numTime = Number(time);
+    const numFlightNum = Number(flight_num);
+    if (!Number.isFinite(numWeight) || numWeight < 0 || numWeight > 500) {
+      return res.status(400).json({ error: 'weight must be a number between 0 and 500' });
+    }
+    if (!Number.isFinite(numTime) || numTime < 0 || numTime > 1440) {
+      return res.status(400).json({ error: 'time must be a non-negative number (minutes)' });
+    }
+    if (!Number.isInteger(numFlightNum) || numFlightNum < 1 || numFlightNum > 100) {
+      return res.status(400).json({ error: 'flight_num must be a positive integer' });
+    }
 
     const timer = await queryOne('SELECT client_name, started_at FROM active_timers WHERE pilot_id = ?', [pilotId]);
     const resolvedClientName = sanitize(client_name || (timer ? timer.client_name : null), 100);
@@ -773,9 +816,11 @@ app.put('/api/pilot/avatar', verifyToken, async (req, res) => {
 app.get('/api/pilot/avatar/:pilotId', verifyPilotOrOffice, async (req, res) => {
   try {
     const { pilotId } = req.params;
+    // Pilots can only fetch their own avatar; office tokens have unrestricted access
     if (req.pilot && req.pilot.id !== pilotId) {
       return res.status(403).json({ error: 'Forbidden' });
     }
+    // req.office is set for office tokens — intentionally allowed to read any avatar
     const row = await queryOne('SELECT avatar_data FROM pilots WHERE id = ?', [pilotId]);
     if (!row || !row.avatar_data) return res.status(404).json({ error: 'No profile photo' });
     res.json({ avatar: row.avatar_data });
@@ -1157,18 +1202,18 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
       pilotNames.push(pilot.name);
       pilotMap.push({ id: pid, name: pilot.name });
     }
-    // Push notification to each pilot — tells them who else is in the group
-    for (const p of pilotMap) {
+    // Push notification to each pilot in parallel — tells them who else is in the group
+    await Promise.all(pilotMap.map(p => {
       const others = pilotNames.filter(n => n !== p.name);
       const body = others.length
         ? `Flying with ${others.join(', ')} — ${duration} min timer started.`
         : `Timer started — ${duration} minutes.`;
-      await sendPushToPilot(p.id, {
+      return sendPushToPilot(p.id, {
         title: `🪂 GForce — YOU'RE AWAY!`,
         body,
         tag: 'pilot-sent-away'
       });
-    }
+    }));
 
     broadcast({
       type: 'GROUP_LEFT_OFFICE',
@@ -1245,6 +1290,7 @@ app.post('/api/office/land-pilot', verifyOffice, async (req, res) => {
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'office_landed', now]);
 
     const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [pilot_id]);
+    if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
     broadcast({ type: 'LANDED_EARLY', pilot_id, pilot_name: pilot.name, landed_at: now, flight_id: flightId });
 
     res.json({ message: 'Pilot landed and flight logged', flight_id: flightId });
@@ -1287,6 +1333,7 @@ app.post('/api/office/landed-early', verifyOffice, async (req, res) => {
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'landed_early', now]);
 
     const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [pilot_id]);
+    if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
     broadcast({ type: 'LANDED_EARLY', pilot_id, pilot_name: pilot.name, landed_at: now, flight_id: flightId });
 
     res.json({ message: 'Timer cancelled and flight logged', flight_id: flightId });
@@ -1300,16 +1347,19 @@ app.post('/api/office/adjust-timer', verifyOffice, async (req, res) => {
   try {
     const { pilot_id, delta } = req.body;
     if (!pilot_id || delta === undefined) return res.status(400).json({ error: 'pilot_id and delta required' });
+    const clampedDelta = Math.max(-120, Math.min(120, Number(delta)));
+    if (!Number.isFinite(clampedDelta)) return res.status(400).json({ error: 'delta must be a number' });
     const timer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [pilot_id]);
     if (!timer) return res.status(404).json({ error: 'No active timer for this pilot' });
-    const deltaMs = delta * 60 * 1000;
+    const deltaMs = clampedDelta * 60 * 1000;
     const newExpiry = new Date(new Date(timer.expires_at).getTime() + deltaMs);
     if (newExpiry <= new Date()) return res.status(400).json({ error: 'New time must be in the future' });
     const currentAdjustments = Number(timer.office_adjustments || 0);
-    await run('UPDATE active_timers SET expires_at = ?, office_adjustments = ? WHERE pilot_id = ?', [newExpiry.toISOString(), currentAdjustments + delta, pilot_id]);
+    await run('UPDATE active_timers SET expires_at = ?, office_adjustments = ? WHERE pilot_id = ?', [newExpiry.toISOString(), currentAdjustments + clampedDelta, pilot_id]);
     const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [pilot_id]);
+    if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
     broadcast({ type: 'TIMER_ADJUSTED', pilot_id, pilot_name: pilot.name, expires_at: newExpiry.toISOString() });
-    res.json({ message: `Timer ${delta > 0 ? 'added' : 'removed'} ${Math.abs(delta)} min`, expires_at: newExpiry.toISOString() });
+    res.json({ message: `Timer ${clampedDelta > 0 ? 'added' : 'removed'} ${Math.abs(clampedDelta)} min`, expires_at: newExpiry.toISOString() });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Internal server error' });

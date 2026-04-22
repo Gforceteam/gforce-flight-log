@@ -1879,6 +1879,11 @@ function doLogout() {
   clearInterval(window._statusPoll);
   clearInterval(window._dashboardTimer);
   if (window._statusPollAbort) { window._statusPollAbort.abort(); window._statusPollAbort = null; }
+  // Clear pending hours save timers so stale writes don't fire after logout
+  if (typeof _hoursSaveTimers !== 'undefined') {
+    Object.values(_hoursSaveTimers).forEach(clearTimeout);
+    _hoursSaveTimers = {};
+  }
   localStorage.removeItem('gforce_pilot_token');
   localStorage.removeItem('gforce_pilot_id');
   localStorage.removeItem('gforce_pilot_name');
@@ -4636,7 +4641,8 @@ async function officeResetPassword() {
 
 // ─── WebSocket ────────────────────────────────────────────────────────────────
 function connectWS() {
-  ws = new WebSocket(WS_URL);
+  if (!officeToken) return;
+  ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(officeToken)}`);
   ws.onopen = () => {
     document.getElementById('ws-indicator').classList.add('connected');
     document.getElementById('ws-indicator').title = 'Connected';
@@ -4647,7 +4653,22 @@ function connectWS() {
     if (officeToken) {
       if (officeRefreshInterval) clearInterval(officeRefreshInterval);
       officeRefreshInterval = setInterval(loadOfficeData, 20000);
-      setTimeout(connectWS, 5000);
+      // Refresh token before reconnecting to avoid reconnecting with an expired JWT
+      setTimeout(async () => {
+        try {
+          const r = await fetch(`${API_URL}/api/auth/refresh-office`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refresh_token: localStorage.getItem('gforce_office_refresh') })
+          });
+          if (r.ok) {
+            const data = await r.json();
+            officeToken = data.token;
+            localStorage.setItem('gforce_office_token', officeToken);
+          }
+        } catch (_) {}
+        if (officeToken) connectWS();
+      }, 5000);
     }
   };
   ws.onerror = () => ws.close();

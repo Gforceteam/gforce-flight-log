@@ -3,3 +3,4 @@ backups/
 api/node_modules/
 api/.env
 api/local.db
+Transfer Documents/.venv/

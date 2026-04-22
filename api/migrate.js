@@ -12,7 +12,7 @@ const db = createClient({
 });
 
 const FALLBACK_RAW_URL =
-  'https://raw.githubusercontent.com/brookewhatnall/gforce-flight-log/main/api/data/backup.json';
+  'https://raw.githubusercontent.com/gforceteam/gforce-flight-log/main/api/data/backup.json';
 
 function fetchBackupJson() {
   const localPath = path.join(__dirname, 'data', 'backup.json');

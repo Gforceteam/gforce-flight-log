@@ -387,6 +387,7 @@ wss.on('close', () => clearInterval(_wsPingInterval));
 // ─── Middleware ────────────────────────────────────────────────────────────────
 const ALLOWED_ORIGINS = [
   'https://brookewhatnall.github.io',
+  'https://gforceteam.github.io',
   'http://localhost:3000',
   'http://localhost:8080',
   'http://127.0.0.1:3000',

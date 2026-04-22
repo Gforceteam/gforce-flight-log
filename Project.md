@@ -8,7 +8,7 @@ Canonical onboarding for this product: architecture, deployment, API, data, UI c
 | --- | --- |
 | **Name** | Gforce Flight Log |
 | **Type** | Tandem paragliding flight operations management PWA |
-| **Live app** | https://brookewhatnall.github.io/gforce-flight-log/ (pilots + office: login → **— Office —** + office password) |
+| **Live app** | https://gforceteam.github.io/gforce-flight-log/ (pilots + office: login → **— Office —** + office password) |
 | **API** | https://gforce-api.fly.dev |
 | **WebSocket** | wss://gforce-api.fly.dev |
 
@@ -16,7 +16,7 @@ Two-role PWA for GForce Paragliding (Queenstown, NZ). Pilots log tandem flights 
 
 ## Repository
 
-**Single monorepo:** https://github.com/brookewhatnall/gforce-flight-log  
+**Single monorepo:** https://github.com/Gforceteam/gforce-flight-log  
 
 The pilot PWA (including **office mode** in the same `index.html`), API source under `api/`, and `flight-data-backups/` CSV history all live here. GitHub Pages publishes the **repo root** so the public URL is unchanged. Older split repos (`gforce-api`, `gforce-staff-dashboard`, `gforce-flight-data-backups`) may be archived after migration.
 

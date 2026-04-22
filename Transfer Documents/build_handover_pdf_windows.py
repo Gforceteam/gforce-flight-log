@@ -1,7 +1,7 @@
-"""Build a detailed, wrapped, single-linear GForce handover runbook PDF.
+"""Build the Windows/WSL2 variant of the GForce handover runbook PDF.
 
-Fixes previous overflow by using XPreformatted inside code blocks so long
-lines wrap on whitespace instead of bleeding off the page edge.
+Same layout as build_handover_pdf.py; shell steps target Ubuntu on WSL2 inside
+Windows Terminal (Turso's documented Windows install path).
 """
 
 from reportlab.lib.pagesizes import A4
@@ -18,7 +18,7 @@ from reportlab.platypus import (
     KeepTogether,
 )
 
-OUT = "GForce_Handover_Playbook.pdf"
+OUT = "GForce_Handover_Playbook_Windows.pdf"
 
 PAGE_W = 210 * mm
 LEFT = 18 * mm
@@ -137,13 +137,15 @@ def prompt(text):
 
 story = []
 
-story.append(p("GForce App Handover Runbook", TITLE))
+story.append(p("GForce App Handover Runbook (Windows)", TITLE))
 story.append(
     p(
         "One step-by-step guide for tomorrow's meeting. Follow in order from Step 1 to Step 12. "
         "Brooke, George, and Tuscany open this PDF side-by-side and complete each step together. "
-        "<b>macOS only:</b> every shell command below is written for macOS Terminal (zsh). "
-        "Do not paste them into Windows PowerShell or CMD.",
+        "<b>Windows:</b> use a Windows 10/11 PC. Almost all command-line steps run in "
+        "<b>Ubuntu on WSL2</b> inside <b>Windows Terminal</b> (Turso's official Windows setup). "
+        "One initial block uses <b>PowerShell as Administrator</b> only to install WSL if needed. "
+        "Do not paste the bash blocks into PowerShell, or the PowerShell block into Ubuntu.",
         SMALL,
     )
 )
@@ -163,7 +165,7 @@ services = Table(
         ["GitHub", "Holds the app code and hosts the website people open on their phones."],
         ["Fly.io", "Runs the backend server (the part that handles logins, timers, flight saves)."],
         ["Turso", "Stores all live data (pilots, flights, timers, full history)."],
-        ["Claude Code", "AI assistant used in Terminal to run commands and edits for you."],
+        ["Claude Code", "AI assistant used in the Ubuntu (WSL) shell to run commands and edits for you."],
     ],
     colWidths=[35 * mm, CONTENT_W - 35 * mm],
 )
@@ -200,7 +202,8 @@ story.extend(
         [
             "On Brooke's laptop and George's laptop, open this PDF side-by-side.",
             "Do not skip ahead. Complete each step fully before moving on.",
-            "Both laptops should be <b>Macs</b> with: <b>Terminal.app</b> open (default shell zsh), web browser open, password manager ready.",
+            "Both laptops should be <b>Windows PCs</b> with: <b>Windows Terminal</b> open and an "
+            "<b>Ubuntu (WSL)</b> tab ready, web browser open, password manager ready.",
         ]
     )
 )
@@ -221,40 +224,60 @@ story.extend(
 story.append(p("Save all usernames and emails in the password manager as we create them.", SMALL))
 
 # ------------------ STEP 3 ------------------
-story.append(p("Step 3 — Install required command-line tools (George's Mac)", STEP))
+story.append(p("Step 3 — Install required command-line tools (George's Windows PC)", STEP))
 story.append(
     p(
-        "Open <b>Terminal.app</b> (macOS). Paste each block in order; skip anything already installed. "
-        "Use a normal user account (not root).",
+        "Use <b>Windows Terminal</b>. Section A is <b>PowerShell as Administrator</b> (Windows start menu → "
+        "right‑click Terminal → Run as administrator). Section B is the <b>Ubuntu</b> tab (bash). "
+        "Skip anything already installed.",
         BODY,
     )
 )
+story.append(p("A) PowerShell (Administrator) — only if Ubuntu/WSL is not installed yet:", BODY))
 story.append(
     code_block(
-        "# 1) Install Homebrew (only if not installed):\n"
-        '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"\n\n'
-        "# 2) If `brew` says command not found after step 1, run ONE line (pick your Mac type):\n"
-        "# Apple Silicon (M1/M2/M3/M4):\n"
-        'echo \'eval "$(/opt/homebrew/bin/brew shellenv)"\' >> ~/.zprofile && eval "$(/opt/homebrew/bin/brew shellenv)"\n'
-        "# Intel Mac — run this line instead of the Apple Silicon line above:\n"
-        "echo 'eval \"$(/usr/local/bin/brew shellenv)\"' >> ~/.zprofile && eval \"$(/usr/local/bin/brew shellenv)\"\n\n"
-        "# 3) Install Node.js (needed for Claude Code):\n"
-        "brew install node\n\n"
-        "# 4) Install Claude Code:\n"
-        "npm install -g @anthropic-ai/claude-code\n\n"
-        "# 5) Install GitHub CLI:\n"
-        "brew install gh\n\n"
-        "# 6) Install Fly.io CLI:\n"
-        "curl -L https://fly.io/install.sh | sh\n\n"
-        "# 7) If `fly` says command not found after step 6:\n"
-        'export PATH="$HOME/.fly/bin:$PATH"\n'
-        'grep -q \'\\.fly/bin\' ~/.zprofile 2>/dev/null || echo \'export PATH="$HOME/.fly/bin:$PATH"\' >> ~/.zprofile\n\n'
-        "# 8) Install Turso CLI:\n"
-        "curl -sSfL https://get.tur.so/install.sh | bash\n\n"
-        "# 9) If `turso` is not found, open a new Terminal tab/window, or run: source ~/.zshrc"
+        "wsl --install -d Ubuntu\n"
+        "# If Windows asks for a reboot, reboot, then open Windows Terminal and pick Ubuntu.\n"
+        "# Finish Ubuntu's first-time username/password setup when it prompts."
     )
 )
-story.append(p("Then log into each CLI from the same Terminal window (or a new tab after PATH fixes):", BODY))
+story.append(
+    p(
+        "If WSL is already installed, open Windows Terminal → <b>Ubuntu</b> and continue with B.",
+        SMALL,
+    )
+)
+story.append(p("B) Ubuntu (WSL) — same shell for the rest of the handover:", BODY))
+story.append(
+    code_block(
+        "sudo apt-get update && sudo apt-get install -y build-essential curl file git\n\n"
+        "# 1) Install Homebrew on Linux (WSL):\n"
+        '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"\n\n'
+        "# 2) Add Homebrew to PATH (run the two lines Homebrew prints at the end of step 1), OR use:\n"
+        'echo \'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"\' >> ~/.profile\n'
+        'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"\n\n'
+        "# 3) Install Node.js + GitHub CLI:\n"
+        "brew install node gh\n\n"
+        "# 4) Install Claude Code:\n"
+        "npm install -g @anthropic-ai/claude-code\n\n"
+        "# 5) Install Fly.io CLI:\n"
+        "curl -L https://fly.io/install.sh | sh\n\n"
+        "# 6) If `fly` is not found:\n"
+        'export PATH="$HOME/.fly/bin:$PATH"\n'
+        'grep -q \'\\.fly/bin\' ~/.profile 2>/dev/null || echo \'export PATH="$HOME/.fly/bin:$PATH"\' >> ~/.profile\n\n'
+        "# 7) Install Turso CLI (official path on Windows is via WSL):\n"
+        "curl -sSfL https://get.tur.so/install.sh | bash\n\n"
+        "# 8) If `turso` is not found: open a new Ubuntu tab, or run: source ~/.profile"
+    )
+)
+story.append(
+    p(
+        "Optional — Fly CLI natively in PowerShell (only if you prefer it outside WSL; you still need "
+        "Turso in Ubuntu): <font face='Courier'>pwsh -Command \"iwr https://fly.io/install.ps1 -useb | iex\"</font>",
+        SMALL,
+    )
+)
+story.append(p("Then log into each CLI from the same Ubuntu window (or a new tab after PATH fixes):", BODY))
 story.append(
     code_block(
         "gh auth login        # pick GitHub.com, HTTPS, browser login\n"
@@ -268,19 +291,19 @@ story.append(
 story.append(p("Step 4 — Verify everything is installed and logged in (via Claude Code)", STEP))
 story.append(
     p(
-        "In <b>Terminal.app</b> on George's Mac, start Claude Code and paste the prompt below. "
+        "In <b>Ubuntu (WSL)</b> on George's Windows PC, start Claude Code and paste the prompt below. "
         "Claude will check all tools and logins.",
         BODY,
     )
 )
-story.append(p("Start Claude Code (macOS paths):", BODY))
+story.append(p("Start Claude Code (Linux home path inside WSL):", BODY))
 story.append(code_block("mkdir -p ~/Developer && cd ~/Developer && claude"))
 story.append(
     prompt(
         "Please verify my dev environment for the GForce handover.\n\n"
         "1) Print versions of: node, npm, git, gh, fly, turso.\n"
         "2) Check logins: gh auth status, fly auth whoami, turso auth whoami.\n"
-        "3) If anything is missing or logged out, stop and print the exact macOS install or login command.\n"
+        "3) If anything is missing or logged out, stop and print the exact Ubuntu (WSL) install or login command.\n"
         "4) Print my GitHub username, Fly.io email, Turso email so I can confirm they are George's accounts.\n"
         "5) When everything passes, print: READY FOR HANDOVER."
     )
@@ -392,21 +415,25 @@ story.append(
         BODY,
     )
 )
-story.append(p("Brooke runs this on Brooke's Mac first (Terminal.app):", BODY))
+story.append(p("Brooke runs this on Brooke's Windows PC first (Ubuntu / WSL tab):", BODY))
 story.append(
-    code_block("turso db dump gforce-api-nzgforce --output ~/Desktop/gforce-backup.sql")
+    code_block(
+        "turso db dump gforce-api-nzgforce --output ~/gforce-backup.sql\n"
+        "# Copy to Windows Desktop (replace YOUR_WINDOWS_LOGIN with your C:\\Users\\... folder name):\n"
+        "cp ~/gforce-backup.sql /mnt/c/Users/YOUR_WINDOWS_LOGIN/Desktop/gforce-backup.sql"
+    )
 )
 story.append(
     p(
-        "The file appears on Brooke's <b>Desktop</b> in Finder. Brooke sends <font face='Courier'>gforce-backup.sql</font> "
-        "to George (AirDrop Mac-to-Mac, Signal, or encrypted USB).",
+        "If you are unsure of the folder name: in PowerShell run <font face='Courier'>echo $env:USERNAME</font>. "
+        "Brooke sends <font face='Courier'>gforce-backup.sql</font> to George (OneDrive/Signal/encrypted USB, or a shared folder).",
         SMALL,
     )
 )
 story.append(
     prompt(
         "Migrate the Turso database to my Turso account.\n\n"
-        "1) Ask me for the local path to gforce-backup.sql (for example ~/Downloads/gforce-backup.sql). Verify it exists and show size + first 20 lines.\n\n"
+        "1) Ask me for the local path to gforce-backup.sql (for example /mnt/c/Users/Name/Downloads/gforce-backup.sql or ~/gforce-backup.sql). Verify it exists and show size + first 20 lines.\n\n"
         "2) Create new DB in my Turso account:\n"
         "turso db create gforce-production --location nrt\n\n"
         "3) Import backup:\n"
@@ -562,7 +589,7 @@ doc = SimpleDocTemplate(
     rightMargin=RIGHT,
     topMargin=16 * mm,
     bottomMargin=16 * mm,
-    title="GForce App Handover Runbook",
+    title="GForce App Handover Runbook (Windows)",
     author="Twisted Joker Limited",
 )
 doc.build(story)

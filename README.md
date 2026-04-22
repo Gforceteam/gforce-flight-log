@@ -6,7 +6,7 @@ Tandem paragliding flight logger: pilot PWA (with **built-in office mode**), API
 
 | App | URL |
 |-----|-----|
-| Pilot + office (same PWA) | https://brookewhatnall.github.io/gforce-flight-log/ |
+| Pilot + office (same PWA) | https://gforceteam.github.io/gforce-flight-log/ |
 | API (Fly.io) | https://gforce-api.fly.dev |
 | WebSocket | wss://gforce-api.fly.dev |
 

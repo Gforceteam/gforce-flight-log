@@ -385,6 +385,8 @@
     }
     .flight-badge.green { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(243,115,41,0.3); }
     .flight-badge.client { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(243,115,41,0.3); }
+    .flight-badge.pending { background: rgba(245,166,35,0.15); color: var(--warning); border: 1px solid rgba(245,166,35,0.4); }
+    .flight-badge.confirmed { background: rgba(34,197,94,0.12); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
 
     .date-group-header {
       font-size: 12px; font-weight: 700; color: var(--muted);
@@ -2514,6 +2516,13 @@ function renderDashboard() {
     startDashboardCountdown(myStatus.timer_expires_at);
   } else {
     clearInterval(window._dashboardTimer);
+    const today = todayStr();
+    const pendingFlights = myFlights.filter(f => f.date === today && !f.office_ack_emoji);
+    const pendingBanner = pendingFlights.length ? `
+      <div style="margin-top:16px;padding:14px 16px;background:rgba(245,166,35,0.1);border:1px solid rgba(245,166,35,0.4);border-radius:12px;text-align:center;">
+        <div style="font-size:15px;font-weight:700;color:var(--warning);margin-bottom:4px;">⏳ Awaiting Office Confirmation</div>
+        <div style="font-size:13px;color:var(--muted);">${pendingFlights.length} flight${pendingFlights.length !== 1 ? 's' : ''} pending — office needs to confirm your landing${pendingFlights.length !== 1 ? 's' : ''}.</div>
+      </div>` : '';
     const notifPrompt = ('Notification' in window && Notification.permission !== 'granted') ? `
       <div style="margin-top:20px;padding:14px 16px;background:rgba(243,115,41,0.12);border:1px solid rgba(243,115,41,0.4);border-radius:12px;text-align:center;">
         <div style="font-size:15px;font-weight:700;color:var(--accent);margin-bottom:6px;">🔔 Enable Push Notifications</div>
@@ -2533,6 +2542,7 @@ function renderDashboard() {
           ${pilotPresence === 2 ? 'Coming Up Condola' : 'Down Below'}
         </button>
       </div>
+      ${pendingBanner}
       ${notifPrompt}
       ${renderFlyingList(false)}
     `;
@@ -3027,16 +3037,22 @@ function renderFlights() {
     </div>`;
     dayFlights.forEach(f => {
       const pendingFill = f.notes && String(f.notes).includes('PENDING_PILOT_FILL');
+      const confirmed = !!f.office_ack_emoji;
       const sentAwayAt = f.sent_away_at
         ? new Date(f.sent_away_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
         : null;
       const loggedAt = f.landed_at
         ? new Date(f.landed_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
         : null;
+      const statusBadge = pendingFill
+        ? `<span class="flight-badge" style="margin-right:6px;">Complete</span>`
+        : confirmed
+          ? `<span class="flight-badge confirmed" style="margin-right:6px;">${esc(f.office_ack_emoji)} Confirmed</span>`
+          : `<span class="flight-badge pending" style="margin-right:6px;">⏳ Pending</span>`;
       html += `<div class="flight-item${pendingFill ? ' flight-item-pending' : ''}">
         <div>
-          <div style="font-size:14px;font-weight:600">${pendingFill ? '<span class="flight-badge" style="margin-right:6px;">Complete</span>' : ''}Flight ${f.flight_num} · ${f.weight}kg · ${f.time}min</div>
-          <div class="flight-meta">${esc(f.takeoff)} → ${esc(f.landing)}${f.notes ? ' · ' + esc(f.notes) : ''}</div>
+          <div style="font-size:14px;font-weight:600">${statusBadge}Flight ${f.flight_num} · ${f.weight}kg · ${f.time}min</div>
+          <div class="flight-meta">${esc(f.takeoff)} → ${esc(f.landing)}${f.notes && !pendingFill ? ' · ' + esc(f.notes) : ''}</div>
           ${f.client_name ? `<div class="flight-meta" style="color:#fff">👤 ${esc(f.client_name)}</div>` : ''}
           ${sentAwayAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">✈️ Away ${esc(sentAwayAt)}</div>` : ''}
           ${loggedAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">⏱ Landed ${esc(loggedAt)}</div>` : ''}

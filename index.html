@@ -2851,16 +2851,8 @@ async function saveFlight() {
       if (!res.ok) throw new Error(await res.text());
       toast('Flight updated!');
       await loadMyData();
-      if (savedEditingId) {
-        editFlight(savedEditingId);
-        const ct = document.getElementById('card-title');
-        const psId = localStorage.getItem(logPostsaveFlightIdKey());
-        const dl = Number(localStorage.getItem(logPostsaveDeadlineKey()));
-        if (ct && psId === savedEditingId && Number.isFinite(dl) && dl > Date.now()) {
-          ct.textContent = 'Saved flight';
-        }
-      }
-      scheduleLogPostSaveTimeout();
+      resetForm();
+      showPage('dashboard');
     } else {
       const wingReg = (document.getElementById('f-wing')?.value || '').trim().toUpperCase() || null;
       if (wingReg && wingReg !== currentWing) currentWing = wingReg;
@@ -2878,15 +2870,8 @@ async function saveFlight() {
       const data = await res.json();
       toast('Flight logged! Office notified.');
       await loadMyData();
-      if (data.id) {
-        editFlight(data.id);
-        const ct = document.getElementById('card-title');
-        if (ct) ct.textContent = 'Saved flight';
-        armLogPostSaveDeadline(data.id);
-      } else {
-        resetForm();
-        updateFlightNumForDate(document.getElementById('f-date').value);
-      }
+      resetForm();
+      showPage('dashboard');
     }
   } catch (e) {
     toast('Save failed: ' + e.message);

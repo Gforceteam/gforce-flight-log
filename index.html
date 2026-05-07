@@ -2550,7 +2550,7 @@ function renderDashboard() {
       <p style="color:var(--muted);font-size:14px;margin-top:8px;">${pilotPresence === 1 ? 'Office can send you away' : pilotPresence === 2 ? 'Waiting down below — not on dispatch list' : 'Signed out — not on dispatch list'}</p>
       <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:16px;">
         <button type="button" onclick="toggleAvailability()" style="padding:12px 18px;background:${pilotPresence === 1 ? 'rgba(239,83,80,0.15)' : 'rgba(74,143,30,0.2)'};border:1px solid ${pilotPresence === 1 ? 'var(--danger)' : '#4a8f1e'};border-radius:9999px;color:${pilotPresence === 1 ? 'var(--danger)' : '#7bc950'};font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
-          ${pilotPresence === 1 ? 'Sign out' : 'Available'}
+          ${pilotPresence === 1 ? 'Complete' : 'Available'}
         </button>
         <button type="button" onclick="toggleDownBottomFromDashboard()" style="padding:12px 18px;background:rgba(139,92,246,0.15);border:1px solid #8b5cf6;border-radius:9999px;color:#c4b5fd;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
           ${pilotPresence === 2 ? 'Coming Up Condola' : 'Down Below'}
@@ -5065,6 +5065,7 @@ function notifyPilotSentAway() {
       <button onclick="document.getElementById('sent-away-modal').remove()" style="margin-top:16px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:16px;font-weight:700;padding:14px 32px;cursor:pointer;font-family:Montserrat,sans-serif;width:100%;">GOT IT 👍</button>
     </div>`;
   document.body.appendChild(modal);
+  setTimeout(() => { modal.remove(); showPage('dashboard'); }, 5000);
 
   // System notification via service worker (works on iOS 16.4+ PWA, Android Chrome)
   const pushTitle = '🪂 GForce — YOU\'RE AWAY!';

@@ -3063,6 +3063,9 @@ function renderFlights() {
     dayFlights.forEach(f => {
       const pendingFill = f.notes && String(f.notes).includes('PENDING_PILOT_FILL');
       const confirmed = !!f.office_ack_emoji;
+      const confirmedAt = f.office_ack_at
+        ? new Date(f.office_ack_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
+        : null;
       const sentAwayAt = f.sent_away_at
         ? new Date(f.sent_away_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
         : null;
@@ -3081,6 +3084,7 @@ function renderFlights() {
           ${f.client_name ? `<div class="flight-meta" style="color:#fff">👤 ${esc(f.client_name)}</div>` : ''}
           ${sentAwayAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">✈️ Away ${esc(sentAwayAt)}</div>` : ''}
           ${loggedAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">⏱ Landed ${esc(loggedAt)}</div>` : ''}
+          ${confirmedAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">${esc(f.office_ack_emoji)} Confirmed by office ${esc(confirmedAt)}</div>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:72px;">
           <button class="btn-edit" onclick="editFlight('${f.id}')" style="padding:8px 12px;font-size:13px;font-weight:700;text-align:center;">✏️ Edit</button>

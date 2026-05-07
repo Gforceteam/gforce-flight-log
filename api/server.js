@@ -220,6 +220,8 @@ async function createTables() {
   try { await db.execute('ALTER TABLE flights ADD COLUMN sent_away_at TEXT'); } catch (_) {}
   // Add office acknowledgment emoji column
   try { await db.execute('ALTER TABLE flights ADD COLUMN office_ack_emoji TEXT'); } catch (_) {}
+  // Add office acknowledgment timestamp column
+  try { await db.execute('ALTER TABLE flights ADD COLUMN office_ack_at TEXT'); } catch (_) {}
   await db.execute(`CREATE TABLE IF NOT EXISTS office_logs (
     id TEXT PRIMARY KEY, pilot_id TEXT, event TEXT, created_at TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS active_timers (
@@ -1507,7 +1509,7 @@ app.post('/api/office/acknowledge-landing', verifyOffice, async (req, res) => {
     }
     const flight = await queryOne('SELECT id, pilot_id FROM flights WHERE id = ?', [flight_id]);
     if (!flight) return res.status(404).json({ error: 'Flight not found' });
-    await run('UPDATE flights SET office_ack_emoji = ? WHERE id = ?', [emoji, flight_id]);
+    await run('UPDATE flights SET office_ack_emoji = ?, office_ack_at = ? WHERE id = ?', [emoji, new Date().toISOString(), flight_id]);
     const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [flight.pilot_id]);
     await sendPushToPilot(flight.pilot_id, {
       title: `${emoji} Flight confirmed!`,

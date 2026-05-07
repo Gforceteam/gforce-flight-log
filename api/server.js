@@ -1427,6 +1427,26 @@ app.post('/api/office/extend', verifyOffice, async (req, res) => {
   }
 });
 
+// ─── Office: pending landing acknowledgments ──────────────────────────────────
+app.get('/api/office/pending-acks', verifyOffice, async (req, res) => {
+  try {
+    // Flights logged in the last 24 hours with no office acknowledgment
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const rows = await queryAll(
+      `SELECT f.id AS flight_id, f.pilot_id, p.name AS pilot_name, f.landed_at
+       FROM flights f
+       JOIN pilots p ON f.pilot_id = p.id
+       WHERE f.landed_at >= ? AND (f.office_ack_emoji IS NULL OR f.office_ack_emoji = '')
+       ORDER BY f.landed_at DESC`,
+      [since]
+    );
+    res.json(rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.get('/api/office/flights', verifyOffice, async (req, res) => {
   try {
     const flights = await queryAll(`

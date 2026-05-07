@@ -3862,15 +3862,20 @@ function refreshOfficeUiAfterLoad() {
 
 async function loadOfficeData() {
   try {
-    const [pilotsRes, flightsRes] = await Promise.all([
+    const [pilotsRes, flightsRes, acksRes] = await Promise.all([
       officeFetch('/api/pilots'),
-      officeFetch('/api/office/flights')
+      officeFetch('/api/office/flights'),
+      officeFetch('/api/office/pending-acks')
     ]);
-    // officeFetch returns null when it handles a 401 logout internally
     if (!pilotsRes) return;
     if (pilotsRes.status === 401) { officeDoLogout(); return; }
     officePilots = await pilotsRes.json();
     allFlights = (flightsRes && flightsRes.ok) ? await flightsRes.json() : [];
+    // Pending acks are the source of truth — replace in-memory list from server each load
+    if (acksRes && acksRes.ok) {
+      pendingAcks = await acksRes.json();
+      renderAckPanel();
+    }
     refreshOfficeUiAfterLoad();
   } catch (e) {
     toast('Cannot connect to server');

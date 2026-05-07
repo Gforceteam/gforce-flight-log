@@ -220,6 +220,16 @@
 
     .dashboard-status { text-align: center; padding: 28px 20px; }
     .dashboard-status-icon { font-size: 62px; margin-bottom: 16px; line-height: 1; }
+    .dashboard-avatar {
+      width: 90px; height: 90px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), #c95f1a);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 36px; font-weight: 800; color: #fff;
+      margin: 0 auto 16px; overflow: hidden;
+      box-shadow: 0 4px 20px var(--accent-glow);
+    }
+    .dashboard-avatar.has-photo { background: var(--surface); }
+    .dashboard-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .dashboard-status-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px; font-weight: 600; }
     .dashboard-status-value { font-size: 26px; font-weight: 800; color: var(--text); font-family: 'Montserrat', sans-serif; }
     .dashboard-client { font-size: 17px; color: var(--accent); margin-top: 8px; font-weight: 600; }
@@ -2529,8 +2539,12 @@ function renderDashboard() {
         <div style="font-size:13px;color:var(--muted);margin-bottom:12px;">Get an alert on your phone when office sends you away — even when the app is closed.</div>
         <button onclick="requestAndSubscribePush(this)" style="background:var(--accent);border:none;border-radius:9999px;color:#fff;padding:10px 24px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">Enable Notifications</button>
       </div>` : '';
+    const cachedUrl = avatarCache[pilotId];
+    const avatarHtml = cachedUrl
+      ? `<div class="dashboard-avatar has-photo"><img src="${cachedUrl}" alt="" /></div>`
+      : `<div class="dashboard-avatar" id="dashboard-avatar-placeholder">${pilotName ? pilotName.charAt(0).toUpperCase() : '?'}</div>`;
     el.innerHTML = `
-      <div class="dashboard-status-icon">🏢</div>
+      ${avatarHtml}
       <div class="dashboard-status-label">Status</div>
       <div class="dashboard-status-value">${pilotPresenceLabel()}</div>
       <p style="color:var(--muted);font-size:14px;margin-top:8px;">${pilotPresence === 1 ? 'Office can send you away' : pilotPresence === 2 ? 'Waiting down below — not on dispatch list' : 'Signed out — not on dispatch list'}</p>
@@ -2546,6 +2560,17 @@ function renderDashboard() {
       ${notifPrompt}
       ${renderFlyingList(false)}
     `;
+    // Async-fill avatar if it wasn't cached yet
+    if (!cachedUrl && pilotHasAvatar) {
+      fetchPilotAvatarCached(pilotId).then(url => {
+        if (!url) return;
+        const placeholder = document.getElementById('dashboard-avatar-placeholder');
+        if (placeholder) {
+          placeholder.classList.add('has-photo');
+          placeholder.innerHTML = `<img src="${url}" alt="" />`;
+        }
+      });
+    }
   }
 }
 

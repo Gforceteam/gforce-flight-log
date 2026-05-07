@@ -699,8 +699,9 @@ app.post('/api/flights', verifyToken, async (req, res) => {
     if (activeTimer) {
       await run('DELETE FROM active_timers WHERE pilot_id = ?', [pilotId]);
       await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilotId, 'landed', new Date().toISOString()]);
-      broadcast({ type: 'LANDED', pilot_id: pilotId, pilot_name: req.pilot.name, landed_at: now, flight_id: id });
     }
+    // Always notify office when a flight is logged, regardless of whether a timer was active
+    broadcast({ type: 'LANDED', pilot_id: pilotId, pilot_name: req.pilot.name, landed_at: now, flight_id: id });
 
     res.status(201).json({ id, message: 'Flight logged, office notified' });
   } catch (e) {

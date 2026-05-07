@@ -592,6 +592,11 @@ app.get('/api/my-status', verifyToken, async (req, res) => {
     }
     const pr = pilot ? Number(pilot.presence) : 0;
     const presence = Number.isFinite(pr) ? pr : (pilot && Number(pilot.available) === 1 ? 1 : 0);
+    // Most recent acknowledged flight for this pilot (so the app can notify in-foreground)
+    const latestAck = await queryOne(
+      'SELECT id, office_ack_emoji FROM flights WHERE pilot_id = ? AND office_ack_emoji IS NOT NULL ORDER BY landed_at DESC LIMIT 1',
+      [req.pilot.id]
+    );
     res.json({
       status: timer ? 'airborne' : 'in_office',
       client_name: timer ? timer.client_name : null,
@@ -603,7 +608,8 @@ app.get('/api/my-status', verifyToken, async (req, res) => {
       has_avatar: pilot ? Number(pilot.has_avatar) === 1 : false,
       group_name: groupName,
       group_pilots: groupPilots,
-      group_id: groupId
+      group_id: groupId,
+      latest_ack: latestAck ? { flight_id: latestAck.id, emoji: latestAck.office_ack_emoji } : null
     });
   } catch (e) {
     console.error(e);

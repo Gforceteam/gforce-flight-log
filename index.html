@@ -1986,6 +1986,16 @@ function startStatusPoll() {
       }
       if (flyingRes && flyingRes.ok) flyingPilots = await flyingRes.json();
 
+      // In-app notification when office acknowledges a landing (covers foreground case)
+      if (newStatus.latest_ack) {
+        const seenKey = `gforce_seen_ack_${pilotId}`;
+        const seenId = localStorage.getItem(seenKey);
+        if (seenId !== newStatus.latest_ack.flight_id) {
+          localStorage.setItem(seenKey, newStatus.latest_ack.flight_id);
+          toast(`${newStatus.latest_ack.emoji} Office confirmed your landing!`);
+        }
+      }
+
       const groupPilotsChanged = (newStatus.group_pilots || []).join(',') !== prevGroupPilots;
       if (newStatus.status !== prevStatus || groupPilotsChanged) {
         updateStatusBadge();

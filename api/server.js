@@ -218,6 +218,8 @@ async function createTables() {
   try { await db.execute('ALTER TABLE flights ADD COLUMN hours_worked REAL'); } catch (_) {}
   // Add sent_away_at column to existing DBs
   try { await db.execute('ALTER TABLE flights ADD COLUMN sent_away_at TEXT'); } catch (_) {}
+  // Add office acknowledgment emoji column
+  try { await db.execute('ALTER TABLE flights ADD COLUMN office_ack_emoji TEXT'); } catch (_) {}
   await db.execute(`CREATE TABLE IF NOT EXISTS office_logs (
     id TEXT PRIMARY KEY, pilot_id TEXT, event TEXT, created_at TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS active_timers (
@@ -1437,6 +1439,33 @@ app.get('/api/export/flights', verifyOffice, async (req, res) => {
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="flights${pilot_id?'_'+pilot_id:'_all'}.csv"`);
     res.send(csv);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── Office Acknowledge Landing ───────────────────────────────────────────────
+const ALLOWED_ACK_EMOJIS = ['👍', '✅', '🎉', '🤙', '🪂'];
+app.post('/api/office/acknowledge-landing', verifyOffice, async (req, res) => {
+  try {
+    const { flight_id, emoji } = req.body;
+    if (!flight_id) return res.status(400).json({ error: 'flight_id required' });
+    if (!emoji || !ALLOWED_ACK_EMOJIS.includes(emoji)) {
+      return res.status(400).json({ error: 'Invalid emoji' });
+    }
+    const flight = await queryOne('SELECT id, pilot_id FROM flights WHERE id = ?', [flight_id]);
+    if (!flight) return res.status(404).json({ error: 'Flight not found' });
+    await run('UPDATE flights SET office_ack_emoji = ? WHERE id = ?', [emoji, flight_id]);
+    const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [flight.pilot_id]);
+    await sendPushToPilot(flight.pilot_id, {
+      title: `${emoji} Flight confirmed!`,
+      body: 'Office has acknowledged your landing.',
+      tag: 'office-ack',
+      requireInteraction: false
+    });
+    broadcast({ type: 'LANDING_ACKNOWLEDGED', flight_id, pilot_id: flight.pilot_id, pilot_name: pilot?.name || 'Pilot', emoji });
+    res.json({ message: 'Landing acknowledged' });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Internal server error' });

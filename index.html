@@ -473,6 +473,26 @@
       color: var(--text-2); font-size: 13px; padding: 6px 14px; cursor: pointer; font-weight: 500;
     }
 
+    /* ── Landing Ack Panel ─────────────────────────────────────────────── */
+    #office-ack-panel { display: none; background: #0f1a0f; border-bottom: 2px solid #22c55e; }
+    .ack-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 20px; border-bottom: 1px solid rgba(255,255,255,0.07);
+      gap: 12px;
+    }
+    .ack-item:last-child { border-bottom: none; }
+    .ack-pilot-name { font-size: 15px; font-weight: 700; color: #86efac; }
+    .ack-label { font-size: 12px; color: #4ade80; margin-top: 2px; }
+    .ack-emojis { display: flex; gap: 8px; flex-shrink: 0; }
+    .ack-emoji-btn {
+      font-size: 22px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 10px; width: 44px; height: 44px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .ack-emoji-btn:hover { background: rgba(255,255,255,0.18); transform: scale(1.1); }
+    .ack-emoji-btn:active { transform: scale(0.95); }
+
     .office-tab-bar {
       display: flex;
       background: var(--surface);
@@ -1173,6 +1193,8 @@
     ⚠️ PILOT TIMER EXPIRED — <span id="alert-pilot-name"></span> has not reported landing!
   </div>
 
+  <div id="office-ack-panel"></div>
+
   <div class="office-tab-bar">
     <button class="office-tab-btn active" onclick="showOfficeTab('groups')" id="office-tab-groups-btn">New FF</button>
     <button class="office-tab-btn" onclick="showOfficeTab('pilots')" id="office-tab-pilots-btn">Flight Following</button>
@@ -1427,6 +1449,8 @@ let officeRefreshInterval = null;
 let allFlights = [];
 let filteredFlights = [];
 let alertDismissed = new Set();
+// Pending landing acknowledgments — { pilot_name, flight_id }
+let pendingAcks = [];
 let timerInterval;
 let todaySort = { col: 'time', dir: 'desc' }; // landed: newest first by default
 let flightsSearch = '';
@@ -4581,6 +4605,44 @@ function dismissAlert(pilotName) {
   document.getElementById('office-alert-banner').classList.remove('show');
 }
 
+// ─── Landing Acknowledgment ───────────────────────────────────────────────────
+const ACK_EMOJIS = ['👍', '✅', '🎉', '🤙', '🪂'];
+
+function renderAckPanel() {
+  const panel = document.getElementById('office-ack-panel');
+  if (!panel) return;
+  if (!pendingAcks.length) {
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+    return;
+  }
+  panel.style.display = 'block';
+  panel.innerHTML = pendingAcks.map(ack => `
+    <div class="ack-item">
+      <div>
+        <div class="ack-pilot-name">🛬 ${esc(ack.pilot_name)}</div>
+        <div class="ack-label">Tap an emoji to confirm landing</div>
+      </div>
+      <div class="ack-emojis">
+        ${ACK_EMOJIS.map(e => `<button class="ack-emoji-btn" onclick="acknowledgeFlightLanding('${ack.flight_id}','${e}')" title="${e}">${e}</button>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+async function acknowledgeFlightLanding(flightId, emoji) {
+  try {
+    const res = await officeFetch('/api/office/acknowledge-landing', {
+      method: 'POST',
+      body: JSON.stringify({ flight_id: flightId, emoji })
+    });
+    if (!res || !res.ok) { toast('Failed to acknowledge'); return; }
+    pendingAcks = pendingAcks.filter(a => a.flight_id !== flightId);
+    renderAckPanel();
+  } catch (e) {
+    toast('Error: ' + e.message);
+  }
+}
+
 // ─── Office Tabs ──────────────────────────────────────────────────────────────
 function showOfficeTab(name) {
   officeActiveTab = name;
@@ -4698,7 +4760,16 @@ function connectWS() {
       case 'LANDED_EARLY':
         toast(`${data.pilot_name} landed!`);
         dismissAlert(data.pilot_name);
+        if (data.flight_id && data.pilot_name) {
+          pendingAcks.push({ pilot_name: data.pilot_name, flight_id: data.flight_id });
+          renderAckPanel();
+        }
         loadOfficeData();
+        break;
+      case 'LANDING_ACKNOWLEDGED':
+        pendingAcks = pendingAcks.filter(a => a.flight_id !== data.flight_id);
+        renderAckPanel();
+        toast(`${data.pilot_name} landing confirmed ${data.emoji}`);
         break;
       case 'DID_NOT_FLY':
         toast(`${data.pilot_name} — did not fly, timer cancelled`);

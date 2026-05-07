@@ -983,6 +983,30 @@ app.put('/api/pilot/password', verifyToken, async (req, res) => {
   }
 });
 
+// ─── Office: create a new pilot ──────────────────────────────────────────────
+app.post('/api/office/pilots', verifyOffice, async (req, res) => {
+  try {
+    const { name, password } = req.body;
+    if (!name || !password) return res.status(400).json({ error: 'name and password required' });
+    if (name.length > 60) return res.status(400).json({ error: 'Name too long' });
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    if (password.length > 128) return res.status(400).json({ error: 'Password too long' });
+    const cleanName = sanitize(name, 60);
+    const existing = await queryOne('SELECT id FROM pilots WHERE name = ?', [cleanName]);
+    if (existing) return res.status(409).json({ error: `A pilot named "${cleanName}" already exists` });
+    const id = uuidv4();
+    const pinHash = await bcrypt.hash(password, 10);
+    await run(
+      'INSERT INTO pilots (id, name, pin_hash, created_at, presence) VALUES (?, ?, ?, ?, ?)',
+      [id, cleanName, pinHash, new Date().toISOString(), 1]
+    );
+    res.status(201).json({ id, name: cleanName, message: `Pilot "${cleanName}" created` });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to create pilot' });
+  }
+});
+
 // ─── Office: reset a pilot's password ────────────────────────────────────────
 app.put('/api/office/pilot-password', verifyOffice, async (req, res) => {
   try {

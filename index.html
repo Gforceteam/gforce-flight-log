@@ -1236,6 +1236,18 @@
           <button onclick="updateApp()" style="width:100%;padding:13px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;letter-spacing:0.5px;">⬇ Update App</button>
         </div>
 
+        <!-- Create pilot -->
+        <div class="card stat-section" style="margin-bottom:12px;">
+          <div class="stat-section-title" style="margin-bottom:6px;">➕ Create Pilot</div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Add a new pilot account. They can change their password after first login.</div>
+          <input type="text" id="office-new-pilot-name" placeholder="Pilot name" maxlength="60"
+            style="width:100%;padding:11px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;margin-bottom:10px;box-sizing:border-box;" />
+          <input type="password" id="office-new-pilot-pw" placeholder="Password (min 6 chars)" maxlength="128"
+            style="width:100%;padding:11px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;margin-bottom:10px;box-sizing:border-box;" />
+          <div id="office-create-pilot-error" style="color:var(--danger);font-size:13px;margin-bottom:8px;min-height:16px;"></div>
+          <button onclick="officeCreatePilot()" style="width:100%;padding:13px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">Create Pilot</button>
+        </div>
+
         <!-- Reset pilot password -->
         <div class="card stat-section" style="margin-bottom:12px;">
           <div class="stat-section-title" style="margin-bottom:6px;">🔑 Reset Pilot Password</div>
@@ -4691,6 +4703,27 @@ async function officeResetPassword() {
     document.getElementById('office-reset-pw').value = '';
     document.getElementById('office-reset-pilot-sel').value = '';
     toast('✅ ' + data.message);
+  } catch { errEl.textContent = 'Network error'; }
+}
+
+async function officeCreatePilot() {
+  const name = document.getElementById('office-new-pilot-name').value.trim();
+  const pw = document.getElementById('office-new-pilot-pw').value;
+  const errEl = document.getElementById('office-create-pilot-error');
+  errEl.textContent = '';
+  if (!name) { errEl.textContent = 'Enter a pilot name'; return; }
+  if (!pw || pw.length < 6) { errEl.textContent = 'Password must be at least 6 characters'; return; }
+  try {
+    const res = await officeFetch('/api/office/pilots', {
+      method: 'POST',
+      body: JSON.stringify({ name, password: pw })
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error || 'Failed'; return; }
+    document.getElementById('office-new-pilot-name').value = '';
+    document.getElementById('office-new-pilot-pw').value = '';
+    toast(`✅ Pilot "${name}" created`);
+    await loadOfficeData();
   } catch { errEl.textContent = 'Network error'; }
 }
 

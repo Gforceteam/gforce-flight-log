@@ -47,7 +47,7 @@ function safeCompare(a, b) {
   return crypto.timingSafeEqual(hashA, hashB);
 }
 
-// In-memory rate limiter — strict (5/15min) for auth, general (200/15min) for all other API routes
+// In-memory rate limiter — strict (5/15min) for auth, general (1000/15min) for all other API routes
 const _rateLimitBuckets = new Map();
 function _checkLimit(ip, key, max, windowMs) {
   const now = Date.now();
@@ -64,7 +64,7 @@ function _checkLimit(ip, key, max, windowMs) {
   return { blocked: false };
 }
 function checkRateLimit(ip) { return _checkLimit(ip, 'auth', 5, 15 * 60 * 1000); }
-function checkGlobalRateLimit(ip) { return _checkLimit(ip, 'global', 200, 15 * 60 * 1000); }
+function checkGlobalRateLimit(ip) { return _checkLimit(ip, 'global', 1000, 15 * 60 * 1000); }
 function clearRateLimit(ip) {
   for (const k of _rateLimitBuckets.keys()) { if (k.endsWith(`:${ip}`)) _rateLimitBuckets.delete(k); }
 }
@@ -433,7 +433,7 @@ app.use(cors({
 app.use(compression());
 app.use(express.json({ limit: '2mb' }));
 
-// Global rate limit — 200 requests per IP per 15 min across all API routes
+// Global rate limit — 1000 requests per IP per 15 min across all API routes
 app.use('/api/', (req, res, next) => {
   const ip = req.ip || req.connection.remoteAddress;
   const rl = checkGlobalRateLimit(ip);

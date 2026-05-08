@@ -4389,7 +4389,6 @@ function renderTodayTab() {
       <th class="sortable sort-${todaySort.col === 'pilot' ? 'active' : 'inactive'}" onclick="sortToday('pilot')">Pilot${arrow('pilot')}</th>
       <th class="sortable sort-${todaySort.col === 'client' ? 'active' : 'inactive'}" onclick="sortToday('client')">Client${arrow('client')}</th>
       <th>#</th>
-      <th>kg</th>
       <th></th>
     </tr></thead>
     <tbody>`;
@@ -4416,7 +4415,6 @@ function renderTodayTab() {
       <td class="col-pilot">${esc(f.pilot_name)}</td>
       <td>${esc(f.client_name || '—')}</td>
       <td>${f.flight_num}</td>
-      <td>${f.weight}</td>
       <td style="white-space:nowrap"><button class="btn-edit" onclick="officeEditFlight('${f.id}')" style="margin-right:4px;">✏️ Edit</button><button class="btn-danger" onclick="officeDeleteFlight('${f.id}', '${(f.pilot_name||'').replace(/'/g,"\\'")}')" >🗑</button></td>
     </tr>`;
   });

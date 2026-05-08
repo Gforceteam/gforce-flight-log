@@ -2518,7 +2518,7 @@ function renderDashboard() {
           <div style="font-size:15px;font-weight:600;color:var(--text);">${myStatus.group_pilots.map(esc).join(' · ')}</div>
         </div>` : ''}
       <div class="dashboard-timer" id="dashboard-timer">--:--</div>
-      <button class="btn-log-flight" onclick="goToLogFlight()">Log Flight</button>
+      <button class="btn-log-flight" onclick="goToLogFlight()">Land Flight</button>
       <button class="btn-extend" id="btn-extend" onclick="extendMyTimer()">+ 30 Minutes</button>
       <button class="btn-extend" id="btn-dnf" onclick="didNotFly()" style="border-color:var(--muted);color:var(--muted);margin-top:6px;">✕ Did Not Fly</button>
       ${renderFlyingList(true)}

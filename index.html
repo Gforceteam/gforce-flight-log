@@ -4403,7 +4403,12 @@ function renderTodayTab() {
       : '—';
     const confirmedStr = f.office_ack_at
       ? `${esc(f.office_ack_emoji)} ${new Date(f.office_ack_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })}`
-      : '<span style="color:var(--muted);font-style:italic;">⏳ Pending</span>';
+      : `<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+          <button onclick="toggleTodayAckPicker('${f.id}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:11px;font-weight:700;padding:3px 8px;cursor:pointer;">Complete</button>
+          <div id="ack-picker-${f.id}" style="display:none;flex-wrap:wrap;gap:2px;">
+            ${ACK_EMOJIS.map(e => `<button class="ack-emoji-btn" onclick="acknowledgeFlightLanding('${f.id}','${e}')" style="font-size:18px;padding:2px 4px;">${e}</button>`).join('')}
+          </div>
+        </div>`;
     html += `<tr>
       <td class="col-time">${esc(sentAwayStr)}</td>
       <td class="col-time">${esc(landedStr)}</td>
@@ -4718,9 +4723,16 @@ async function acknowledgeFlightLanding(flightId, emoji) {
     if (!res || !res.ok) { toast('Failed to acknowledge'); return; }
     pendingAcks = pendingAcks.filter(a => a.flight_id !== flightId);
     renderAckPanel();
+    await loadOfficeData();
+    renderTodayTab();
   } catch (e) {
     toast('Error: ' + e.message);
   }
+}
+
+function toggleTodayAckPicker(flightId) {
+  const picker = document.getElementById('ack-picker-' + flightId);
+  if (picker) picker.style.display = picker.style.display === 'none' ? 'flex' : 'none';
 }
 
 // ─── Office Tabs ──────────────────────────────────────────────────────────────

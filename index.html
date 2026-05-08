@@ -485,6 +485,16 @@
       color: var(--text-2); font-size: 13px; padding: 6px 14px; cursor: pointer; font-weight: 500;
     }
 
+    /* ── Extension Request Panel ───────────────────────────────────────── */
+    #office-ext-panel { display: none; background: #0f1220; border-bottom: 2px solid #6366f1; }
+    .ext-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid rgba(99,102,241,0.2); }
+    .ext-item:last-child { border-bottom: none; }
+    .ext-pilot-name { font-size: 15px; font-weight: 700; color: #fff; }
+    .ext-label { font-size: 12px; color: #a5b4fc; margin-top: 2px; }
+    .ext-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .ext-approve-btn { background: #22c55e; border: none; border-radius: 8px; color: #fff; font-size: 13px; font-weight: 700; padding: 8px 14px; cursor: pointer; }
+    .ext-deny-btn { background: transparent; border: 2px solid var(--muted); border-radius: 8px; color: var(--muted); font-size: 13px; font-weight: 700; padding: 8px 14px; cursor: pointer; }
+
     /* ── Landing Ack Panel ─────────────────────────────────────────────── */
     #office-ack-panel { display: none; background: #0f1a0f; border-bottom: 2px solid #22c55e; }
     .ack-item {
@@ -1205,6 +1215,7 @@
     ⚠️ PILOT TIMER EXPIRED — <span id="alert-pilot-name"></span> has not reported landing!
   </div>
 
+  <div id="office-ext-panel"></div>
   <div id="office-ack-panel"></div>
 
   <div class="office-tab-bar">
@@ -1475,6 +1486,8 @@ let filteredFlights = [];
 let alertDismissed = new Set();
 // Pending landing acknowledgments — { pilot_name, flight_id }
 let pendingAcks = [];
+// Pending extension requests — { id, pilot_name, requested_at }
+let pendingExtensions = [];
 let timerInterval;
 let todaySort = { col: 'time', dir: 'desc' }; // landed: newest first by default
 let flightsSearch = '';
@@ -2519,7 +2532,7 @@ function renderDashboard() {
         </div>` : ''}
       <div class="dashboard-timer" id="dashboard-timer">--:--</div>
       <button class="btn-log-flight" onclick="goToLogFlight()">Landed → Log Flight</button>
-      <button class="btn-extend" id="btn-extend" onclick="extendMyTimer()">+ 30 Minutes</button>
+      <button class="btn-extend" id="btn-extend" onclick="requestExtension()">Request More Time</button>
       <button class="btn-extend" id="btn-dnf" onclick="didNotFly()" style="border-color:var(--muted);color:var(--muted);margin-top:6px;">✕ Did Not Fly</button>
       ${renderFlyingList(true)}
     `;
@@ -2596,23 +2609,28 @@ async function didNotFly() {
   }
 }
 
-async function extendMyTimer() {
+async function requestExtension() {
   const btn = document.getElementById('btn-extend');
-  if (!btn) return;
+  if (!btn || btn.disabled) return;
   btn.disabled = true;
-  btn.textContent = 'Extending...';
+  btn.textContent = 'Requesting...';
   try {
-    const res = await apiFetch('/api/pilot/extend-timer', { method: 'POST' });
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json();
-    myStatus.timer_expires_at = data.expires_at;
-    startDashboardCountdown(data.expires_at);
-    toast('Timer extended by 30 minutes');
+    const res = await apiFetch('/api/pilot/request-extension', { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      if (res.status === 409) {
+        toast('Request already pending — waiting for office approval');
+        btn.textContent = '⏳ Awaiting Approval';
+        return;
+      }
+      throw new Error(err.error || res.statusText);
+    }
+    btn.textContent = '⏳ Awaiting Approval';
+    toast('More time requested — waiting for office approval');
   } catch (e) {
-    toast('Could not extend timer: ' + e.message);
-  } finally {
+    toast('Could not request extension: ' + e.message);
     btn.disabled = false;
-    btn.textContent = '+ 30 Minutes';
+    btn.textContent = 'Request More Time';
   }
 }
 
@@ -3892,10 +3910,11 @@ function refreshOfficeUiAfterLoad() {
 
 async function loadOfficeData() {
   try {
-    const [pilotsRes, flightsRes, acksRes] = await Promise.all([
+    const [pilotsRes, flightsRes, acksRes, extRes] = await Promise.all([
       officeFetch('/api/pilots'),
       officeFetch('/api/office/flights'),
-      officeFetch('/api/office/pending-acks')
+      officeFetch('/api/office/pending-acks'),
+      officeFetch('/api/office/pending-extensions')
     ]);
     if (!pilotsRes) return;
     if (pilotsRes.status === 401) { officeDoLogout(); return; }
@@ -3905,6 +3924,10 @@ async function loadOfficeData() {
     if (acksRes && acksRes.ok) {
       pendingAcks = await acksRes.json();
       renderAckPanel();
+    }
+    if (extRes && extRes.ok) {
+      pendingExtensions = await extRes.json();
+      renderExtensionPanel();
     }
     refreshOfficeUiAfterLoad();
   } catch (e) {
@@ -4728,6 +4751,37 @@ async function acknowledgeFlightLanding(flightId, emoji) {
   }
 }
 
+function renderExtensionPanel() {
+  const panel = document.getElementById('office-ext-panel');
+  if (!panel) return;
+  if (!pendingExtensions.length) { panel.style.display = 'none'; panel.innerHTML = ''; return; }
+  panel.style.display = 'block';
+  panel.innerHTML = pendingExtensions.map(r => `
+    <div class="ext-item">
+      <div>
+        <div class="ext-pilot-name">⏱ ${esc(r.pilot_name)} — More Time Request</div>
+        <div class="ext-label">Requested ${new Date(r.requested_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })}</div>
+      </div>
+      <div class="ext-actions">
+        <button class="ext-approve-btn" onclick="respondExtension('${r.id}','approve')">✓ Approve</button>
+        <button class="ext-deny-btn" onclick="respondExtension('${r.id}','deny')">✕ Deny</button>
+      </div>
+    </div>`).join('');
+}
+
+async function respondExtension(requestId, action) {
+  try {
+    const res = await officeFetch(`/api/office/${action}-extension`, {
+      method: 'POST', body: JSON.stringify({ request_id: requestId })
+    });
+    if (!res || !res.ok) { toast('Failed to respond'); return; }
+    pendingExtensions = pendingExtensions.filter(r => r.id !== requestId);
+    renderExtensionPanel();
+    if (action === 'approve') { toast('Extension approved — 30 min added'); await loadOfficeData(); }
+    else toast('Extension denied');
+  } catch (e) { toast('Error: ' + e.message); }
+}
+
 function toggleTodayAckPicker(flightId) {
   const picker = document.getElementById('ack-picker-' + flightId);
   if (picker) picker.style.display = picker.style.display === 'none' ? 'flex' : 'none';
@@ -4891,6 +4945,20 @@ function connectWS() {
         toast(`⚠️ Timer expired for ${data.pilot_name}!`);
         loadOfficeData();
         break;
+      case 'EXTENSION_REQUEST':
+        pendingExtensions.push({ id: data.request_id, pilot_name: data.pilot_name, requested_at: new Date().toISOString() });
+        renderExtensionPanel();
+        toast(`⏱ ${data.pilot_name} requests more time`);
+        break;
+      case 'EXTENSION_APPROVED':
+        pendingExtensions = pendingExtensions.filter(r => r.id !== data.request_id);
+        renderExtensionPanel();
+        loadOfficeData();
+        break;
+      case 'EXTENSION_DENIED':
+        pendingExtensions = pendingExtensions.filter(r => r.id !== data.request_id);
+        renderExtensionPanel();
+        break;
       case 'TIMER_EXTENDED':
         toast(`${data.pilot_name}: timer extended to +30 min`);
         loadOfficeData();
@@ -4935,6 +5003,24 @@ function connectWS() {
           toast(`${p ? p.name : 'Pilot'} signed in`);
         }
         loadOfficeData();
+        break;
+      }
+      case 'EXTENSION_APPROVED': {
+        if (pilotId && data.pilot_id === pilotId) {
+          myStatus.timer_expires_at = data.expires_at;
+          startDashboardCountdown(data.expires_at);
+          const btn = document.getElementById('btn-extend');
+          if (btn) { btn.disabled = false; btn.textContent = 'Request More Time'; }
+          toast('✅ Extra time approved — 30 min added!');
+        }
+        break;
+      }
+      case 'EXTENSION_DENIED': {
+        if (pilotId && data.pilot_id === pilotId) {
+          const btn = document.getElementById('btn-extend');
+          if (btn) { btn.disabled = false; btn.textContent = 'Request More Time'; }
+          toast('❌ Extra time request denied by office');
+        }
         break;
       }
     }

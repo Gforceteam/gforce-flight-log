@@ -237,6 +237,10 @@ async function createTables() {
   try { await db.execute('ALTER TABLE active_timers ADD COLUMN office_adjustments INTEGER DEFAULT 0'); } catch (_) {}
   await db.execute(`CREATE TABLE IF NOT EXISTS drives (
     id TEXT PRIMARY KEY, pilot_id TEXT, date TEXT, notes TEXT, group_id TEXT, created_at TEXT)`);
+  await db.execute(`CREATE TABLE IF NOT EXISTS extension_requests (
+    id TEXT PRIMARY KEY, pilot_id TEXT NOT NULL, requested_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending', responded_at TEXT)`);
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_ext_req_pilot ON extension_requests(pilot_id, status)');
   await db.execute(`CREATE TABLE IF NOT EXISTS push_subscriptions (
     id TEXT PRIMARY KEY, pilot_id TEXT NOT NULL, subscription TEXT NOT NULL, created_at TEXT)`);
   // Indexes for common queries
@@ -619,26 +623,94 @@ app.get('/api/my-status', verifyToken, async (req, res) => {
   }
 });
 
-app.post('/api/pilot/extend-timer', verifyToken, async (req, res) => {
+// Pilot requests 30-min extension — office must approve
+app.post('/api/pilot/request-extension', verifyToken, async (req, res) => {
   try {
     const pilotId = req.pilot.id;
     const timer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [pilotId]);
     if (!timer) return res.status(404).json({ error: 'No active timer' });
 
+    // Only one pending request at a time
+    const existing = await queryOne(
+      "SELECT id FROM extension_requests WHERE pilot_id = ? AND status = 'pending'", [pilotId]);
+    if (existing) return res.status(409).json({ error: 'Request already pending' });
+
+    const id = uuidv4();
+    await run(
+      "INSERT INTO extension_requests (id, pilot_id, requested_at, status) VALUES (?, ?, ?, 'pending')",
+      [id, pilotId, new Date().toISOString()]);
+
+    broadcast({ type: 'EXTENSION_REQUEST', request_id: id, pilot_id: pilotId, pilot_name: req.pilot.name, client_name: timer.client_name });
+    res.json({ message: 'Extension request sent', request_id: id });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Office approves extension request
+app.post('/api/office/approve-extension', verifyOffice, async (req, res) => {
+  try {
+    const { request_id } = req.body;
+    if (!request_id) return res.status(400).json({ error: 'request_id required' });
+
+    const req_ = await queryOne("SELECT * FROM extension_requests WHERE id = ? AND status = 'pending'", [request_id]);
+    if (!req_) return res.status(404).json({ error: 'Request not found or already resolved' });
+
+    const timer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [req_.pilot_id]);
+    if (!timer) return res.status(404).json({ error: 'No active timer for pilot' });
+
+    const now = new Date().toISOString();
+    await run("UPDATE extension_requests SET status = 'approved', responded_at = ? WHERE id = ?", [now, request_id]);
+
     const newExpiry = new Date(new Date(timer.expires_at).getTime() + 30 * 60 * 1000);
-    await run('UPDATE active_timers SET expires_at = ?, notif_10min = 0, notif_5min = 0, notif_expired = 0 WHERE pilot_id = ?', [newExpiry.toISOString(), pilotId]);
-    await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilotId, 'timer_extended_30min', new Date().toISOString()]);
+    await run('UPDATE active_timers SET expires_at = ?, notif_10min = 0, notif_5min = 0, notif_expired = 0 WHERE pilot_id = ?',
+      [newExpiry.toISOString(), req_.pilot_id]);
+    await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)',
+      [uuidv4(), req_.pilot_id, 'timer_extended_30min_approved', now]);
 
-    broadcast({
-      type: 'TIMER_EXTENDED',
-      pilot_id: pilotId,
-      pilot_name: req.pilot.name,
-      client_name: timer.client_name,
-      started_at: timer.started_at,
-      expires_at: newExpiry.toISOString()
-    });
+    const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [req_.pilot_id]);
+    await sendPushToPilot(req_.pilot_id, { title: '✅ Extra time approved!', body: '30 minutes added to your timer.', tag: 'extension-approved' });
+    broadcast({ type: 'EXTENSION_APPROVED', request_id, pilot_id: req_.pilot_id, pilot_name: pilot?.name, expires_at: newExpiry.toISOString() });
 
-    res.json({ message: 'Timer extended', expires_at: newExpiry.toISOString() });
+    res.json({ message: 'Extension approved', expires_at: newExpiry.toISOString() });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Office denies extension request
+app.post('/api/office/deny-extension', verifyOffice, async (req, res) => {
+  try {
+    const { request_id } = req.body;
+    if (!request_id) return res.status(400).json({ error: 'request_id required' });
+
+    const req_ = await queryOne("SELECT * FROM extension_requests WHERE id = ? AND status = 'pending'", [request_id]);
+    if (!req_) return res.status(404).json({ error: 'Request not found or already resolved' });
+
+    const now = new Date().toISOString();
+    await run("UPDATE extension_requests SET status = 'denied', responded_at = ? WHERE id = ?", [now, request_id]);
+
+    const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [req_.pilot_id]);
+    await sendPushToPilot(req_.pilot_id, { title: '❌ Extra time denied', body: 'Your extension request was not approved.', tag: 'extension-denied' });
+    broadcast({ type: 'EXTENSION_DENIED', request_id, pilot_id: req_.pilot_id, pilot_name: pilot?.name });
+
+    res.json({ message: 'Extension denied' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Office fetches pending extension requests
+app.get('/api/office/pending-extensions', verifyOffice, async (req, res) => {
+  try {
+    const rows = await queryAll(
+      `SELECT er.id, er.pilot_id, er.requested_at, p.name AS pilot_name
+       FROM extension_requests er JOIN pilots p ON p.id = er.pilot_id
+       WHERE er.status = 'pending' ORDER BY er.requested_at ASC`);
+    res.json(rows);
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Internal server error' });

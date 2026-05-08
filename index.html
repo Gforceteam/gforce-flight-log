@@ -3039,8 +3039,9 @@ function renderFlights() {
   let html = '';
   Object.keys(byDate).sort().reverse().forEach(date => {
     const dayFlights = byDate[date].slice().sort((a,b) => a.flight_num - b.flight_num);
-    // hours_worked lives on the last flight of the day
+    // hours_worked lives on the last (highest-numbered) flight of the day
     const lastFlight = dayFlights[dayFlights.length - 1];
+    dayFlights.reverse();
     const hoursVal = (lastFlight && lastFlight.hours_worked != null) ? lastFlight.hours_worked : '';
     html += `<div class="date-group-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
       <div style="display:flex;align-items:center;gap:8px;flex:1;">

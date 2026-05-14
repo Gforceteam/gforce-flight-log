@@ -1221,8 +1221,7 @@
   <div id="office-ack-panel"></div>
 
   <div class="office-tab-bar">
-    <button class="office-tab-btn active" onclick="showOfficeTab('groups')" id="office-tab-groups-btn">New FF</button>
-    <button class="office-tab-btn" onclick="showOfficeTab('pilots')" id="office-tab-pilots-btn">Flight Following</button>
+    <button class="office-tab-btn active" onclick="showOfficeTab('pilots')" id="office-tab-pilots-btn">Flight Following</button>
     <button class="office-tab-btn" onclick="showOfficeTab('today')" id="office-tab-today-btn">Today</button>
     <button class="office-tab-btn" onclick="showOfficeTab('flights')" id="office-tab-flights-btn">Flight Log</button>
     <button class="office-tab-btn" onclick="showOfficeTab('ff')" id="office-tab-ff-btn">Duty Sheet</button>
@@ -1230,16 +1229,12 @@
   </div>
 
   <div class="office-content">
-    <div class="office-tab-content" id="office-tab-pilots">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+    <div class="office-tab-content active" id="office-tab-pilots">
+      <div id="groups-panel"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 4px;">
         <div class="section-title" style="margin-bottom:0;">Pilots</div>
-        <button onclick="loadOfficeData()" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">↻ Refresh</button>
       </div>
       <div id="pilots-list"></div>
-    </div>
-
-    <div class="office-tab-content active" id="office-tab-groups">
-      <div id="groups-panel"></div>
     </div>
 
     <div class="office-tab-content" id="office-tab-today">
@@ -1480,7 +1475,7 @@ document.addEventListener('click', () => { ensureAudioCtx(); }, { once: true });
 let officeToken = localStorage.getItem('gforce_office_token');
 let ws = null;
 /** Which office dashboard tab is visible — only this panel is re-rendered on periodic refresh */
-let officeActiveTab = 'groups';
+let officeActiveTab = 'pilots';
 let officePilots = [];
 let officeRefreshInterval = null;
 let allFlights = [];
@@ -3880,7 +3875,7 @@ function showOfficeDashboard() {
   connectWS();
   if (officeRefreshInterval) clearInterval(officeRefreshInterval);
   officeRefreshInterval = setInterval(loadOfficeData, 20000);
-  loadOfficeData().then(() => showOfficeTab('groups'));
+  loadOfficeData().then(() => showOfficeTab('pilots'));
 }
 
 function officeDoLogout() {
@@ -3900,13 +3895,12 @@ function officeDoLogout() {
 /** Re-render only the visible office tab after a data load (avoids 3× redundant DOM work on each poll). */
 function refreshOfficeUiAfterLoad() {
   switch (officeActiveTab) {
-    case 'pilots': renderOfficeTab(); break;
+    case 'pilots': renderGroupsTab(); renderOfficeTab(); break;
     case 'today': renderTodayTab(); break;
     case 'flights': renderFlightsTab(); break;
-    case 'groups': renderGroupsTab(); break;
     case 'ff': renderOfficeFF(); break;
     case 'settings': break;
-    default: renderGroupsTab();
+    default: renderGroupsTab(); renderOfficeTab();
   }
 }
 
@@ -4797,10 +4791,9 @@ function showOfficeTab(name) {
   document.getElementById(`office-tab-${name}`).classList.add('active');
   document.getElementById(`office-tab-${name}-btn`).classList.add('active');
   if (name === 'ff') renderOfficeFF();
-  if (name === 'pilots') renderOfficeTab();
+  if (name === 'pilots') { renderGroupsTab(); renderOfficeTab(); }
   if (name === 'today') renderTodayTab();
   if (name === 'flights') renderFlightsTab();
-  if (name === 'groups') renderGroupsTab();
   if (name === 'settings') populateOfficeResetPilots();
 }
 

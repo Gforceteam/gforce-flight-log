@@ -1222,6 +1222,7 @@
 
   <div class="office-tab-bar">
     <button class="office-tab-btn active" onclick="showOfficeTab('pilots')" id="office-tab-pilots-btn">Flight Following</button>
+    <button class="office-tab-btn" onclick="showOfficeTab('away')" id="office-tab-away-btn">Currently Away</button>
     <button class="office-tab-btn" onclick="showOfficeTab('today')" id="office-tab-today-btn">Today</button>
     <button class="office-tab-btn" onclick="showOfficeTab('flights')" id="office-tab-flights-btn">Flight Log</button>
     <button class="office-tab-btn" onclick="showOfficeTab('ff')" id="office-tab-ff-btn">Duty Sheet</button>
@@ -1235,6 +1236,10 @@
         <div class="section-title" style="margin-bottom:0;">Pilots</div>
       </div>
       <div id="pilots-list"></div>
+    </div>
+
+    <div class="office-tab-content" id="office-tab-away">
+      <div id="away-list"></div>
     </div>
 
     <div class="office-tab-content" id="office-tab-today">
@@ -3896,6 +3901,7 @@ function officeDoLogout() {
 function refreshOfficeUiAfterLoad() {
   switch (officeActiveTab) {
     case 'pilots': renderGroupsTab(); renderOfficeTab(); break;
+    case 'away': renderAwayTab(); break;
     case 'today': renderTodayTab(); break;
     case 'flights': renderFlightsTab(); break;
     case 'ff': renderOfficeFF(); break;
@@ -3983,26 +3989,7 @@ function renderGroupsTab() {
       </div>
     </div>`;
 
-  if (airborne.length > 0) {
-    html += `<div class="section-title" style="margin-top:24px;">Currently Airborne Groups</div>`;
-    // Group airborne pilots by group_id
-    const grouped = {};
-    const ungrouped = [];
-    airborne.forEach(p => {
-      if (p.group_id) {
-        if (!grouped[p.group_id]) grouped[p.group_id] = { name: p.client_name || p.group_id, pilots: [] };
-        grouped[p.group_id].pilots.push(p);
-      } else {
-        ungrouped.push(p);
-      }
-    });
-    Object.values(grouped).forEach(g => {
-      html += `<div class="card" style="border-color:var(--warning);margin-bottom:10px;">
-        <div style="font-weight:700;color:var(--accent);margin-bottom:8px;">📋 ${esc(g.name)}</div>
-        <div style="color:var(--text-2);font-size:14px;">${g.pilots.map(p => esc(p.name)).join(', ')}</div>
-      </div>`;
-    });
-  }
+
 
   el.innerHTML = html;
 }
@@ -4053,11 +4040,89 @@ async function submitGroupAway() {
   } catch (e) { toast('Error: ' + e.message); }
 }
 
+// ─── Currently Away Tab ───────────────────────────────────────────────────────
+function renderAwayTab() {
+  const el = document.getElementById('away-list');
+  if (!el) return;
+  const flying = officePilots.filter(p => p.status === 'airborne');
+
+  if (flying.length === 0) {
+    el.innerHTML = '<div class="empty-state">No pilots currently away</div>';
+    return;
+  }
+
+  const grouped = {};
+  const ungrouped = [];
+  flying.forEach(p => {
+    if (p.group_id) {
+      if (!grouped[p.group_id]) grouped[p.group_id] = { name: p.client_name || p.group_id, pilots: [] };
+      grouped[p.group_id].pilots.push(p);
+    } else {
+      ungrouped.push(p);
+    }
+  });
+
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+    <div class="section-title" style="margin:0;">🪂 Away (${flying.length})</div>
+    <button onclick="loadOfficeData()" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">↻ Refresh</button>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">`;
+
+  Object.values(grouped).forEach(g => {
+    html += `<div class="pilot-card airborne" style="margin-bottom:0;">
+      <div style="font-weight:700;color:var(--accent);font-size:14px;margin-bottom:6px;">📋 ${esc(g.name)}</div>`;
+    g.pilots.forEach(p => {
+      html += `<div id="pilot-card-${p.id}" class="pilot-card airborne" style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);">
+        <div>
+          <span style="font-weight:600;font-size:13px;">${esc(p.name)}</span>
+          <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at || '')}" style="font-size:13px;margin:0;">--:--</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
+          <div style="display:flex;gap:3px;">
+            <button onclick="doLandPilot('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:11px;padding:4px 8px;font-weight:700;">Land</button>
+            <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="font-size:11px;padding:4px 10px;">Cancel</button>
+          </div>
+          <div style="display:flex;gap:3px;">
+            <button onclick="adjustPilotTimer('${p.id}', -5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">−5</button>
+            <button onclick="adjustPilotTimer('${p.id}', 5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">+5</button>
+          </div>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+
+  ungrouped.forEach(p => {
+    html += `<div id="pilot-card-${p.id}" class="pilot-card airborne" style="margin-bottom:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-weight:600;font-size:14px;">${esc(p.name)}</div>
+          ${p.client_name ? `<div style="color:var(--accent);font-size:12px;">👤 ${esc(p.client_name)}</div>` : ''}
+          <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at || '')}" style="font-size:13px;margin:2px 0 0;">--:--</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
+          <div style="display:flex;gap:3px;">
+            <button onclick="doLandPilot('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:11px;padding:4px 8px;font-weight:700;">Land</button>
+            <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="font-size:11px;padding:4px 10px;">Cancel</button>
+          </div>
+          <div style="display:flex;gap:3px;">
+            <button onclick="adjustPilotTimer('${p.id}', -5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">−5</button>
+            <button onclick="adjustPilotTimer('${p.id}', 5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">+5</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  });
+
+  html += `</div>`;
+  el.innerHTML = html;
+  updateTimers();
+}
+
 // ─── Office Tab (Flight Following) ───────────────────────────────────────────
 function renderOfficeTab() {
   const el = document.getElementById('pilots-list');
 
-  const flying       = officePilots.filter(p => p.status === 'airborne');
   // Sort available by last_landed_at ascending — longest wait first (null = never flown, top priority)
   const signedIn     = officePilots.filter(p => p.status !== 'airborne' && officePresenceVal(p) === 1)
     .sort((a, b) => {
@@ -4070,76 +4135,6 @@ function renderOfficeTab() {
     .sort((a, b) => a.name.localeCompare(b.name));
   const signedOutOnly = officePilots.filter(p => p.status !== 'airborne' && officePresenceVal(p) === 0)
     .sort((a, b) => a.name.localeCompare(b.name));
-
-  // ── Flying section: group by group_id ──
-  let flyingHtml = '';
-  if (flying.length > 0) {
-    const grouped = {};
-    const ungrouped = [];
-    flying.forEach(p => {
-      if (p.group_id) {
-        if (!grouped[p.group_id]) grouped[p.group_id] = { name: p.client_name || p.group_id, pilots: [] };
-        grouped[p.group_id].pilots.push(p);
-      } else {
-        ungrouped.push(p);
-      }
-    });
-
-    flyingHtml += `<div class="section-title">🪂 Flying (${flying.length})</div>`;
-    flyingHtml += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">`;
-
-    // Grouped flights — one card per group
-    Object.values(grouped).forEach(g => {
-      flyingHtml += `<div class="pilot-card airborne" style="margin-bottom:0;">
-        <div style="font-weight:700;color:var(--accent);font-size:14px;margin-bottom:6px;">📋 ${esc(g.name)}</div>`;
-      g.pilots.forEach(p => {
-        flyingHtml += `<div id="pilot-card-${p.id}" class="pilot-card airborne" style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);">
-          <div>
-            <span style="font-weight:600;font-size:13px;">${esc(p.name)}</span>
-            <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at || '')}" style="font-size:13px;margin:0;">--:--</div>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
-            <div style="display:flex;gap:3px;">
-              <button onclick="doLandPilot('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:11px;padding:4px 8px;font-weight:700;">Land</button>
-              <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="font-size:11px;padding:4px 10px;">Cancel</button>
-            </div>
-            <div style="display:flex;gap:3px;">
-              <button onclick="adjustPilotTimer('${p.id}', -5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">−5</button>
-              <button onclick="adjustPilotTimer('${p.id}', 5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">+5</button>
-            </div>
-          </div>
-        </div>`;
-      });
-      flyingHtml += `</div>`;
-    });
-
-    // Ungrouped solo flights
-    ungrouped.forEach(p => {
-      flyingHtml += `<div id="pilot-card-${p.id}" class="pilot-card airborne" style="margin-bottom:0;">
-        <div style="display:flex;align-items:center;justify-content:space-between;">
-          <div>
-            <div style="font-weight:600;font-size:14px;">${esc(p.name)}</div>
-            ${p.client_name ? `<div style="color:var(--accent);font-size:12px;">👤 ${esc(p.client_name)}</div>` : ''}
-            <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at || '')}" style="font-size:13px;margin:2px 0 0;">--:--</div>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
-            <div style="display:flex;gap:3px;">
-              <button onclick="doLandPilot('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:11px;padding:4px 8px;font-weight:700;">Land</button>
-              <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="font-size:11px;padding:4px 10px;">Cancel</button>
-            </div>
-            <div style="display:flex;gap:3px;">
-              <button onclick="adjustPilotTimer('${p.id}', -5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">−5</button>
-              <button onclick="adjustPilotTimer('${p.id}', 5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">+5</button>
-            </div>
-          </div>
-        </div>
-      </div>`;
-    });
-
-    flyingHtml += `</div>`; // close grid
-  } else {
-    flyingHtml += `<div class="section-title">🪂 Flying <span style="color:var(--border);font-weight:400">— none</span></div>`;
-  }
 
   // ── Available section: 2 columns, compact cards ──
   let availHtml = '';
@@ -4218,7 +4213,7 @@ function renderOfficeTab() {
     naHtml += `<div class="section-title">🔴 Signed out <span style="color:var(--border);font-weight:400">— none</span></div>`;
   }
 
-  el.innerHTML = flyingHtml + availHtml + dbHtml + naHtml;
+  el.innerHTML = availHtml + dbHtml + naHtml;
   updateTimers();
   hydrateOfficePilotAvatars();
 }
@@ -4792,6 +4787,7 @@ function showOfficeTab(name) {
   document.getElementById(`office-tab-${name}-btn`).classList.add('active');
   if (name === 'ff') renderOfficeFF();
   if (name === 'pilots') { renderGroupsTab(); renderOfficeTab(); }
+  if (name === 'away') renderAwayTab();
   if (name === 'today') renderTodayTab();
   if (name === 'flights') renderFlightsTab();
   if (name === 'settings') populateOfficeResetPilots();

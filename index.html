@@ -4091,77 +4091,60 @@ async function submitGroupAway() {
 function renderAwayTab() {
   const el = document.getElementById('away-list');
   if (!el) return;
-  const flying = officePilots.filter(p => p.status === 'airborne');
+
+  // Flatten all airborne pilots and sort by timer expiry ascending (least time first)
+  const flying = officePilots
+    .filter(p => p.status === 'airborne')
+    .sort((a, b) => {
+      const ta = a.timer_expires_at ? new Date(a.timer_expires_at).getTime() : Infinity;
+      const tb = b.timer_expires_at ? new Date(b.timer_expires_at).getTime() : Infinity;
+      return ta - tb;
+    });
 
   if (flying.length === 0) {
     el.innerHTML = '<div class="empty-state">No pilots currently away</div>';
     return;
   }
 
-  const grouped = {};
-  const ungrouped = [];
-  flying.forEach(p => {
-    if (p.group_id) {
-      if (!grouped[p.group_id]) grouped[p.group_id] = { name: p.client_name || p.group_id, pilots: [] };
-      grouped[p.group_id].pilots.push(p);
-    } else {
-      ungrouped.push(p);
-    }
+  let html = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div class="section-title" style="margin:0;">🪂 Away (${flying.length})</div>
+      <button onclick="loadOfficeData()" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">↻ Refresh</button>
+    </div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead>
+        <tr style="border-bottom:2px solid var(--border-hi);">
+          <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;">Pilot</th>
+          <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;">Booking</th>
+          <th style="text-align:center;padding:8px 10px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;">Time Left</th>
+          <th style="text-align:right;padding:8px 10px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>`;
+
+  flying.forEach((p, i) => {
+    const booking = p.client_name || (p.group_id ? '—' : '—');
+    const rowBg = i % 2 === 0 ? 'background:var(--card);' : 'background:var(--surface);';
+    html += `
+      <tr id="pilot-card-${p.id}" style="${rowBg}border-bottom:1px solid var(--border);transition:background 0.15s;">
+        <td style="padding:12px 10px;font-weight:700;font-size:14px;color:var(--text);">${esc(p.name)}</td>
+        <td style="padding:12px 10px;color:var(--accent);font-size:13px;">${esc(booking)}</td>
+        <td style="padding:12px 10px;text-align:center;">
+          <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at || '')}" style="font-size:15px;font-weight:800;margin:0;">--:--</div>
+        </td>
+        <td style="padding:10px 10px;text-align:right;white-space:nowrap;">
+          <div style="display:flex;gap:4px;justify-content:flex-end;align-items:center;">
+            <button onclick="adjustPilotTimer('${p.id}', -5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 9px;">−5</button>
+            <button onclick="adjustPilotTimer('${p.id}', 5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 9px;">+5</button>
+            <button onclick="doLandPilot('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:12px;padding:5px 12px;font-weight:700;">Land</button>
+            <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="font-size:12px;padding:5px 10px;">✕</button>
+          </div>
+        </td>
+      </tr>`;
   });
 
-  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-    <div class="section-title" style="margin:0;">🪂 Away (${flying.length})</div>
-    <button onclick="loadOfficeData()" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">↻ Refresh</button>
-  </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">`;
-
-  Object.values(grouped).forEach(g => {
-    html += `<div class="pilot-card airborne" style="margin-bottom:0;">
-      <div style="font-weight:700;color:var(--accent);font-size:14px;margin-bottom:6px;">📋 ${esc(g.name)}</div>`;
-    g.pilots.forEach(p => {
-      html += `<div id="pilot-card-${p.id}" class="pilot-card airborne" style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);">
-        <div>
-          <span style="font-weight:600;font-size:13px;">${esc(p.name)}</span>
-          <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at || '')}" style="font-size:13px;margin:0;">--:--</div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
-          <div style="display:flex;gap:3px;">
-            <button onclick="doLandPilot('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:11px;padding:4px 8px;font-weight:700;">Land</button>
-            <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="font-size:11px;padding:4px 10px;">Cancel</button>
-          </div>
-          <div style="display:flex;gap:3px;">
-            <button onclick="adjustPilotTimer('${p.id}', -5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">−5</button>
-            <button onclick="adjustPilotTimer('${p.id}', 5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">+5</button>
-          </div>
-        </div>
-      </div>`;
-    });
-    html += `</div>`;
-  });
-
-  ungrouped.forEach(p => {
-    html += `<div id="pilot-card-${p.id}" class="pilot-card airborne" style="margin-bottom:0;">
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <div>
-          <div style="font-weight:600;font-size:14px;">${esc(p.name)}</div>
-          ${p.client_name ? `<div style="color:var(--accent);font-size:12px;">👤 ${esc(p.client_name)}</div>` : ''}
-          <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at || '')}" style="font-size:13px;margin:2px 0 0;">--:--</div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
-          <div style="display:flex;gap:3px;">
-            <button onclick="doLandPilot('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:11px;padding:4px 8px;font-weight:700;">Land</button>
-            <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="font-size:11px;padding:4px 10px;">Cancel</button>
-          </div>
-          <div style="display:flex;gap:3px;">
-            <button onclick="adjustPilotTimer('${p.id}', -5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">−5</button>
-            <button onclick="adjustPilotTimer('${p.id}', 5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:3px 7px;">+5</button>
-          </div>
-        </div>
-      </div>
-    </div>`;
-  });
-
-  html += `</div>`;
+  html += `</tbody></table></div>`;
   el.innerHTML = html;
   updateTimers();
 }

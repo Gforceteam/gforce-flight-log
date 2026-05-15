@@ -1529,6 +1529,8 @@ let ws = null;
 /** Which office dashboard tab is visible — only this panel is re-rendered on periodic refresh */
 let officeActiveTab = 'pilots';
 let officePilots = [];
+// Collapsed state for Flight Following sections (persist across re-renders)
+const _ffCollapsed = { avail: true, downbelow: true, signedout: true };
 let officeRefreshInterval = null;
 let allFlights = [];
 let filteredFlights = [];
@@ -4212,11 +4214,18 @@ function renderOfficeTab() {
   const signedOutOnly = officePilots.filter(p => p.status !== 'airborne' && officePresenceVal(p) === 0)
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  // ── Available section: 2 columns, compact cards ──
-  let availHtml = '';
+  // Helper: collapsible section header
+  const sectionHeader = (key, label, count) => `
+    <div class="section-title" onclick="toggleFFSection('${key}')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none;">
+      <span>${label}${count !== null ? ` (${count})` : ''}</span>
+      <span style="font-size:10px;color:var(--muted);transition:transform 0.2s;display:inline-block;transform:rotate(${_ffCollapsed[key] ? '0deg' : '180deg'});">▼</span>
+    </div>`;
+
+  // ── Available section ──
+  let availHtml = sectionHeader('avail', '✅ Available', signedIn.length);
+  availHtml += `<div id="ff-avail-body" style="display:${_ffCollapsed.avail ? 'none' : 'block'}">`;
   if (signedIn.length > 0) {
-    availHtml += `<div class="section-title">✅ Available (${signedIn.length})</div>`;
-    availHtml += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">`;
+    availHtml += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">`;
     signedIn.forEach(p => {
       const lastFlight = p.last_landed_at ? fmtRelative(p.last_landed_at) : 'no flights';
       const activeGroups = getActiveGroups();
@@ -4244,14 +4253,15 @@ function renderOfficeTab() {
     });
     availHtml += `</div>`;
   } else {
-    availHtml += `<div class="section-title">✅ Available <span style="color:var(--border);font-weight:400">— none</span></div>`;
+    availHtml += `<div style="color:var(--muted);font-size:13px;padding:8px 0 12px;">No pilots available</div>`;
   }
+  availHtml += `</div>`;
 
   // ── Down Below (off dispatch) ──
-  let dbHtml = '';
+  let dbHtml = sectionHeader('downbelow', '🟣 Down Below', downBottomPilots.length);
+  dbHtml += `<div id="ff-downbelow-body" style="display:${_ffCollapsed.downbelow ? 'none' : 'block'}">`;
   if (downBottomPilots.length > 0) {
-    dbHtml += `<div class="section-title">🟣 Down Below (${downBottomPilots.length})</div>`;
-    dbHtml += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">`;
+    dbHtml += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">`;
     downBottomPilots.forEach(p => {
       dbHtml += `<div class="pilot-card office-card-downbottom" style="margin-bottom:0;padding:10px 12px;border:2px solid rgba(139,92,246,0.5);">
         <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -4265,14 +4275,15 @@ function renderOfficeTab() {
     });
     dbHtml += `</div>`;
   } else {
-    dbHtml += `<div class="section-title">🟣 Down Below <span style="color:var(--border);font-weight:400">— none</span></div>`;
+    dbHtml += `<div style="color:var(--muted);font-size:13px;padding:8px 0 12px;">No pilots down below</div>`;
   }
+  dbHtml += `</div>`;
 
   // ── Signed out section ──
-  let naHtml = '';
+  let naHtml = sectionHeader('signedout', '🔴 Signed Out', signedOutOnly.length);
+  naHtml += `<div id="ff-signedout-body" style="display:${_ffCollapsed.signedout ? 'none' : 'block'}">`;
   if (signedOutOnly.length > 0) {
-    naHtml += `<div class="section-title">🔴 Signed out (${signedOutOnly.length})</div>`;
-    naHtml += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">`;
+    naHtml += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">`;
     signedOutOnly.forEach(p => {
       naHtml += `<div class="pilot-card office-card-signedout" style="margin-bottom:0;padding:10px 12px;opacity:0.65;">
         <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -4286,12 +4297,18 @@ function renderOfficeTab() {
     });
     naHtml += `</div>`;
   } else {
-    naHtml += `<div class="section-title">🔴 Signed out <span style="color:var(--border);font-weight:400">— none</span></div>`;
+    naHtml += `<div style="color:var(--muted);font-size:13px;padding:8px 0 12px;">No pilots signed out</div>`;
   }
+  naHtml += `</div>`;
 
   el.innerHTML = availHtml + dbHtml + naHtml;
   updateTimers();
   hydrateOfficePilotAvatars();
+}
+
+function toggleFFSection(key) {
+  _ffCollapsed[key] = !_ffCollapsed[key];
+  renderOfficeTab();
 }
 
 async function doLeaveOffice(pilotId) {

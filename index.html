@@ -4092,19 +4092,36 @@ function renderAwayTab() {
   const el = document.getElementById('away-list');
   if (!el) return;
 
-  // Flatten all airborne pilots and sort by timer expiry ascending (least time first)
-  const flying = officePilots
-    .filter(p => p.status === 'airborne')
-    .sort((a, b) => {
-      const ta = a.timer_expires_at ? new Date(a.timer_expires_at).getTime() : Infinity;
-      const tb = b.timer_expires_at ? new Date(b.timer_expires_at).getTime() : Infinity;
-      return ta - tb;
-    });
-
+  const flying = officePilots.filter(p => p.status === 'airborne');
   if (flying.length === 0) {
     el.innerHTML = '<div class="empty-state">No pilots currently away</div>';
     return;
   }
+
+  // Build entries: solo pilots stay individual, grouped pilots are collected together
+  const groupMap = {};
+  const entries = []; // each entry: { type:'solo'|'group', minExpiry, pilot?, pilots?, groupName? }
+  flying.forEach(p => {
+    if (p.group_id) {
+      if (!groupMap[p.group_id]) {
+        const entry = { type: 'group', groupName: p.client_name || p.group_id, pilots: [], minExpiry: Infinity };
+        groupMap[p.group_id] = entry;
+        entries.push(entry);
+      }
+      const entry = groupMap[p.group_id];
+      entry.pilots.push(p);
+      const t = p.timer_expires_at ? new Date(p.timer_expires_at).getTime() : Infinity;
+      if (t < entry.minExpiry) entry.minExpiry = t;
+    } else {
+      const t = p.timer_expires_at ? new Date(p.timer_expires_at).getTime() : Infinity;
+      entries.push({ type: 'solo', pilot: p, minExpiry: t });
+    }
+  });
+
+  // Sort entries by least time remaining first
+  entries.sort((a, b) => a.minExpiry - b.minExpiry);
+
+  const thStyle = `text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;`;
 
   let html = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -4115,33 +4132,62 @@ function renderAwayTab() {
     <table style="width:100%;border-collapse:collapse;font-size:13px;">
       <thead>
         <tr style="border-bottom:2px solid var(--border-hi);">
-          <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;">Pilot</th>
-          <th style="text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;">Booking</th>
-          <th style="text-align:center;padding:8px 10px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;">Time Left</th>
-          <th style="text-align:right;padding:8px 10px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;">Actions</th>
+          <th style="${thStyle}">Pilot</th>
+          <th style="${thStyle}">Booking</th>
+          <th style="${thStyle}text-align:center;">Time Left</th>
+          <th style="${thStyle}text-align:right;">Actions</th>
         </tr>
       </thead>
       <tbody>`;
 
-  flying.forEach((p, i) => {
-    const booking = p.client_name || (p.group_id ? '—' : '—');
-    const rowBg = i % 2 === 0 ? 'background:var(--card);' : 'background:var(--surface);';
-    html += `
-      <tr id="pilot-card-${p.id}" style="${rowBg}border-bottom:1px solid var(--border);transition:background 0.15s;">
-        <td style="padding:12px 10px;font-weight:700;font-size:14px;color:var(--text);">${esc(p.name)}</td>
-        <td style="padding:12px 10px;color:var(--accent);font-size:13px;">${esc(booking)}</td>
-        <td style="padding:12px 10px;text-align:center;">
-          <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at || '')}" style="font-size:15px;font-weight:800;margin:0;">--:--</div>
-        </td>
-        <td style="padding:10px 10px;text-align:right;white-space:nowrap;">
-          <div style="display:flex;gap:4px;justify-content:flex-end;align-items:center;">
-            <button onclick="adjustPilotTimer('${p.id}', -5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 9px;">−5</button>
-            <button onclick="adjustPilotTimer('${p.id}', 5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 9px;">+5</button>
-            <button onclick="doLandPilot('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:12px;padding:5px 12px;font-weight:700;">Land</button>
-            <button class="btn-danger" onclick="confirmLandedEarly('${p.id}', '${p.name.replace(/'/g, "\\'")}')" style="font-size:12px;padding:5px 10px;">✕</button>
-          </div>
-        </td>
-      </tr>`;
+  const actionBtns = p => `
+    <div style="display:flex;gap:4px;justify-content:flex-end;align-items:center;">
+      <button onclick="adjustPilotTimer('${p.id}',-5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 9px;">−5</button>
+      <button onclick="adjustPilotTimer('${p.id}',5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 9px;">+5</button>
+      <button onclick="doLandPilot('${p.id}','${p.name.replace(/'/g,"\\'")}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:12px;padding:5px 12px;font-weight:700;">Land</button>
+      <button class="btn-danger" onclick="confirmLandedEarly('${p.id}','${p.name.replace(/'/g,"\\'")}')">✕</button>
+    </div>`;
+
+  let rowIdx = 0;
+  entries.forEach(entry => {
+    if (entry.type === 'solo') {
+      const p = entry.pilot;
+      const bg = rowIdx++ % 2 === 0 ? 'var(--card)' : 'var(--surface)';
+      html += `
+        <tr id="pilot-card-${p.id}" style="background:${bg};border-bottom:1px solid var(--border);">
+          <td style="padding:12px 10px;font-weight:700;font-size:14px;color:var(--text);">${esc(p.name)}</td>
+          <td style="padding:12px 10px;color:var(--accent);font-size:13px;">${p.client_name ? esc(p.client_name) : '—'}</td>
+          <td style="padding:12px 10px;text-align:center;">
+            <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="font-size:15px;font-weight:800;margin:0;">--:--</div>
+          </td>
+          <td style="padding:10px;text-align:right;white-space:nowrap;">${actionBtns(p)}</td>
+        </tr>`;
+    } else {
+      // Group header row
+      const groupBg = 'rgba(243,115,41,0.06)';
+      const groupBorder = 'border-left:3px solid var(--accent);';
+      html += `
+        <tr style="background:var(--accent-dim);border-bottom:1px solid rgba(243,115,41,0.2);">
+          <td colspan="4" style="padding:8px 10px 6px;${groupBorder}font-size:11px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:1px;">
+            📋 ${esc(entry.groupName)} · ${entry.pilots.length} pilots
+          </td>
+        </tr>`;
+      // One row per pilot in the group
+      entry.pilots.forEach(p => {
+        html += `
+          <tr id="pilot-card-${p.id}" style="background:${groupBg};border-bottom:1px solid rgba(243,115,41,0.1);">
+            <td style="padding:11px 10px 11px 18px;font-weight:700;font-size:14px;color:var(--text);${groupBorder}">${esc(p.name)}</td>
+            <td style="padding:11px 10px;color:var(--muted);font-size:13px;">—</td>
+            <td style="padding:11px 10px;text-align:center;">
+              <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="font-size:15px;font-weight:800;margin:0;">--:--</div>
+            </td>
+            <td style="padding:10px;text-align:right;white-space:nowrap;">${actionBtns(p)}</td>
+          </tr>`;
+      });
+      // Spacer row to visually separate groups
+      html += `<tr style="height:6px;background:var(--bg);"><td colspan="4"></td></tr>`;
+      rowIdx++;
+    }
   });
 
   html += `</tbody></table></div>`;

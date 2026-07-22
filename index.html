@@ -495,25 +495,20 @@
       background: linear-gradient(90deg, transparent 0%, rgba(243,115,41,0.4) 15%, var(--accent) 45%, #ffb347 65%, rgba(255,179,71,0.3) 85%, transparent 100%);
       pointer-events: none;
     }
-    .office-header-left { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
-    .office-logo-pill {
-      background: #fff;
-      border-radius: 10px;
-      padding: 5px 14px;
-      display: flex;
-      align-items: center;
-      box-shadow: 0 2px 14px rgba(0,0,0,0.35);
-      flex-shrink: 0;
+    .office-header-left { display: flex; align-items: center; gap: 11px; flex-shrink: 0; }
+    .office-logo-icon {
+      width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+      filter: drop-shadow(0 0 10px rgba(243,115,41,0.5));
     }
-    .office-logo-img {
-      height: 36px;
-      width: auto;
-      display: block;
+    .office-title-block { display: flex; flex-direction: column; gap: 1px; }
+    .office-header h1 {
+      font-size: 22px; font-weight: 800; font-family: 'Montserrat', sans-serif;
+      letter-spacing: 3px; color: #fff; line-height: 1;
     }
     .office-subtitle {
-      font-size: 9px; font-weight: 700; color: var(--muted); letter-spacing: 2.5px;
-      text-transform: uppercase; font-family: 'Montserrat', sans-serif; opacity: 0.7;
-      white-space: nowrap;
+      font-size: 8.5px; font-weight: 700; color: rgba(255,255,255,0.45);
+      letter-spacing: 4px; text-transform: uppercase;
+      font-family: 'Montserrat', sans-serif;
     }
     .office-header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .office-airborne-chip {
@@ -565,8 +560,8 @@
     @media (max-width: 600px) {
       .office-clock { display: none; }
       .office-subtitle { display: none; }
-      .office-logo-img { height: 26px; }
-      .office-logo-pill { padding: 4px 10px; }
+      .office-logo-icon { width: 30px; height: 30px; }
+      .office-header h1 { font-size: 17px; letter-spacing: 2px; }
       .office-header { padding: 10px 14px; }
     }
 
@@ -1367,10 +1362,11 @@
 <div id="office-dashboard">
   <div class="office-header">
     <div class="office-header-left">
-      <div class="office-logo-pill">
-        <img src="./logo.png.jpg" class="office-logo-img" alt="GForce Paragliding">
+      <img src="./logo-icon.png" class="office-logo-icon" alt="GForce">
+      <div class="office-title-block">
+        <h1>GFORCE</h1>
+        <span class="office-subtitle">PARAGLIDING</span>
       </div>
-      <span class="office-subtitle" style="margin-left:6px;">Office Dashboard</span>
     </div>
     <div class="office-header-right">
       <div class="office-airborne-chip" id="office-airborne-chip">

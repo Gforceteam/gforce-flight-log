@@ -4932,7 +4932,7 @@ function updateTimers() {
         showAlert(p.name);
         if (officeVisible && !_bellFired.has(`${p.id}:exp`)) {
           _bellFired.add(`${p.id}:exp`);
-          playBell(3);
+          playBell(10);
         }
       } else {
         const mins = Math.floor(remaining / 60000);
@@ -4951,12 +4951,12 @@ function updateTimers() {
           if (card) card.classList.add('alert');
           if (!_bellFired.has(`${p.id}:10`)) {
             _bellFired.add(`${p.id}:10`);
-            if (officeVisible) { toast(`⚠️ ${p.name} — 10 min to landing`); playBell(1); }
+            if (officeVisible) { toast(`⚠️ ${p.name} — 10 min to landing`); playBell(5); }
           }
         }
         if (remaining < 300000 && !_bellFired.has(`${p.id}:5`)) {
           _bellFired.add(`${p.id}:5`);
-          if (officeVisible) { toast(`⚠️ ${p.name} — 5 min to landing`); playBell(2); }
+          if (officeVisible) { toast(`⚠️ ${p.name} — 5 min to landing`); playBell(5); }
         }
       }
     });

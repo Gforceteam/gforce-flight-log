@@ -1477,6 +1477,21 @@
           <button onclick="officeResetPassword()" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Reset Password</button>
         </div>
 
+        <!-- Remove pilot -->
+        <div class="card stat-section" style="margin-bottom:12px;">
+          <div class="stat-section-title" style="margin-bottom:6px;">🗑 Remove Pilot</div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Permanently remove a pilot from the app. Their flight history is kept for records.</div>
+          <select id="office-delete-pilot-sel" style="width:100%;padding:11px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;margin-bottom:10px;">
+            <option value="">Select pilot…</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-2);margin-bottom:10px;cursor:pointer;">
+            <input type="checkbox" id="office-delete-confirm" />
+            I confirm this pilot should be permanently removed
+          </label>
+          <div id="office-delete-error" style="color:var(--danger);font-size:13px;margin-bottom:8px;min-height:16px;"></div>
+          <button onclick="officeDeletePilot()" style="width:100%;padding:13px;background:rgba(239,68,68,0.08);border:1px solid var(--danger);border-radius:9999px;color:var(--danger);font-size:14px;font-weight:600;cursor:pointer;">Remove Pilot</button>
+        </div>
+
         <!-- Logout -->
         <div class="card stat-section">
           <div class="stat-section-title" style="margin-bottom:6px;">Account</div>
@@ -5122,7 +5137,7 @@ function showOfficeTab(name) {
   if (name === 'loop') loadLoopBoard();
   if (name === 'today') renderTodayTab();
   if (name === 'flights') renderFlightsTab();
-  if (name === 'settings') populateOfficeResetPilots();
+  if (name === 'settings') { populateOfficeResetPilots(); populateOfficeDeletePilots(); }
 }
 
 async function populateOfficeResetPilots() {
@@ -5139,6 +5154,45 @@ async function populateOfficeResetPilots() {
       sel.appendChild(opt);
     });
   } catch {}
+}
+
+async function populateOfficeDeletePilots() {
+  const sel = document.getElementById('office-delete-pilot-sel');
+  if (!sel || sel.options.length > 1) return;
+  try {
+    const res = await officeFetch('/api/pilots');
+    if (!res.ok) return;
+    const pilots = await res.json();
+    pilots.sort((a, b) => a.name.localeCompare(b.name)).forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name;
+      sel.appendChild(opt);
+    });
+  } catch {}
+}
+
+async function officeDeletePilot() {
+  const sel = document.getElementById('office-delete-pilot-sel');
+  const confirmCb = document.getElementById('office-delete-confirm');
+  const errEl = document.getElementById('office-delete-error');
+  errEl.textContent = '';
+  const pilotId = sel.value;
+  if (!pilotId) { errEl.textContent = 'Select a pilot'; return; }
+  if (!confirmCb.checked) { errEl.textContent = 'Check the confirmation box first'; return; }
+  const pilotName = sel.options[sel.selectedIndex].textContent;
+  try {
+    const res = await officeFetch(`/api/office/pilots/${pilotId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error || 'Failed'; return; }
+    toast(`${pilotName} removed`);
+    sel.value = '';
+    confirmCb.checked = false;
+    // Reset both dropdowns so they repopulate on next open
+    document.getElementById('office-reset-pilot-sel').innerHTML = '<option value="">Select pilot…</option>';
+    sel.innerHTML = '<option value="">Select pilot…</option>';
+    loadOfficeData();
+  } catch { errEl.textContent = 'Network error'; }
 }
 
 async function officeResetPassword() {
@@ -5339,6 +5393,10 @@ function connectWS() {
       case 'LOOP_BOARD_UPDATE':
         loopBoard = data.board;
         if (officeActiveTab === 'loop') renderLoopBoard();
+        break;
+      case 'PILOT_DELETED':
+        toast(`${data.pilot_name} removed`);
+        loadOfficeData();
         break;
       case 'EXTENSION_APPROVED': {
         if (pilotId && data.pilot_id === pilotId) {

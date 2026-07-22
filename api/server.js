@@ -1118,6 +1118,24 @@ app.put('/api/office/pilot-password', verifyOffice, async (req, res) => {
   }
 });
 
+// ─── Office: Delete Pilot ─────────────────────────────────────────────────────
+app.delete('/api/office/pilots/:id', verifyOffice, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pilot = await queryOne('SELECT id, name FROM pilots WHERE id = ?', [id]);
+    if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
+    await run('DELETE FROM active_timers WHERE pilot_id = ?', [id]);
+    await run('DELETE FROM push_subscriptions WHERE pilot_id = ?', [id]);
+    await run('UPDATE loop_board SET pilot_id = NULL, pilot_name = NULL WHERE pilot_id = ?', [id]);
+    await run('DELETE FROM pilots WHERE id = ?', [id]);
+    broadcast({ type: 'PILOT_DELETED', pilot_id: id, pilot_name: pilot.name });
+    res.json({ ok: true, pilot_name: pilot.name });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Did Not Fly — pilot cancels their own timer without logging a flight ─────
 app.post('/api/pilot/cancel-timer', verifyToken, async (req, res) => {
   try {

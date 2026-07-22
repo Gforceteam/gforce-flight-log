@@ -1668,6 +1668,7 @@ let officePilots = [];
 const _ffCollapsed = { avail: true, downbelow: true, signedout: true };
 let officeRefreshInterval = null;
 let _officeClockInterval = null;
+const _bellFired = new Set(); // tracks which pilots have already triggered each bell threshold
 let allFlights = [];
 let filteredFlights = [];
 let alertDismissed = new Set();
@@ -4120,6 +4121,9 @@ async function loadOfficeData() {
     if (!pilotsRes) return;
     if (pilotsRes.status === 401) { officeDoLogout(); return; }
     officePilots = await pilotsRes.json();
+    // Clear bell flags for pilots no longer airborne so their next flight triggers fresh bells
+    const _nowAirborne = new Set(officePilots.filter(p => p.status === 'airborne').map(p => p.id));
+    for (const key of [..._bellFired]) { if (!_nowAirborne.has(key.split(':')[0])) _bellFired.delete(key); }
     const _airborneCount = officePilots.filter(p => p.status === 'airborne').length;
     const _chip = document.getElementById('office-airborne-chip');
     const _countEl = document.getElementById('office-airborne-count');
@@ -4883,25 +4887,53 @@ function downloadCSV(csv, filename) {
 }
 
 // ─── Office Timers ────────────────────────────────────────────────────────────
+function playBell(count) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ring = (t) => {
+      // Three partials — fundamental + harmonics — give a realistic bell tone
+      [[880, 0.55, 2.8], [1760, 0.28, 1.6], [2640, 0.13, 0.9]].forEach(([freq, vol, dur]) => {
+        const osc  = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, t);
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(vol, t + 0.008); // sharp attack
+        gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + dur);
+      });
+    };
+    for (let i = 0; i < count; i++) ring(ctx.currentTime + i * 1.15);
+    setTimeout(() => { try { ctx.close(); } catch(e){} }, (count * 1.15 + 3) * 1000);
+  } catch (e) { /* audio not supported */ }
+}
+
 function updateTimers() {
   clearInterval(timerInterval);
   function tick() {
     const now = Date.now();
+    const officeVisible = document.getElementById('office-dashboard')?.style.display !== 'none';
     officePilots.forEach(p => {
       if (p.status !== 'airborne' || !p.timer_expires_at) return;
       const expires = new Date(p.timer_expires_at).getTime();
       const remaining = expires - now;
       const el = document.getElementById(`timer-${p.id}`);
       if (!el) return;
+
       if (remaining <= 0) {
         el.textContent = 'EXPIRED';
+        el.classList.remove('timer-ok', 'timer-warn');
         el.classList.add('urgent');
         const card = document.getElementById(`pilot-card-${p.id}`);
-        if (card) {
-          card.classList.add('alert', 'office-timer-expired');
-          card.classList.remove('airborne');
-        }
+        if (card) { card.classList.add('alert', 'office-timer-expired'); card.classList.remove('airborne'); }
         showAlert(p.name);
+        if (officeVisible && !_bellFired.has(`${p.id}:exp`)) {
+          _bellFired.add(`${p.id}:exp`);
+          playBell(3);
+        }
       } else {
         const mins = Math.floor(remaining / 60000);
         const secs = Math.floor((remaining % 60000) / 1000);
@@ -4909,17 +4941,22 @@ function updateTimers() {
         el.classList.toggle('timer-ok',   remaining >= 1200000);
         el.classList.toggle('timer-warn', remaining >= 600000 && remaining < 1200000);
         el.classList.toggle('urgent',     remaining < 600000);
-        if (remaining < 600000 && remaining > 0) {
+
+        // If time was extended back above a threshold, reset that bell so it fires again on next crossing
+        if (remaining >= 600000) { _bellFired.delete(`${p.id}:10`); _bellFired.delete(`${p.id}:5`); _bellFired.delete(`${p.id}:exp`); }
+        else if (remaining >= 300000) { _bellFired.delete(`${p.id}:5`); _bellFired.delete(`${p.id}:exp`); }
+
+        if (remaining < 600000) {
           const card = document.getElementById(`pilot-card-${p.id}`);
           if (card) card.classList.add('alert');
-          if (remaining <= 600000 && !p._warned10) {
-            p._warned10 = true;
-            // Only show toast on office dashboard, not pilot New FF tab
-            const od = document.getElementById('office-dashboard');
-            if (od && od.style.display !== 'none') {
-              toast(`⚠️ ${p.name} — 10 min to landing`);
-            }
+          if (!_bellFired.has(`${p.id}:10`)) {
+            _bellFired.add(`${p.id}:10`);
+            if (officeVisible) { toast(`⚠️ ${p.name} — 10 min to landing`); playBell(1); }
           }
+        }
+        if (remaining < 300000 && !_bellFired.has(`${p.id}:5`)) {
+          _bellFired.add(`${p.id}:5`);
+          if (officeVisible) { toast(`⚠️ ${p.name} — 5 min to landing`); playBell(2); }
         }
       }
     });

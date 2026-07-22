@@ -948,20 +948,26 @@
     }
 
     /* ── LOOP BOARD ─────────────────────────────────────────────────────── */
-    .loop-board { padding: 10px; overflow-x: auto; }
-    .loop-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .loop-table thead th { padding: 6px 4px; border-bottom: 2px solid var(--border); color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; text-align: center; white-space: nowrap; }
-    .loop-table thead th.loop-th-pilot { text-align: left; min-width: 130px; }
-    .loop-table thead th.loop-th-slot { width: 28px; }
-    .loop-table thead th.loop-th-tally { width: 50px; }
+    .loop-board { padding: 0; overflow: auto; max-height: 590px; }
+    .loop-table { border-collapse: collapse; font-size: 15px; }
+    .loop-table thead th {
+      padding: 12px 6px; border-bottom: 2px solid var(--border);
+      color: var(--muted); font-size: 12px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.6px;
+      text-align: center; white-space: nowrap;
+      position: sticky; top: 0; background: var(--surface); z-index: 2;
+    }
+    .loop-th-slot { width: 44px; min-width: 44px; }
+    .loop-th-pilot { width: 175px; min-width: 175px; text-align: left !important; }
+    .loop-th-tally { width: 140px; min-width: 140px; }
     .loop-table tbody tr { border-bottom: 1px solid var(--border); }
     .loop-table tbody tr:hover { background: var(--card-hi); }
-    .loop-td-slot { text-align: center; font-weight: 800; color: var(--accent); font-family: 'Montserrat', sans-serif; font-size: 13px; padding: 5px 4px; }
-    .loop-td-pilot { padding: 5px 6px 5px 4px; }
-    .loop-td-tally { padding: 5px 3px; text-align: center; }
-    .loop-pilot-sel { width: 100%; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px; font-size: 12px; cursor: pointer; min-width: 110px; }
+    .loop-td-slot { text-align: center; font-weight: 800; color: var(--accent); font-family: 'Montserrat', sans-serif; font-size: 17px; padding: 10px 6px; white-space: nowrap; }
+    .loop-td-pilot { padding: 10px 8px 10px 6px; }
+    .loop-td-tally { padding: 10px 5px; text-align: center; }
+    .loop-pilot-sel { width: 100%; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 7px; padding: 10px 8px; font-size: 14px; cursor: pointer; }
     .loop-pilot-sel:focus { outline: none; border-color: var(--accent); }
-    .loop-tally-sel { width: 52px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 5px; padding: 5px 2px; font-size: 12px; text-align: center; cursor: pointer; }
+    .loop-tally-sel { width: 126px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 10px 6px; font-size: 15px; text-align: center; cursor: pointer; }
     .loop-tally-sel:focus { outline: none; border-color: var(--accent); }
     .loop-tally-sel.has-val { background: rgba(243,115,41,0.12); border-color: rgba(243,115,41,0.45); color: var(--accent); font-weight: 700; }
 

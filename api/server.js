@@ -255,11 +255,12 @@ async function createTables() {
     pilot_id TEXT,
     pilot_name TEXT
   )`);
+  try { await db.execute('ALTER TABLE loop_board ADD COLUMN tallies TEXT'); } catch (_) {}
   // Seed 20 slots on first run
   const lbCount = await queryOne('SELECT COUNT(*) as c FROM loop_board');
   if (!lbCount || Number(lbCount.c) === 0) {
     for (let i = 1; i <= 20; i++) {
-      await run('INSERT OR IGNORE INTO loop_board (slot, pilot_id, pilot_name) VALUES (?, NULL, NULL)', [i]);
+      await run('INSERT OR IGNORE INTO loop_board (slot, pilot_id, pilot_name, tallies) VALUES (?, NULL, NULL, NULL)', [i]);
     }
   }
   console.log('✅ Tables ready');
@@ -1833,7 +1834,7 @@ function scheduleDailyBackup() {
 // ─── Loop Board ───────────────────────────────────────────────────────────────
 app.get('/api/office/loop-board', verifyOffice, async (req, res) => {
   try {
-    const rows = await queryAll('SELECT slot, pilot_id, pilot_name FROM loop_board ORDER BY slot ASC');
+    const rows = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board ORDER BY slot ASC');
     res.json(rows);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1848,7 +1849,29 @@ app.post('/api/office/loop-board/slot', verifyOffice, async (req, res) => {
       'UPDATE loop_board SET pilot_id = ?, pilot_name = ? WHERE slot = ?',
       [pilot_id || null, pilot_name || null, slot]
     );
-    const board = await queryAll('SELECT slot, pilot_id, pilot_name FROM loop_board ORDER BY slot ASC');
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board ORDER BY slot ASC');
+    broadcast({ type: 'LOOP_BOARD_UPDATE', board });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/office/loop-board/tally', verifyOffice, async (req, res) => {
+  try {
+    const { slot, col, value } = req.body;
+    if (!slot || slot < 1 || slot > 20) return res.status(400).json({ error: 'Invalid slot' });
+    if (!col || col < 1 || col > 12) return res.status(400).json({ error: 'Invalid column' });
+    const allowed = ['', '1', 'L', ',.,'];
+    if (!allowed.includes(value || '')) return res.status(400).json({ error: 'Invalid value' });
+    const row = await queryOne('SELECT tallies FROM loop_board WHERE slot = ?', [slot]);
+    if (!row) return res.status(404).json({ error: 'Slot not found' });
+    let tallies = Array(12).fill('');
+    try { const t = JSON.parse(row.tallies || '[]'); if (Array.isArray(t)) tallies = t; } catch (_) {}
+    while (tallies.length < 12) tallies.push('');
+    tallies[col - 1] = value || '';
+    await run('UPDATE loop_board SET tallies = ? WHERE slot = ?', [JSON.stringify(tallies), slot]);
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board ORDER BY slot ASC');
     broadcast({ type: 'LOOP_BOARD_UPDATE', board });
     res.json({ ok: true });
   } catch (e) {

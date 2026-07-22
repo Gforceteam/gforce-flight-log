@@ -250,6 +250,18 @@ async function createTables() {
   await db.execute('CREATE INDEX IF NOT EXISTS idx_push_pilot ON push_subscriptions(pilot_id)');
   await db.execute('CREATE INDEX IF NOT EXISTS idx_drives_pilot ON drives(pilot_id)');
   await db.execute('CREATE INDEX IF NOT EXISTS idx_flights_landed ON flights(landed_at)');
+  await db.execute(`CREATE TABLE IF NOT EXISTS loop_board (
+    slot INTEGER PRIMARY KEY,
+    pilot_id TEXT,
+    pilot_name TEXT
+  )`);
+  // Seed 20 slots on first run
+  const lbCount = await queryOne('SELECT COUNT(*) as c FROM loop_board');
+  if (!lbCount || Number(lbCount.c) === 0) {
+    for (let i = 1; i <= 20; i++) {
+      await run('INSERT OR IGNORE INTO loop_board (slot, pilot_id, pilot_name) VALUES (?, NULL, NULL)', [i]);
+    }
+  }
   console.log('✅ Tables ready');
 }
 
@@ -1799,6 +1811,32 @@ function scheduleDailyBackup() {
     setInterval(pushDailyBackup, 24 * 60 * 60 * 1000); // then every 24h
   }, msUntil2am);
 }
+
+// ─── Loop Board ───────────────────────────────────────────────────────────────
+app.get('/api/office/loop-board', verifyOffice, async (req, res) => {
+  try {
+    const rows = await queryAll('SELECT slot, pilot_id, pilot_name FROM loop_board ORDER BY slot ASC');
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/office/loop-board/slot', verifyOffice, async (req, res) => {
+  try {
+    const { slot, pilot_id, pilot_name } = req.body;
+    if (!slot || slot < 1 || slot > 20) return res.status(400).json({ error: 'Invalid slot' });
+    await run(
+      'UPDATE loop_board SET pilot_id = ?, pilot_name = ? WHERE slot = ?',
+      [pilot_id || null, pilot_name || null, slot]
+    );
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name FROM loop_board ORDER BY slot ASC');
+    broadcast({ type: 'LOOP_BOARD_UPDATE', board });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 scheduleDailyBackup();
 // Also run immediately on startup to ensure we have a current backup

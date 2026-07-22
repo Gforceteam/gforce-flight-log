@@ -947,6 +947,14 @@
       font-family: 'Montserrat', sans-serif;
     }
 
+    /* ── LOOP BOARD ─────────────────────────────────────────────────────── */
+    .loop-board { padding: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+    .loop-slot { display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+    .loop-num { font-size: 15px; font-weight: 800; font-family: 'Montserrat', sans-serif; color: var(--accent); width: 26px; flex-shrink: 0; text-align: right; }
+    .loop-select { flex: 1; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px; font-size: 13px; font-family: 'Inter', sans-serif; cursor: pointer; }
+    .loop-select:focus { outline: none; border-color: var(--accent); }
+    .loop-slot.filled { border-color: rgba(243,115,41,0.35); background: rgba(243,115,41,0.04); }
+
     /* ── STATS EXTRAS ──────────────────────────────────────────────────── */
     .stat-section { margin-bottom: 14px; }
     .stat-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 10px; font-weight: 700; }
@@ -1392,6 +1400,7 @@
 
   <div class="office-tab-bar">
     <button class="office-tab-btn active" onclick="showOfficeTab('pilots')" id="office-tab-pilots-btn">Flight Following</button>
+    <button class="office-tab-btn" onclick="showOfficeTab('loop')" id="office-tab-loop-btn">Loop Board</button>
     <button class="office-tab-btn" onclick="showOfficeTab('today')" id="office-tab-today-btn">Today</button>
     <button class="office-tab-btn" onclick="showOfficeTab('settings')" id="office-tab-settings-btn">⚙</button>
   </div>
@@ -1404,6 +1413,10 @@
         <div class="section-title" style="margin-bottom:0;">Pilots</div>
       </div>
       <div id="pilots-list"></div>
+    </div>
+
+    <div class="office-tab-content" id="office-tab-loop">
+      <div class="loop-board" id="loop-board-list"><p style="color:var(--muted);padding:20px;text-align:center;">Loading...</p></div>
     </div>
 
     <div class="office-tab-content" id="office-tab-today">
@@ -1672,6 +1685,8 @@ let alertDismissed = new Set();
 let pendingAcks = [];
 // Pending extension requests — { id, pilot_name, requested_at }
 let pendingExtensions = [];
+// Loop Board slot assignments — { slot, pilot_id, pilot_name }
+let loopBoard = [];
 let timerInterval;
 let todaySort = { col: 'time', dir: 'desc' }; // landed: newest first by default
 let flightsSearch = '';
@@ -4097,6 +4112,7 @@ function officeDoLogout() {
 function refreshOfficeUiAfterLoad() {
   switch (officeActiveTab) {
     case 'pilots': renderAwayTab(); renderGroupsTab(); renderOfficeTab(); break;
+    case 'loop': renderLoopBoard(); break;
     case 'today': renderTodayTab(); break;
     case 'flights': renderFlightsTab(); break;
     case 'ff': renderOfficeFF(); break;
@@ -5047,6 +5063,53 @@ function toggleTodayAckPicker(flightId) {
   if (picker) picker.style.display = picker.style.display === 'none' ? 'flex' : 'none';
 }
 
+// ─── Loop Board ───────────────────────────────────────────────────────────────
+async function loadLoopBoard() {
+  try {
+    const res = await officeFetch('/api/office/loop-board');
+    if (!res.ok) return;
+    loopBoard = await res.json();
+    if (officeActiveTab === 'loop') renderLoopBoard();
+  } catch (_) {}
+}
+
+function renderLoopBoard() {
+  const el = document.getElementById('loop-board-list');
+  if (!el) return;
+  const available = (officePilots || []).filter(p => p.presence >= 1).sort((a, b) => a.name.localeCompare(b.name));
+  let html = '';
+  for (let i = 1; i <= 20; i++) {
+    const slot = loopBoard.find(s => s.slot === i) || { slot: i, pilot_id: null, pilot_name: null };
+    const filled = !!slot.pilot_id;
+    const opts = available.map(p =>
+      `<option value="${p.id}" data-name="${p.name.replace(/"/g, '&quot;')}" ${slot.pilot_id === p.id ? 'selected' : ''}>${p.name}</option>`
+    ).join('');
+    html += `<div class="loop-slot${filled ? ' filled' : ''}">
+      <span class="loop-num">${i}</span>
+      <select class="loop-select" onchange="setLoopSlot(${i}, this)">
+        <option value="">— empty —</option>
+        ${opts}
+      </select>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+async function setLoopSlot(slot, selectEl) {
+  const pilot_id = selectEl.value || null;
+  const pilot_name = pilot_id ? (selectEl.options[selectEl.selectedIndex].dataset.name || null) : null;
+  try {
+    const res = await officeFetch('/api/office/loop-board/slot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slot, pilot_id, pilot_name })
+    });
+    if (!res.ok) toast('Failed to update slot', 'err');
+  } catch (_) {
+    toast('Cannot reach server', 'err');
+  }
+}
+
 // ─── Office Tabs ──────────────────────────────────────────────────────────────
 function showOfficeTab(name) {
   officeActiveTab = name;
@@ -5056,6 +5119,7 @@ function showOfficeTab(name) {
   document.getElementById(`office-tab-${name}-btn`).classList.add('active');
   if (name === 'ff') renderOfficeFF();
   if (name === 'pilots') { renderAwayTab(); renderGroupsTab(); renderOfficeTab(); }
+  if (name === 'loop') loadLoopBoard();
   if (name === 'today') renderTodayTab();
   if (name === 'flights') renderFlightsTab();
   if (name === 'settings') populateOfficeResetPilots();
@@ -5272,6 +5336,10 @@ function connectWS() {
         loadOfficeData();
         break;
       }
+      case 'LOOP_BOARD_UPDATE':
+        loopBoard = data.board;
+        if (officeActiveTab === 'loop') renderLoopBoard();
+        break;
       case 'EXTENSION_APPROVED': {
         if (pilotId && data.pilot_id === pilotId) {
           myStatus.timer_expires_at = data.expires_at;

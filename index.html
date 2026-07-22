@@ -587,7 +587,11 @@
       box-shadow: var(--shadow-sm);
       transition: border-color 0.2s;
     }
-    .pilot-card.airborne { border-left-color: var(--warning); border-color: rgba(245,166,35,0.25); background: linear-gradient(135deg, rgba(245,166,35,0.07) 0%, var(--card) 50%); box-shadow: 0 2px 16px rgba(245,166,35,0.08); }
+    @keyframes airborneGlow {
+      0%, 100% { box-shadow: 0 2px 12px rgba(245,166,35,0.06); }
+      50%       { box-shadow: 0 4px 28px rgba(245,166,35,0.28), 0 0 0 2px rgba(245,166,35,0.10); }
+    }
+    .pilot-card.airborne { border-left-color: var(--warning); border-color: rgba(245,166,35,0.25); background: linear-gradient(135deg, rgba(245,166,35,0.07) 0%, var(--card) 50%); animation: airborneGlow 3s ease-in-out infinite; }
     .pilot-card.alert { border-left-color: var(--danger); border-color: var(--border); }
     .pilot-card.office-timer-expired { border-color: var(--danger) !important; background: rgba(240,68,56,0.08) !important; }
 
@@ -750,7 +754,14 @@
       color: var(--warning); margin-bottom: 10px;
       font-family: 'Montserrat', sans-serif;
     }
-    .timer-display.urgent { color: var(--danger); }
+    .timer-display.urgent { color: var(--danger) !important; }
+    .timer-display.timer-ok   { color: var(--success) !important; }
+    .timer-display.timer-warn { color: var(--warning) !important; }
+    @keyframes timerUrgentPulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.55; }
+    }
+    .timer-display.urgent { animation: timerUrgentPulse 1.2s ease-in-out infinite; }
 
     .pilot-client-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
     .pilot-client-row label { font-size: 11px; font-weight: 700; color: var(--muted); white-space: nowrap; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -835,6 +846,42 @@
     .today-table tr:hover td { background: var(--card-hi); }
     .today-table .col-pilot { font-weight: 700; color: var(--text); }
     .today-table .col-time { color: var(--muted); font-size: 12px; white-space: nowrap; font-weight: 600; }
+    .today-row-pending td { background: rgba(245,166,35,0.06) !important; }
+    .today-row-pending td:first-child { box-shadow: inset 3px 0 0 var(--warning); }
+
+    .away-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .away-table th {
+      text-align: left; padding: 9px 10px; background: var(--surface);
+      color: var(--muted); font-size: 11px; text-transform: uppercase;
+      letter-spacing: 0.8px; border-bottom: 2px solid var(--border-hi); font-weight: 700;
+    }
+    .away-table th:nth-child(3) { text-align: center; }
+    .away-table th:last-child   { text-align: right; }
+    .away-table td { padding: 12px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text-2); }
+    .away-table tr:last-child td { border-bottom: none; }
+    .away-table tbody tr:not(.group-header):not(.group-spacer):hover td { background: var(--card-hi); }
+    .away-table .col-pilot  { font-weight: 700; font-size: 14px; color: var(--text); }
+    .away-table .col-booking { color: var(--accent); font-size: 13px; }
+    .away-table .col-timer  { text-align: center; }
+    .away-table .col-actions { text-align: right; white-space: nowrap; }
+    .away-table .group-header td {
+      background: var(--accent-dim); padding: 8px 10px 6px;
+      font-size: 11px; font-weight: 800; color: var(--accent);
+      text-transform: uppercase; letter-spacing: 1px;
+      border-left: 3px solid var(--accent);
+      border-bottom: 1px solid rgba(243,115,41,0.2);
+    }
+    .away-table .group-row td { background: rgba(243,115,41,0.05); border-bottom: 1px solid rgba(243,115,41,0.10); }
+    .away-table .group-row .col-pilot { border-left: 3px solid var(--accent); padding-left: 20px; }
+    .away-table .group-spacer td { height: 6px; background: var(--bg); border: none; }
+
+    .ff-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--accent); color: #fff;
+      font-size: 10px; font-weight: 800; min-width: 18px; height: 18px;
+      border-radius: 9999px; padding: 0 5px; line-height: 1;
+      font-family: 'Montserrat', sans-serif;
+    }
 
     /* ── STATS EXTRAS ──────────────────────────────────────────────────── */
     .stat-section { margin-bottom: 14px; }
@@ -885,15 +932,25 @@
     #ff-content { padding: 12px 16px; }
 
     /* ── SHARED ────────────────────────────────────────────────────────── */
+    @keyframes toastSlideUp {
+      from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+      to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
     #toast {
       position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%);
       background: var(--card-hi); color: var(--text); padding: 11px 22px;
       border-radius: 9999px; font-size: 14px; font-weight: 500; opacity: 0;
-      pointer-events: none; transition: opacity 0.25s; z-index: 999; white-space: nowrap;
+      pointer-events: none; z-index: 999; white-space: nowrap;
       border: 1px solid var(--border-hi);
       box-shadow: var(--shadow);
+      transition: opacity 0.2s;
+      display: flex; align-items: center; gap: 7px;
     }
-    #toast.show { opacity: 1; }
+    #toast.show { opacity: 1; animation: toastSlideUp 0.22s ease forwards; }
+    .toast-icon { font-size: 13px; flex-shrink: 0; }
+    .toast-icon.ok   { color: var(--success); }
+    .toast-icon.err  { color: var(--danger); }
+    .toast-icon.warn { color: var(--warning); }
     .hidden { display: none !important; }
     .empty-state {
       text-align: center; color: var(--muted); padding: 52px 20px; font-size: 14px;
@@ -4123,21 +4180,19 @@ function renderAwayTab() {
   // Sort entries by least time remaining first
   entries.sort((a, b) => a.minExpiry - b.minExpiry);
 
-  const thStyle = `text-align:left;padding:8px 10px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;`;
-
   let html = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
       <div class="section-title" style="margin:0;">🪂 Away (${flying.length})</div>
       <button onclick="loadOfficeData()" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">↻ Refresh</button>
     </div>
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
-    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+    <table class="away-table">
       <thead>
-        <tr style="border-bottom:2px solid var(--border-hi);">
-          <th style="${thStyle}">Pilot</th>
-          <th style="${thStyle}">Booking</th>
-          <th style="${thStyle}text-align:center;">Time Left</th>
-          <th style="${thStyle}text-align:right;">Actions</th>
+        <tr>
+          <th>Pilot</th>
+          <th>Booking</th>
+          <th>Time Left</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>`;
@@ -4150,45 +4205,35 @@ function renderAwayTab() {
       <button class="btn-danger" onclick="confirmLandedEarly('${p.id}','${p.name.replace(/'/g,"\\'")}')">✕</button>
     </div>`;
 
-  let rowIdx = 0;
   entries.forEach(entry => {
     if (entry.type === 'solo') {
       const p = entry.pilot;
-      const bg = rowIdx++ % 2 === 0 ? 'var(--card)' : 'var(--surface)';
       html += `
-        <tr id="pilot-card-${p.id}" style="background:${bg};border-bottom:1px solid var(--border);">
-          <td style="padding:12px 10px;font-weight:700;font-size:14px;color:var(--text);">${esc(p.name)}</td>
-          <td style="padding:12px 10px;color:var(--accent);font-size:13px;">${p.client_name ? esc(p.client_name) : '—'}</td>
-          <td style="padding:12px 10px;text-align:center;">
-            <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="font-size:15px;font-weight:800;margin:0;">--:--</div>
+        <tr id="pilot-card-${p.id}">
+          <td class="col-pilot">${esc(p.name)}</td>
+          <td class="col-booking">${p.client_name ? esc(p.client_name) : '—'}</td>
+          <td class="col-timer">
+            <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="margin:0;">--:--</div>
           </td>
-          <td style="padding:10px;text-align:right;white-space:nowrap;">${actionBtns(p)}</td>
+          <td class="col-actions">${actionBtns(p)}</td>
         </tr>`;
     } else {
-      // Group header row
-      const groupBg = 'rgba(243,115,41,0.06)';
-      const groupBorder = 'border-left:3px solid var(--accent);';
       html += `
-        <tr style="background:var(--accent-dim);border-bottom:1px solid rgba(243,115,41,0.2);">
-          <td colspan="4" style="padding:8px 10px 6px;${groupBorder}font-size:11px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:1px;">
-            📋 ${esc(entry.groupName)} · ${entry.pilots.length} pilots
-          </td>
+        <tr class="group-header">
+          <td colspan="4">📋 ${esc(entry.groupName)} · ${entry.pilots.length} pilots</td>
         </tr>`;
-      // One row per pilot in the group
       entry.pilots.forEach(p => {
         html += `
-          <tr id="pilot-card-${p.id}" style="background:${groupBg};border-bottom:1px solid rgba(243,115,41,0.1);">
-            <td style="padding:11px 10px 11px 18px;font-weight:700;font-size:14px;color:var(--text);${groupBorder}">${esc(p.name)}</td>
-            <td style="padding:11px 10px;color:var(--muted);font-size:13px;">—</td>
-            <td style="padding:11px 10px;text-align:center;">
-              <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="font-size:15px;font-weight:800;margin:0;">--:--</div>
+          <tr id="pilot-card-${p.id}" class="group-row">
+            <td class="col-pilot">${esc(p.name)}</td>
+            <td class="col-booking" style="color:var(--muted);">—</td>
+            <td class="col-timer">
+              <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="margin:0;">--:--</div>
             </td>
-            <td style="padding:10px;text-align:right;white-space:nowrap;">${actionBtns(p)}</td>
+            <td class="col-actions">${actionBtns(p)}</td>
           </tr>`;
       });
-      // Spacer row to visually separate groups
-      html += `<tr style="height:6px;background:var(--bg);"><td colspan="4"></td></tr>`;
-      rowIdx++;
+      html += `<tr class="group-spacer"><td colspan="4"></td></tr>`;
     }
   });
 
@@ -4217,7 +4262,7 @@ function renderOfficeTab() {
   // Helper: collapsible section header
   const sectionHeader = (key, label, count) => `
     <div class="section-title" onclick="toggleFFSection('${key}')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none;">
-      <span>${label}${count !== null ? ` (${count})` : ''}</span>
+      <span style="display:flex;align-items:center;gap:7px;">${label}${count !== null ? `<span class="ff-badge">${count}</span>` : ''}</span>
       <span style="font-size:10px;color:var(--muted);transition:transform 0.2s;display:inline-block;transform:rotate(${_ffCollapsed[key] ? '0deg' : '180deg'});">▼</span>
     </div>`;
 
@@ -4515,7 +4560,7 @@ function renderTodayTab() {
             ${ACK_EMOJIS.map(e => `<button class="ack-emoji-btn" onclick="acknowledgeFlightLanding('${f.id}','${e}')" style="font-size:18px;padding:2px 4px;">${e}</button>`).join('')}
           </div>
         </div>`;
-    html += `<tr>
+    html += `<tr class="${f.office_ack_at ? '' : 'today-row-pending'}">
       <td class="col-time">${esc(sentAwayStr)}</td>
       <td class="col-time">${esc(landedStr)}</td>
       <td class="col-time">${confirmedStr}</td>
@@ -4764,7 +4809,9 @@ function updateTimers() {
         const mins = Math.floor(remaining / 60000);
         const secs = Math.floor((remaining % 60000) / 1000);
         el.textContent = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')} remaining`;
-        el.classList.toggle('urgent', remaining < 600000);
+        el.classList.toggle('timer-ok',   remaining >= 1200000);
+        el.classList.toggle('timer-warn', remaining >= 600000 && remaining < 1200000);
+        el.classList.toggle('urgent',     remaining < 600000);
         if (remaining < 600000 && remaining > 0) {
           const card = document.getElementById(`pilot-card-${p.id}`);
           if (card) card.classList.add('alert');
@@ -5122,13 +5169,19 @@ function fmtRelative(isoString) {
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 let _toastTimer = null;
-function toast(msg) {
+function toast(msg, type) {
   const el = document.getElementById('toast');
   if (!el) return;
-  el.textContent = msg;
+  const lc = (msg || '').toLowerCase();
+  const kind = type || (lc.includes('error') || lc.includes('fail') || lc.includes('denied') ? 'err' : lc.includes('warn') || lc.includes('⚠') ? 'warn' : 'ok');
+  const icons = { ok: '✓', err: '✕', warn: '⚠' };
+  el.innerHTML = `<span class="toast-icon ${kind}">${icons[kind]}</span><span class="toast-msg"></span>`;
+  el.querySelector('.toast-msg').textContent = msg;
+  el.classList.remove('show');
+  void el.offsetWidth; // force reflow so animation re-triggers
   el.classList.add('show');
   if (_toastTimer) clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => { el.classList.remove('show'); _toastTimer = null; }, 2500);
+  _toastTimer = setTimeout(() => { el.classList.remove('show'); _toastTimer = null; }, 2800);
 }
 
 // ─── Push Subscription ───────────────────────────────────────────────────────

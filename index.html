@@ -476,29 +476,94 @@
     #office-dashboard { display: none; padding-bottom: 0; background: var(--bg); }
 
     .office-header {
-      background: linear-gradient(135deg, #16192a 0%, var(--card) 60%, #1a1c28 100%);
-      border-bottom: 1px solid var(--border);
-      box-shadow: 0 2px 16px rgba(0,0,0,0.35);
-      padding: 16px 20px;
+      background: linear-gradient(135deg, #0d1020 0%, #141828 55%, #1a1d30 100%);
+      box-shadow: 0 4px 32px rgba(0,0,0,0.55);
+      padding: 13px 22px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       position: sticky;
       top: 0;
       z-index: 10;
+      gap: 12px;
     }
+    .office-header::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent 0%, rgba(243,115,41,0.4) 15%, var(--accent) 45%, #ffb347 65%, rgba(255,179,71,0.3) 85%, transparent 100%);
+      pointer-events: none;
+    }
+    .office-header-left { display: flex; align-items: center; gap: 13px; flex-shrink: 0; }
+    .office-logo-ring {
+      width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+      filter: drop-shadow(0 0 10px rgba(243,115,41,0.5));
+    }
+    .office-title-block { display: flex; flex-direction: column; gap: 2px; }
     .office-header h1 {
-      font-size: 18px; font-weight: 800; font-family: 'Montserrat', sans-serif; letter-spacing: 2px;
+      font-size: 21px; font-weight: 800; font-family: 'Montserrat', sans-serif; letter-spacing: 3.5px;
       background: linear-gradient(90deg, var(--accent) 0%, #ffb347 100%);
       -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      line-height: 1;
     }
-    .office-header-right { display: flex; align-items: center; gap: 12px; }
-    .ws-indicator { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 6px var(--danger); transition: all 0.3s; flex-shrink: 0; }
+    .office-subtitle {
+      font-size: 8px; font-weight: 700; color: var(--muted); letter-spacing: 3px;
+      text-transform: uppercase; font-family: 'Montserrat', sans-serif; opacity: 0.75;
+    }
+    .office-header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .office-airborne-chip {
+      display: none; align-items: center; gap: 6px;
+      background: rgba(245,166,35,0.10); border: 1px solid rgba(245,166,35,0.28);
+      border-radius: 9999px; padding: 5px 13px;
+      font-size: 12px; font-weight: 700; color: var(--warning); white-space: nowrap;
+    }
+    .office-airborne-chip.show { display: flex; }
+    @keyframes airborneDotPulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+    .airborne-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--warning); box-shadow: 0 0 6px rgba(245,166,35,0.7);
+      animation: airborneDotPulse 1.5s ease-in-out infinite; flex-shrink: 0;
+    }
+    .office-clock {
+      font-family: 'Montserrat', sans-serif; font-size: 14px; font-weight: 700;
+      color: var(--text-2); font-variant-numeric: tabular-nums; letter-spacing: 1.5px;
+      min-width: 74px; text-align: center; padding: 5px 10px;
+      background: rgba(255,255,255,0.04); border-radius: 8px;
+    }
+    .office-ws-badge {
+      display: flex; align-items: center; gap: 5px;
+      background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.22);
+      border-radius: 9999px; padding: 5px 11px; transition: all 0.3s;
+    }
+    .office-ws-badge.offline {
+      background: rgba(240,68,56,0.08); border-color: rgba(240,68,56,0.22);
+    }
+    .ws-indicator { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 6px var(--danger); transition: all 0.3s; flex-shrink: 0; }
     .ws-indicator.connected { background: var(--success); box-shadow: 0 0 8px rgba(34,197,94,0.6); }
-    .ws-label { font-size: 11px; color: var(--muted); font-weight: 500; }
+    .ws-badge-label { font-size: 10px; font-weight: 800; color: var(--success); letter-spacing: 1px; font-family: 'Montserrat', sans-serif; }
+    .office-ws-badge.offline .ws-badge-label { color: var(--danger); }
+    .office-icon-btn {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 8px; color: var(--muted); font-size: 14px;
+      padding: 6px 10px; cursor: pointer; transition: all 0.15s;
+    }
+    .office-icon-btn:hover { background: rgba(255,255,255,0.12); color: var(--text); }
     .office-logout-btn {
-      background: var(--surface); border: 1px solid var(--border-hi); border-radius: 9999px;
-      color: var(--text-2); font-size: 13px; padding: 6px 14px; cursor: pointer; font-weight: 500;
+      background: transparent; border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 9999px; color: var(--text-2); font-size: 12px;
+      padding: 6px 16px; cursor: pointer; font-weight: 500; transition: all 0.15s; white-space: nowrap;
+    }
+    .office-logout-btn:hover { border-color: rgba(240,68,56,0.5); color: var(--danger); }
+    @media (max-width: 600px) {
+      .office-clock { display: none; }
+      .office-subtitle { display: none; }
+      .office-logo-ring { width: 30px; height: 30px; }
+      .office-header h1 { font-size: 16px; letter-spacing: 2px; }
+      .office-header { padding: 11px 14px; }
     }
 
     /* ── Extension Request Panel ───────────────────────────────────────── */
@@ -1297,10 +1362,27 @@
 <!-- ── OFFICE DASHBOARD ────────────────────────────────────────────────────── -->
 <div id="office-dashboard">
   <div class="office-header">
-    <h1>GFORCE OFFICE DASHBOARD</h1>
+    <div class="office-header-left">
+      <svg class="office-logo-ring" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="50" fill="#F37329"/>
+        <path fill="white" d="M 26 57 C 17 52 15 40 22 33 C 28 27 38 27 44 34 C 47 21 57 14 69 17 C 79 20 85 31 82 42 C 80 51 72 57 63 55 C 58 54 54 50 52 46 C 50 53 48 63 44 72 C 40 67 40 58 43 52 C 39 55 35 60 33 68 C 30 75 29 82 26 84 C 21 79 21 70 24 63 Z"/>
+      </svg>
+      <div class="office-title-block">
+        <h1>GFORCE</h1>
+        <span class="office-subtitle">Office Dashboard</span>
+      </div>
+    </div>
     <div class="office-header-right">
-      <div style="display:flex;align-items:center;gap:6px;"><span class="ws-label">WS</span><div class="ws-indicator" id="ws-indicator" title="Connection status"></div></div>
-      <button id="office-theme-btn" onclick="toggleOfficeTheme()" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:13px;padding:6px 10px;cursor:pointer;">🎨</button>
+      <div class="office-airborne-chip" id="office-airborne-chip">
+        <span class="airborne-dot"></span>
+        <span id="office-airborne-count">0</span>&nbsp;airborne
+      </div>
+      <div class="office-clock" id="office-clock"></div>
+      <div class="office-ws-badge" id="office-ws-badge">
+        <div class="ws-indicator" id="ws-indicator" title="Connection status"></div>
+        <span class="ws-badge-label" id="ws-badge-label">LIVE</span>
+      </div>
+      <button id="office-theme-btn" onclick="toggleOfficeTheme()" class="office-icon-btn" title="Toggle theme">🎨</button>
       <button class="office-logout-btn" onclick="officeDoLogout()">Logout</button>
     </div>
   </div>
@@ -1589,6 +1671,7 @@ let officePilots = [];
 // Collapsed state for Flight Following sections (persist across re-renders)
 const _ffCollapsed = { avail: true, downbelow: true, signedout: true };
 let officeRefreshInterval = null;
+let _officeClockInterval = null;
 let allFlights = [];
 let filteredFlights = [];
 let alertDismissed = new Set();
@@ -3979,6 +4062,18 @@ async function officeFetch(path, opts = {}) {
 }
 
 // ─── Office Auth ──────────────────────────────────────────────────────────────
+function startOfficeClock() {
+  if (_officeClockInterval) clearInterval(_officeClockInterval);
+  const el = document.getElementById('office-clock');
+  function tick() {
+    if (!el) return;
+    const now = new Date();
+    el.textContent = now.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  }
+  tick();
+  _officeClockInterval = setInterval(tick, 1000);
+}
+
 function showOfficeDashboard() {
   document.getElementById('login-page').style.display = 'none';
   document.getElementById('office-dashboard').style.display = 'block';
@@ -3986,6 +4081,7 @@ function showOfficeDashboard() {
   connectWS();
   if (officeRefreshInterval) clearInterval(officeRefreshInterval);
   officeRefreshInterval = setInterval(loadOfficeData, 20000);
+  startOfficeClock();
   loadOfficeData().then(() => showOfficeTab('pilots'));
 }
 
@@ -3996,6 +4092,7 @@ function officeDoLogout() {
   if (ws) { ws.close(); ws = null; }
   clearInterval(timerInterval);
   if (officeRefreshInterval) { clearInterval(officeRefreshInterval); officeRefreshInterval = null; }
+  if (_officeClockInterval) { clearInterval(_officeClockInterval); _officeClockInterval = null; }
   document.getElementById('office-dashboard').style.display = 'none';
   document.getElementById('login-page').style.display = 'flex';
   document.getElementById('pilot-pin').value = '';
@@ -4027,6 +4124,10 @@ async function loadOfficeData() {
     if (!pilotsRes) return;
     if (pilotsRes.status === 401) { officeDoLogout(); return; }
     officePilots = await pilotsRes.json();
+    const _airborneCount = officePilots.filter(p => p.status === 'airborne').length;
+    const _chip = document.getElementById('office-airborne-chip');
+    const _countEl = document.getElementById('office-airborne-count');
+    if (_chip && _countEl) { _countEl.textContent = _airborneCount; _chip.classList.toggle('show', _airborneCount > 0); }
     allFlights = (flightsRes && flightsRes.ok) ? await flightsRes.json() : [];
     // Pending acks are the source of truth — replace in-memory list from server each load
     if (acksRes && acksRes.ok) {
@@ -4997,10 +5098,18 @@ function connectWS() {
   ws.onopen = () => {
     document.getElementById('ws-indicator').classList.add('connected');
     document.getElementById('ws-indicator').title = 'Connected';
+    const badge = document.getElementById('office-ws-badge');
+    const label = document.getElementById('ws-badge-label');
+    if (badge) badge.classList.remove('offline');
+    if (label) label.textContent = 'LIVE';
   };
   ws.onclose = () => {
     document.getElementById('ws-indicator').classList.remove('connected');
     document.getElementById('ws-indicator').title = 'Disconnected';
+    const badge = document.getElementById('office-ws-badge');
+    const label = document.getElementById('ws-badge-label');
+    if (badge) badge.classList.add('offline');
+    if (label) label.textContent = 'OFFLINE';
     if (officeToken) {
       if (officeRefreshInterval) clearInterval(officeRefreshInterval);
       officeRefreshInterval = setInterval(loadOfficeData, 20000);

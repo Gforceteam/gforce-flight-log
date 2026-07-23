@@ -930,7 +930,8 @@
     }
 
     /* ── LOOP BOARD ─────────────────────────────────────────────────────── */
-    .loop-board { padding: 0; overflow: auto; max-height: 760px; }
+    .loop-board { padding: 0; overflow-x: auto; overflow-y: visible; }
+    .loop-board-controls { display: flex; gap: 8px; padding: 10px 8px; border-top: 1px solid var(--border); }
     .loop-table { border-collapse: collapse; font-size: 15px; }
     .loop-table thead th {
       padding: 12px 6px; border-bottom: 2px solid var(--border);
@@ -5053,7 +5054,7 @@ function renderLoopBoard() {
   html += '<th class="loop-th-slot">#</th><th class="loop-th-pilot">Pilot</th>';
   for (let c = 1; c <= 12; c++) html += `<th class="loop-th-tally">${c}</th>`;
   html += '</tr></thead><tbody>';
-  for (let i = 1; i <= 20; i++) {
+  for (let i = 1; i <= loopBoardRows; i++) {
     const slot = loopBoard.find(s => s.slot === i) || { slot: i, pilot_id: null, pilot_name: null, tallies: null };
     let tallies = Array(12).fill('');
     try { const t = JSON.parse(slot.tallies || '[]'); if (Array.isArray(t)) tallies = t; } catch (_) {}
@@ -5071,7 +5072,27 @@ function renderLoopBoard() {
     html += '</tr>';
   }
   html += '</tbody></table>';
+  html += `<div class="loop-board-controls">
+    <button onclick="addLoopRow()" style="padding:8px 22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:22px;line-height:1;cursor:pointer;" ${loopBoardRows >= 20 ? 'disabled' : ''}>+</button>
+    <button onclick="removeLoopRow()" style="padding:8px 22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:22px;line-height:1;cursor:pointer;" ${loopBoardRows <= 1 ? 'disabled' : ''}>−</button>
+  </div>`;
   el.innerHTML = html;
+}
+
+let loopBoardRows = Math.max(1, Math.min(20, parseInt(localStorage.getItem('loopBoardRows') || '1', 10)));
+
+function addLoopRow() {
+  if (loopBoardRows >= 20) return;
+  loopBoardRows++;
+  localStorage.setItem('loopBoardRows', loopBoardRows);
+  renderLoopBoard();
+}
+
+function removeLoopRow() {
+  if (loopBoardRows <= 1) return;
+  loopBoardRows--;
+  localStorage.setItem('loopBoardRows', loopBoardRows);
+  renderLoopBoard();
 }
 
 async function setLoopTally(slot, col, selectEl) {

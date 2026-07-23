@@ -4224,22 +4224,24 @@ function addSendAwayRow() {
 }
 
 async function submitSendAway() {
-  const sels = [...document.querySelectorAll('#send-away-rows .send-away-sel')];
-  const pilots = sels.reduce((acc, sel) => {
-    if (sel.value && !acc.find(p => p.id === sel.value))
-      acc.push({ id: sel.value, name: sel.options[sel.selectedIndex].textContent });
-    return acc;
-  }, []);
+  const rows = [...document.querySelectorAll('#send-away-rows .send-away-row')];
+  const pilots = [];
+  rows.forEach(row => {
+    const sel = row.querySelector('.send-away-sel');
+    const num = row.querySelector('.send-away-num');
+    if (sel && sel.value && !pilots.find(p => p.id === sel.value))
+      pilots.push({ id: sel.value, name: sel.options[sel.selectedIndex].textContent, num: num ? (num.value || '') : '' });
+  });
   if (pilots.length === 0) { toast('Select at least one pilot', 'warn'); return; }
   try {
     let res, data;
     if (pilots.length === 1) {
-      res = await officeFetch('/api/office/leave', { method: 'POST', body: JSON.stringify({ pilot_id: pilots[0].id, client_name: '' }) });
+      res = await officeFetch('/api/office/leave', { method: 'POST', body: JSON.stringify({ pilot_id: pilots[0].id, client_name: pilots[0].num }) });
       data = await res.json();
       if (res.ok) toast(`${pilots[0].name} sent away`);
       else toast(data.error || 'Error', 'err');
     } else {
-      res = await officeFetch('/api/office/group-leave', { method: 'POST', body: JSON.stringify({ group_name: '', pilot_ids: pilots.map(p => p.id) }) });
+      res = await officeFetch('/api/office/group-leave', { method: 'POST', body: JSON.stringify({ group_name: pilots.map(p => p.num).filter(Boolean).join('/'), pilot_ids: pilots.map(p => p.id) }) });
       data = await res.json();
       if (res.ok) toast(`Away: ${pilots.map(p => p.name).join(', ')}`);
       else toast(data.error || 'Error', 'err');
@@ -4292,6 +4294,7 @@ function renderAwayTab() {
       <thead>
         <tr>
           <th>Pilot</th>
+          <th style="text-align:center;width:40px;">#</th>
           <th>Time Left</th>
           <th>Actions</th>
         </tr>
@@ -4312,6 +4315,7 @@ function renderAwayTab() {
       html += `
         <tr id="pilot-card-${p.id}">
           <td class="col-pilot">${esc(p.name)}</td>
+          <td style="text-align:center;font-weight:700;color:var(--accent);font-size:14px;">${p.client_name ? esc(p.client_name) : '—'}</td>
           <td class="col-timer">
             <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="margin:0;">--:--</div>
           </td>
@@ -4320,19 +4324,20 @@ function renderAwayTab() {
     } else {
       html += `
         <tr class="group-header">
-          <td colspan="3">${esc(entry.groupName)} · ${entry.pilots.length} pilots</td>
+          <td colspan="4">${esc(entry.groupName)} · ${entry.pilots.length} pilots</td>
         </tr>`;
       entry.pilots.forEach(p => {
         html += `
           <tr id="pilot-card-${p.id}" class="group-row">
             <td class="col-pilot">${esc(p.name)}</td>
+            <td style="text-align:center;font-weight:700;color:var(--accent);font-size:14px;">—</td>
             <td class="col-timer">
               <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="margin:0;">--:--</div>
             </td>
             <td class="col-actions">${actionBtns(p)}</td>
           </tr>`;
       });
-      html += `<tr class="group-spacer"><td colspan="3"></td></tr>`;
+      html += `<tr class="group-spacer"><td colspan="4"></td></tr>`;
     }
   });
 

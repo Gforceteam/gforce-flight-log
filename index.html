@@ -1416,9 +1416,12 @@
       <div class="ff-wrap" id="office-ff-content"><div class="empty-state">Loading…</div></div>
     </div>
 
-    <div class="office-tab-content" id="office-tab-settings">
+    <div class="office-tab-content" id="office-tab-today">
       <div class="today-summary" id="today-summary"></div>
       <div id="office-today-list"></div>
+    </div>
+
+    <div class="office-tab-content" id="office-tab-settings">
       <div style="padding:4px 0 24px;">
 
         <!-- Push Notifications toggle -->
@@ -1429,6 +1432,13 @@
             <span id="push-notif-status" style="font-size:15px;font-weight:700;">—</span>
             <button id="push-notif-btn" onclick="togglePushNotifications()" style="padding:11px 24px;border-radius:9999px;font-size:14px;font-weight:700;cursor:pointer;border:none;min-width:110px;">…</button>
           </div>
+        </div>
+
+        <!-- Today's Summary -->
+        <div class="card stat-section" style="margin-bottom:12px;">
+          <div class="stat-section-title" style="margin-bottom:6px;">📊 Today's Summary</div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">View today's flights, timers and pilot activity.</div>
+          <button onclick="showOfficeTab('today')" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Open Today's Summary</button>
         </div>
 
         <!-- Flight Log -->
@@ -4128,7 +4138,7 @@ function refreshOfficeUiAfterLoad() {
   switch (officeActiveTab) {
     case 'pilots': renderAwayTab(); renderGroupsTab(); renderOfficeTab(); break;
     case 'loop': renderLoopBoard(); break;
-    case 'settings': renderTodayTab(); break;
+    case 'today': renderTodayTab(); break;
     case 'flights': renderFlightsTab(); break;
     case 'ff': renderOfficeFF(); break;
     case 'settings': break;
@@ -5098,8 +5108,9 @@ function showOfficeTab(name) {
   if (name === 'ff') renderOfficeFF();
   if (name === 'pilots') { renderAwayTab(); renderGroupsTab(); renderOfficeTab(); }
   if (name === 'loop') loadLoopBoard();
+  if (name === 'today') renderTodayTab();
   if (name === 'flights') renderFlightsTab();
-  if (name === 'settings') { renderTodayTab(); populateOfficeResetPilots(); populateOfficeDeletePilots(); loadOfficeSettings(); }
+  if (name === 'settings') { populateOfficeResetPilots(); populateOfficeDeletePilots(); loadOfficeSettings(); }
 }
 
 let _officePushEnabled = false;

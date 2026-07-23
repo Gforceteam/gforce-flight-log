@@ -4304,7 +4304,7 @@ function renderAwayTab() {
 
   let html = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <div class="section-title" style="margin:0;">🪂 Away (${flying.length})</div>
+      <div class="section-title" style="margin:0;">Away (${flying.length})</div>
       <button onclick="loadOfficeData()" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">↻ Refresh</button>
     </div>
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
@@ -4312,7 +4312,6 @@ function renderAwayTab() {
       <thead>
         <tr>
           <th>Pilot</th>
-          <th>Booking</th>
           <th>Time Left</th>
           <th>Actions</th>
         </tr>
@@ -4333,7 +4332,6 @@ function renderAwayTab() {
       html += `
         <tr id="pilot-card-${p.id}">
           <td class="col-pilot">${esc(p.name)}</td>
-          <td class="col-booking">${p.client_name ? esc(p.client_name) : '—'}</td>
           <td class="col-timer">
             <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="margin:0;">--:--</div>
           </td>
@@ -4342,20 +4340,19 @@ function renderAwayTab() {
     } else {
       html += `
         <tr class="group-header">
-          <td colspan="4">📋 ${esc(entry.groupName)} · ${entry.pilots.length} pilots</td>
+          <td colspan="3">${esc(entry.groupName)} · ${entry.pilots.length} pilots</td>
         </tr>`;
       entry.pilots.forEach(p => {
         html += `
           <tr id="pilot-card-${p.id}" class="group-row">
             <td class="col-pilot">${esc(p.name)}</td>
-            <td class="col-booking" style="color:var(--muted);">—</td>
             <td class="col-timer">
               <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="margin:0;">--:--</div>
             </td>
             <td class="col-actions">${actionBtns(p)}</td>
           </tr>`;
       });
-      html += `<tr class="group-spacer"><td colspan="4"></td></tr>`;
+      html += `<tr class="group-spacer"><td colspan="3"></td></tr>`;
     }
   });
 

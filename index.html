@@ -5137,10 +5137,26 @@ async function setLoopSlot(slot, selectEl) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ slot, pilot_id, pilot_name })
     });
-    if (!res.ok) toast('Failed to update slot', 'err');
+    if (!res.ok) { toast('Failed to update slot', 'err'); return; }
+    if (slot === 1 && pilot_id) await autoFillLoopBoard(pilot_id);
   } catch (_) {
     toast('Cannot reach server', 'err');
   }
+}
+
+async function autoFillLoopBoard(firstPilotId) {
+  const sorted = [...(officePilots || [])].sort(pilotSort);
+  const startIdx = sorted.findIndex(p => p.id === firstPilotId);
+  if (startIdx === -1) return;
+  const toFill = sorted.slice(startIdx + 1, startIdx + loopBoardRows);
+  await Promise.all(toFill.map((p, i) =>
+    officeFetch('/api/office/loop-board/slot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slot: i + 2, pilot_id: p.id, pilot_name: p.name })
+    })
+  ));
+  await loadLoopBoard();
 }
 
 // ─── Office Tabs ──────────────────────────────────────────────────────────────

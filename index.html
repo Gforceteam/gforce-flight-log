@@ -5087,7 +5087,7 @@ async function loadLoopBoard() {
 function renderLoopBoard() {
   const el = document.getElementById('loop-board-list');
   if (!el) return;
-  const available = (officePilots || []).filter(p => p.presence >= 1).sort((a, b) => a.name.localeCompare(b.name));
+  const available = (officePilots || []).sort((a, b) => a.name.localeCompare(b.name));
   const tallyOpts = ['', '1', 'L', ',.,'];
   let html = '<table class="loop-table"><thead><tr>';
   html += '<th class="loop-th-slot">#</th><th class="loop-th-pilot">Pilot</th>';

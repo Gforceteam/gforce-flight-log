@@ -911,11 +911,11 @@
     .away-table .col-timer  { text-align: center; }
     .away-table .col-actions { text-align: right; white-space: nowrap; }
     .away-table .group-header td {
-      background: var(--accent-dim); padding: 8px 10px 6px;
-      font-size: 11px; font-weight: 800; color: var(--accent);
+      background: transparent; padding: 8px 10px 6px;
+      font-size: 11px; font-weight: 800; color: var(--muted);
       text-transform: uppercase; letter-spacing: 1px;
-      border-left: 3px solid var(--accent);
-      border-bottom: 1px solid rgba(243,115,41,0.2);
+      border-left: none;
+      border-bottom: 1px solid var(--border);
     }
     .away-table .group-row td { background: rgba(243,115,41,0.05); border-bottom: 1px solid rgba(243,115,41,0.10); }
     .away-table .group-row .col-pilot { border-left: 3px solid var(--accent); padding-left: 20px; }
@@ -4324,7 +4324,7 @@ function renderAwayTab() {
     } else {
       html += `
         <tr class="group-header">
-          <td colspan="4">${esc(entry.groupName)} · ${entry.pilots.length} pilots</td>
+          <td colspan="4">${entry.pilots.length} Pilots</td>
         </tr>`;
       entry.pilots.forEach(p => {
         html += `

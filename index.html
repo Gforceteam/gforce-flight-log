@@ -5077,8 +5077,18 @@ function renderLoopBoard() {
   html += `<div class="loop-board-controls">
     <button onclick="addLoopRow()" style="padding:8px 22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:22px;line-height:1;cursor:pointer;" ${loopBoardRows >= 20 ? 'disabled' : ''}>+</button>
     <button onclick="removeLoopRow()" style="padding:8px 22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:22px;line-height:1;cursor:pointer;" ${loopBoardRows <= 1 ? 'disabled' : ''}>−</button>
+    <button onclick="resetLoopBoard()" style="padding:8px 20px;background:rgba(239,68,68,0.08);border:1px solid var(--danger);border-radius:8px;color:var(--danger);font-size:13px;font-weight:700;cursor:pointer;margin-left:auto;">Reset</button>
   </div>`;
   el.innerHTML = html;
+}
+
+async function resetLoopBoard() {
+  if (!confirm('Clear all pilots and tallies from the Loop Board?')) return;
+  try {
+    const res = await officeFetch('/api/office/loop-board/reset', { method: 'POST' });
+    if (res && res.ok) { loopBoard = await (await officeFetch('/api/office/loop-board')).json(); renderLoopBoard(); }
+    else toast('Reset failed', 'err');
+  } catch (e) { toast('Reset failed', 'err'); }
 }
 
 function addLoopRow() {

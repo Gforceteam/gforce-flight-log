@@ -1883,6 +1883,17 @@ app.post('/api/office/loop-board/slot', verifyOffice, async (req, res) => {
   }
 });
 
+app.post('/api/office/loop-board/reset', verifyOffice, async (req, res) => {
+  try {
+    await run('UPDATE loop_board SET pilot_id = NULL, pilot_name = NULL, tallies = NULL');
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board ORDER BY slot ASC');
+    broadcast({ type: 'LOOP_BOARD_UPDATE', board });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/office/loop-board/tally', verifyOffice, async (req, res) => {
   try {
     const { slot, col, value } = req.body;

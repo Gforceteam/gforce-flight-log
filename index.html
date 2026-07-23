@@ -1443,6 +1443,16 @@
     <div class="office-tab-content" id="office-tab-settings">
       <div style="padding:4px 0 24px;">
 
+        <!-- Push Notifications toggle -->
+        <div class="card stat-section" style="margin-bottom:12px;">
+          <div class="stat-section-title" style="margin-bottom:6px;">🔔 Push Notifications</div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:16px;">Enable or disable push notifications sent to pilots' devices (10 min, 5 min and expiry alerts).</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+            <span id="push-notif-status" style="font-size:15px;font-weight:700;">—</span>
+            <button id="push-notif-btn" onclick="togglePushNotifications()" style="padding:11px 24px;border-radius:9999px;font-size:14px;font-weight:700;cursor:pointer;border:none;min-width:110px;">…</button>
+          </div>
+        </div>
+
         <!-- Flight Log -->
         <div class="card stat-section" style="margin-bottom:12px;">
           <div class="stat-section-title" style="margin-bottom:6px;">📋 Flight Log</div>
@@ -5146,7 +5156,51 @@ function showOfficeTab(name) {
   if (name === 'loop') loadLoopBoard();
   if (name === 'today') renderTodayTab();
   if (name === 'flights') renderFlightsTab();
-  if (name === 'settings') { populateOfficeResetPilots(); populateOfficeDeletePilots(); }
+  if (name === 'settings') { populateOfficeResetPilots(); populateOfficeDeletePilots(); loadOfficeSettings(); }
+}
+
+let _officePushEnabled = false;
+
+async function loadOfficeSettings() {
+  try {
+    const res = await officeFetch('/api/office/settings');
+    if (!res.ok) return;
+    const data = await res.json();
+    _officePushEnabled = !!data.push_notifications_enabled;
+    updatePushNotifUI();
+  } catch {}
+}
+
+function updatePushNotifUI() {
+  const status = document.getElementById('push-notif-status');
+  const btn = document.getElementById('push-notif-btn');
+  if (!status || !btn) return;
+  if (_officePushEnabled) {
+    status.textContent = '🟢 Notifications ON';
+    status.style.color = 'var(--success)';
+    btn.textContent = 'Turn Off';
+    btn.style.cssText = 'padding:11px 24px;border-radius:9999px;font-size:14px;font-weight:700;cursor:pointer;border:1px solid var(--danger);background:rgba(239,68,68,0.08);color:var(--danger);min-width:110px;';
+  } else {
+    status.textContent = '🔴 Notifications OFF';
+    status.style.color = 'var(--danger)';
+    btn.textContent = 'Turn On';
+    btn.style.cssText = 'padding:11px 24px;border-radius:9999px;font-size:14px;font-weight:700;cursor:pointer;border:1px solid #4a8f1e;background:rgba(74,143,30,0.1);color:#7bc950;min-width:110px;';
+  }
+}
+
+async function togglePushNotifications() {
+  const enabled = !_officePushEnabled;
+  try {
+    const res = await officeFetch('/api/office/settings/push-notifications', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled })
+    });
+    if (!res.ok) { toast('Failed to update setting', 'err'); return; }
+    _officePushEnabled = enabled;
+    updatePushNotifUI();
+    toast(enabled ? '🔔 Push notifications enabled' : '🔕 Push notifications disabled');
+  } catch { toast('Cannot reach server', 'err'); }
 }
 
 async function populateOfficeResetPilots() {

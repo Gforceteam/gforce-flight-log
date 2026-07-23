@@ -23,6 +23,9 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const OFFICE_PASSWORD = process.env.OFFICE_PASSWORD;
 
+// ─── App Settings (in-memory, persisted to DB) ────────────────────────────────
+let _pushNotificationsEnabled = false; // off by default; loaded from DB at startup
+
 if (!JWT_SECRET) {
   console.error('FATAL: JWT_SECRET env var not set. Set it with: fly secrets set JWT_SECRET=<long-random-string>');
   process.exit(1);
@@ -255,6 +258,8 @@ async function createTables() {
     pilot_id TEXT,
     pilot_name TEXT
   )`);
+  await db.execute(`CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT)`);
+  await run("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('push_notifications_enabled', 'false')");
   try { await db.execute('ALTER TABLE loop_board ADD COLUMN tallies TEXT'); } catch (_) {}
   // Seed 20 slots on first run
   const lbCount = await queryOne('SELECT COUNT(*) as c FROM loop_board');
@@ -929,6 +934,7 @@ app.get('/api/pilot/avatar/:pilotId', verifyPilotOrOffice, async (req, res) => {
 // ─── Push Notifications ──────────────────────────────────────────────────────
 async function sendPushToPilot(pilotId, payload) {
   if (!process.env.VAPID_PUBLIC_KEY) return;
+  if (!_pushNotificationsEnabled) return;
   const subs = await queryAll('SELECT id, subscription FROM push_subscriptions WHERE pilot_id = ?', [pilotId]);
   const body = JSON.stringify(payload);
   await Promise.allSettled(subs.map(async (row) => {
@@ -1831,6 +1837,24 @@ function scheduleDailyBackup() {
   }, msUntil2am);
 }
 
+// ─── Office Settings ──────────────────────────────────────────────────────────
+app.get('/api/office/settings', verifyOffice, async (req, res) => {
+  res.json({ push_notifications_enabled: _pushNotificationsEnabled });
+});
+
+app.put('/api/office/settings/push-notifications', verifyOffice, async (req, res) => {
+  try {
+    const enabled = !!req.body.enabled;
+    _pushNotificationsEnabled = enabled;
+    await run("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('push_notifications_enabled', ?)", [enabled ? 'true' : 'false']);
+    console.log(`[settings] Push notifications ${enabled ? 'enabled' : 'disabled'}`);
+    broadcast({ type: 'SETTINGS_UPDATE', push_notifications_enabled: enabled });
+    res.json({ ok: true, push_notifications_enabled: enabled });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Loop Board ───────────────────────────────────────────────────────────────
 app.get('/api/office/loop-board', verifyOffice, async (req, res) => {
   try {
@@ -1887,6 +1911,9 @@ setTimeout(pushDailyBackup, 10000);
 async function start() {
   await createTables();
   await seedIfNeeded();
+  const pushSetting = await queryOne("SELECT value FROM app_settings WHERE key = 'push_notifications_enabled'");
+  _pushNotificationsEnabled = pushSetting?.value === 'true';
+  console.log(`Push notifications: ${_pushNotificationsEnabled ? 'ENABLED' : 'DISABLED'}`);
   server.listen(PORT, () => console.log(`🚀 GForce API running on port ${PORT}`));
 }
 

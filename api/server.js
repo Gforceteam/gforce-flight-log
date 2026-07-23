@@ -25,6 +25,8 @@ const OFFICE_PASSWORD = process.env.OFFICE_PASSWORD;
 
 // ─── App Settings (in-memory, persisted to DB) ────────────────────────────────
 let _pushNotificationsEnabled = false; // off by default; loaded from DB at startup
+let _officeTv = 0;              // token version — incremented on password change to invalidate all sessions
+let _officeRefreshSecret = '';  // refresh secret — rotated on password change; seeded from env var
 
 if (!JWT_SECRET) {
   console.error('FATAL: JWT_SECRET env var not set. Set it with: fly secrets set JWT_SECRET=<long-random-string>');
@@ -339,6 +341,7 @@ function verifyOffice(req, res, next) {
   try {
     const office = jwt.verify(auth.slice(7), JWT_SECRET, { algorithms: ['HS256'] });
     if (office.type !== 'office') return res.status(403).json({ error: 'Not office staff' });
+    if (office.tv !== _officeTv) return res.status(401).json({ error: 'Session invalidated' });
     req.office = office;
     next();
   } catch {
@@ -515,6 +518,11 @@ app.put('/api/office/change-password', verifyOffice, async (req, res) => {
     if (!valid) return res.status(401).json({ error: 'Current password is incorrect' });
     const hash = await bcrypt.hash(new_password, 12);
     await run("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('office_password_hash', ?)", [hash]);
+    // Invalidate all active sessions: rotate token version and refresh secret
+    _officeTv++;
+    _officeRefreshSecret = crypto.randomBytes(32).toString('hex');
+    await run("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('office_token_version', ?)", [String(_officeTv)]);
+    await run("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('office_refresh_secret', ?)", [_officeRefreshSecret]);
     res.json({ ok: true });
   } catch (e) {
     console.error(e);
@@ -543,8 +551,8 @@ app.post('/api/auth/office', async (req, res) => {
       return res.status(401).json({ error: 'Invalid password' });
     }
     clearRateLimit(ip);
-    const token = jwt.sign({ type: 'office' }, JWT_SECRET, { expiresIn: '8h' });
-    res.json({ token, refresh_token: process.env.OFFICE_REFRESH_SECRET });
+    const token = jwt.sign({ type: 'office', tv: _officeTv }, JWT_SECRET, { expiresIn: '8h' });
+    res.json({ token, refresh_token: _officeRefreshSecret });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Login failed' });
@@ -572,12 +580,10 @@ app.post('/api/auth/refresh-office', async (req, res) => {
   try {
     const { refresh_token } = req.body;
     if (!refresh_token) return res.status(400).json({ error: 'Refresh token required' });
-    // Office uses a fixed secret token stored in env — verify it matches
-    const expected = process.env.OFFICE_REFRESH_SECRET;
-    if (!expected || !safeCompare(refresh_token, expected)) {
+    if (!_officeRefreshSecret || !safeCompare(refresh_token, _officeRefreshSecret)) {
       return res.status(401).json({ error: 'Invalid refresh token' });
     }
-    const token = jwt.sign({ type: 'office' }, JWT_SECRET, { expiresIn: '8h' });
+    const token = jwt.sign({ type: 'office', tv: _officeTv }, JWT_SECRET, { expiresIn: '8h' });
     res.json({ token });
   } catch (e) {
     console.error(e);
@@ -1957,6 +1963,20 @@ async function start() {
   const pushSetting = await queryOne("SELECT value FROM app_settings WHERE key = 'push_notifications_enabled'");
   _pushNotificationsEnabled = pushSetting?.value === 'true';
   console.log(`Push notifications: ${_pushNotificationsEnabled ? 'ENABLED' : 'DISABLED'}`);
+
+  // Load office token version (used to invalidate all sessions on password change)
+  const tvRow = await queryOne("SELECT value FROM app_settings WHERE key = 'office_token_version'");
+  _officeTv = tvRow ? parseInt(tvRow.value || '0', 10) : 0;
+
+  // Load or seed office refresh secret into DB (so it can be rotated in-app)
+  const rsRow = await queryOne("SELECT value FROM app_settings WHERE key = 'office_refresh_secret'");
+  if (rsRow && rsRow.value) {
+    _officeRefreshSecret = rsRow.value;
+  } else {
+    _officeRefreshSecret = process.env.OFFICE_REFRESH_SECRET;
+    await run("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('office_refresh_secret', ?)", [_officeRefreshSecret]);
+  }
+
   server.listen(PORT, () => console.log(`🚀 GForce API running on port ${PORT}`));
 }
 

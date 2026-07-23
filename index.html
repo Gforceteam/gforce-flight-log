@@ -5996,7 +5996,19 @@ async function submitOfficeCpw() {
     const data = await res.json();
     if (!res.ok) { errEl.textContent = data.error || 'Failed'; return; }
     hideOfficeCpwModal();
-    toast('Password changed successfully');
+    // Re-login with new password to get a fresh token (old one is now invalidated)
+    const loginRes = await fetch(`${API_BASE}/api/auth/office`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: newPw })
+    });
+    if (loginRes.ok) {
+      const loginData = await loginRes.json();
+      officeToken = loginData.token;
+      localStorage.setItem('gforce_office_token', officeToken);
+      if (loginData.refresh_token) localStorage.setItem('gforce_office_refresh', loginData.refresh_token);
+    }
+    toast('Password changed — all other sessions have been logged out');
   } catch (e) {
     errEl.textContent = 'Network error';
   } finally {

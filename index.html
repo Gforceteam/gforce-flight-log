@@ -476,8 +476,8 @@
     #office-dashboard { display: none; padding-bottom: 0; background: var(--bg); }
 
     .office-header {
-      background: linear-gradient(135deg, #0d1020 0%, #141828 55%, #1a1d30 100%);
-      box-shadow: 0 4px 32px rgba(0,0,0,0.55);
+      background: linear-gradient(135deg, #fff8f4 0%, #fef2e8 55%, #fde8d5 100%);
+      box-shadow: 0 4px 20px rgba(243,115,41,0.18);
       padding: 13px 22px;
       display: flex;
       justify-content: space-between;
@@ -503,10 +503,10 @@
     .office-title-block { display: flex; flex-direction: column; gap: 1px; }
     .office-header h1 {
       font-size: 22px; font-weight: 800; font-family: 'Montserrat', sans-serif;
-      letter-spacing: 3px; color: #fff; line-height: 1;
+      letter-spacing: 3px; color: var(--accent); line-height: 1;
     }
     .office-subtitle {
-      font-size: 8.5px; font-weight: 700; color: rgba(255,255,255,0.45);
+      font-size: 8.5px; font-weight: 700; color: rgba(180,80,10,0.6);
       letter-spacing: 4px; text-transform: uppercase;
       font-family: 'Montserrat', sans-serif;
     }
@@ -529,9 +529,9 @@
     }
     .office-clock {
       font-family: 'Montserrat', sans-serif; font-size: 14px; font-weight: 700;
-      color: var(--text-2); font-variant-numeric: tabular-nums; letter-spacing: 1.5px;
+      color: #7a3a0a; font-variant-numeric: tabular-nums; letter-spacing: 1.5px;
       min-width: 74px; text-align: center; padding: 5px 10px;
-      background: rgba(255,255,255,0.04); border-radius: 8px;
+      background: rgba(243,115,41,0.10); border-radius: 8px;
     }
     .office-ws-badge {
       display: flex; align-items: center; gap: 5px;
@@ -546,11 +546,11 @@
     .ws-badge-label { font-size: 10px; font-weight: 800; color: var(--success); letter-spacing: 1px; font-family: 'Montserrat', sans-serif; }
     .office-ws-badge.offline .ws-badge-label { color: var(--danger); }
     .office-icon-btn {
-      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.10);
-      border-radius: 8px; color: var(--muted); font-size: 14px;
+      background: rgba(243,115,41,0.10); border: 1px solid rgba(243,115,41,0.25);
+      border-radius: 8px; color: var(--accent); font-size: 14px;
       padding: 6px 10px; cursor: pointer; transition: all 0.15s;
     }
-    .office-icon-btn:hover { background: rgba(255,255,255,0.12); color: var(--text); }
+    .office-icon-btn:hover { background: rgba(243,115,41,0.20); color: var(--accent); }
     .office-logout-btn {
       background: transparent; border: 1px solid rgba(255,255,255,0.12);
       border-radius: 9999px; color: var(--text-2); font-size: 12px;

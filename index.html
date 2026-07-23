@@ -1707,6 +1707,14 @@ let ws = null;
 /** Which office dashboard tab is visible — only this panel is re-rendered on periodic refresh */
 let officeActiveTab = 'pilots';
 let officePilots = [];
+const PILOT_ORDER = ['Ben F','Casey','Gavin','Pete','Thomas','Dom','Mike','Eddy','Blake','Georges','Cathal','Test','Test 1','Test 2'];
+function pilotSort(a, b) {
+  const ai = PILOT_ORDER.indexOf(a.name), bi = PILOT_ORDER.indexOf(b.name);
+  if (ai !== -1 && bi !== -1) return ai - bi;
+  if (ai !== -1) return -1;
+  if (bi !== -1) return 1;
+  return a.name.localeCompare(b.name);
+}
 // Collapsed state for Flight Following sections (persist across re-renders)
 const _ffCollapsed = { avail: true, downbelow: true, signedout: true };
 let officeRefreshInterval = null;
@@ -4045,7 +4053,7 @@ function renderOfficeFF() {
     d.setDate(d.getDate() - i);
     dates.push(d.toLocaleDateString('en-CA', { timeZone: NZ_TZ }));
   }
-  const ffPilots = [...officePilots].sort((a, b) => a.name.localeCompare(b.name)).map(p => {
+  const ffPilots = [...officePilots].sort(pilotSort).map(p => {
     const dayCounts = {};
     let daysWorked = 0;
     dates.forEach(d => {
@@ -4196,7 +4204,7 @@ let _sendAwayPilotOpts = '';
 function renderGroupsTab() {
   const el = document.getElementById('groups-panel');
   if (!el) return;
-  const notAirborne = officePilots.filter(p => p.status !== 'airborne').sort((a, b) => a.name.localeCompare(b.name));
+  const notAirborne = officePilots.filter(p => p.status !== 'airborne').sort(pilotSort);
   _sendAwayPilotOpts = notAirborne.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
   el.innerHTML = `
     <div style="padding:16px 0 8px;">
@@ -4378,9 +4386,9 @@ function _renderOfficeTab_unused() {
       return new Date(a.last_landed_at) - new Date(b.last_landed_at);
     });
   const downBottomPilots = officePilots.filter(p => p.status !== 'airborne' && officePresenceVal(p) === 2)
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort(pilotSort);
   const signedOutOnly = officePilots.filter(p => p.status !== 'airborne' && officePresenceVal(p) === 0)
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort(pilotSort);
 
   // Helper: collapsible section header
   const sectionHeader = (key, label, count) => `
@@ -5050,7 +5058,7 @@ let loopBoardRows = Math.max(1, Math.min(20, parseInt(localStorage.getItem('loop
 function renderLoopBoard() {
   const el = document.getElementById('loop-board-list');
   if (!el) return;
-  const available = (officePilots || []).sort((a, b) => a.name.localeCompare(b.name));
+  const available = (officePilots || []).sort(pilotSort);
   const tallyOpts = ['', '1', 'L', '-'];
   let html = '<table class="loop-table"><thead><tr>';
   html += '<th class="loop-th-slot">#</th><th class="loop-th-pilot">Pilot</th>';
@@ -5203,7 +5211,7 @@ async function populateOfficeResetPilots() {
     const res = await officeFetch('/api/pilots');
     if (!res.ok) return;
     const pilots = await res.json();
-    pilots.sort((a, b) => a.name.localeCompare(b.name)).forEach(p => {
+    pilots.sort(pilotSort).forEach(p => {
       const opt = document.createElement('option');
       opt.value = p.id;
       opt.textContent = p.name;
@@ -5219,7 +5227,7 @@ async function populateOfficeDeletePilots() {
     const res = await officeFetch('/api/pilots');
     if (!res.ok) return;
     const pilots = await res.json();
-    pilots.sort((a, b) => a.name.localeCompare(b.name)).forEach(p => {
+    pilots.sort(pilotSort).forEach(p => {
       const opt = document.createElement('option');
       opt.value = p.id;
       opt.textContent = p.name;

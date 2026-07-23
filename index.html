@@ -575,25 +575,7 @@
     .ext-approve-btn { background: #22c55e; border: none; border-radius: 8px; color: #fff; font-size: 13px; font-weight: 700; padding: 8px 14px; cursor: pointer; }
     .ext-deny-btn { background: transparent; border: 2px solid var(--muted); border-radius: 8px; color: var(--muted); font-size: 13px; font-weight: 700; padding: 8px 14px; cursor: pointer; }
 
-    /* ── Landing Ack Panel ─────────────────────────────────────────────── */
-    #office-ack-panel { display: none; background: #0f1a0f; border-bottom: 2px solid #22c55e; }
-    .ack-item {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 12px 20px; border-bottom: 1px solid rgba(255,255,255,0.07);
-      gap: 12px;
-    }
-    .ack-item:last-child { border-bottom: none; }
-    .ack-pilot-name { font-size: 15px; font-weight: 700; color: #86efac; }
-    .ack-label { font-size: 12px; color: #4ade80; margin-top: 2px; }
-    .ack-emojis { display: flex; gap: 8px; flex-shrink: 0; }
-    .ack-emoji-btn {
-      font-size: 22px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 10px; width: 44px; height: 44px; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      transition: background 0.15s, transform 0.1s;
-    }
-    .ack-emoji-btn:hover { background: rgba(255,255,255,0.18); transform: scale(1.1); }
-    .ack-emoji-btn:active { transform: scale(0.95); }
+    /* Landing Ack Panel — removed */
 
     .office-tab-bar {
       display: flex;
@@ -1412,7 +1394,6 @@
   </div>
 
   <div id="office-ext-panel"></div>
-  <div id="office-ack-panel"></div>
 
   <div class="office-tab-bar">
     <button class="office-tab-btn active" onclick="showOfficeTab('pilots')" id="office-tab-pilots-btn">Flight Following</button>
@@ -4160,10 +4141,9 @@ function refreshOfficeUiAfterLoad() {
 
 async function loadOfficeData() {
   try {
-    const [pilotsRes, flightsRes, acksRes, extRes] = await Promise.all([
+    const [pilotsRes, flightsRes, extRes] = await Promise.all([
       officeFetch('/api/pilots'),
       officeFetch('/api/office/flights'),
-      officeFetch('/api/office/pending-acks'),
       officeFetch('/api/office/pending-extensions')
     ]);
     if (!pilotsRes) return;
@@ -4177,11 +4157,6 @@ async function loadOfficeData() {
     const _countEl = document.getElementById('office-airborne-count');
     if (_chip && _countEl) { _countEl.textContent = _airborneCount; _chip.classList.toggle('show', _airborneCount > 0); }
     allFlights = (flightsRes && flightsRes.ok) ? await flightsRes.json() : [];
-    // Pending acks are the source of truth — replace in-memory list from server each load
-    if (acksRes && acksRes.ok) {
-      pendingAcks = await acksRes.json();
-      renderAckPanel();
-    }
     if (extRes && extRes.ok) {
       pendingExtensions = await extRes.json();
       renderExtensionPanel();
@@ -4678,13 +4653,8 @@ function renderTodayTab() {
       ? new Date(f.landed_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
       : '—';
     const confirmedStr = f.office_ack_at
-      ? `${esc(f.office_ack_emoji)} ${new Date(f.office_ack_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })}`
-      : `<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
-          <button onclick="toggleTodayAckPicker('${f.id}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:11px;font-weight:700;padding:3px 8px;cursor:pointer;">Complete</button>
-          <div id="ack-picker-${f.id}" style="display:none;flex-wrap:wrap;gap:2px;">
-            ${ACK_EMOJIS.map(e => `<button class="ack-emoji-btn" onclick="acknowledgeFlightLanding('${f.id}','${e}')" style="font-size:18px;padding:2px 4px;">${e}</button>`).join('')}
-          </div>
-        </div>`;
+      ? new Date(f.office_ack_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
+      : `<button onclick="acknowledgeFlightLanding('${f.id}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:11px;font-weight:700;padding:3px 8px;cursor:pointer;">Complete</button>`;
     html += `<tr class="${f.office_ack_at ? '' : 'today-row-pending'}">
       <td class="col-time">${esc(sentAwayStr)}</td>
       <td class="col-time">${esc(landedStr)}</td>
@@ -5000,44 +4970,14 @@ function dismissAlert(pilotName) {
   document.getElementById('office-alert-banner').classList.remove('show');
 }
 
-// ─── Landing Acknowledgment ───────────────────────────────────────────────────
-const ACK_EMOJIS = ['👍', '✅', '🎉', '🤙', '🪂'];
-
-function renderAckPanel() {
-  const panel = document.getElementById('office-ack-panel');
-  if (!panel) return;
-  if (!pendingAcks.length) {
-    panel.style.display = 'none';
-    panel.innerHTML = '';
-    return;
-  }
-  panel.style.display = 'block';
-  panel.innerHTML = pendingAcks.map(ack => `
-    <div class="ack-item">
-      <div>
-        <div class="ack-pilot-name">🛬 ${esc(ack.pilot_name)}</div>
-        <div class="ack-label">Tap an emoji to confirm landing</div>
-      </div>
-      <div class="ack-emojis">
-        ${ACK_EMOJIS.map(e => `<button class="ack-emoji-btn" onclick="acknowledgeFlightLanding('${ack.flight_id}','${e}')" title="${e}">${e}</button>`).join('')}
-      </div>
-    </div>`).join('');
-}
-
+// Landing Acknowledgment — emoji panel removed
+function renderAckPanel() {}
 async function acknowledgeFlightLanding(flightId, emoji) {
   try {
-    const res = await officeFetch('/api/office/acknowledge-landing', {
-      method: 'POST',
-      body: JSON.stringify({ flight_id: flightId, emoji })
-    });
-    if (!res || !res.ok) { toast('Failed to acknowledge'); return; }
-    pendingAcks = pendingAcks.filter(a => a.flight_id !== flightId);
-    renderAckPanel();
-    await loadOfficeData();
-    renderTodayTab();
-  } catch (e) {
-    toast('Error: ' + e.message);
-  }
+    const res = await officeFetch('/api/office/acknowledge-landing', { method: 'POST', body: JSON.stringify({ flight_id: flightId, emoji: '✅' }) });
+    if (!res || !res.ok) return;
+    await loadOfficeData(); renderTodayTab();
+  } catch (_) {}
 }
 
 function renderExtensionPanel() {
@@ -5071,10 +5011,6 @@ async function respondExtension(requestId, action) {
   } catch (e) { toast('Error: ' + e.message); }
 }
 
-function toggleTodayAckPicker(flightId) {
-  const picker = document.getElementById('ack-picker-' + flightId);
-  if (picker) picker.style.display = picker.style.display === 'none' ? 'flex' : 'none';
-}
 
 // ─── Loop Board ───────────────────────────────────────────────────────────────
 async function loadLoopBoard() {
@@ -5375,16 +5311,7 @@ function connectWS() {
       case 'LANDED_EARLY':
         toast(`${data.pilot_name} landed!`);
         dismissAlert(data.pilot_name);
-        if (data.flight_id && data.pilot_name) {
-          pendingAcks.push({ pilot_name: data.pilot_name, flight_id: data.flight_id });
-          renderAckPanel();
-        }
         loadOfficeData();
-        break;
-      case 'LANDING_ACKNOWLEDGED':
-        pendingAcks = pendingAcks.filter(a => a.flight_id !== data.flight_id);
-        renderAckPanel();
-        toast(`${data.pilot_name} landing confirmed ${data.emoji}`);
         break;
       case 'DID_NOT_FLY':
         toast(`${data.pilot_name} — did not fly, timer cancelled`);

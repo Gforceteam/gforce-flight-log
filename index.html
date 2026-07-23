@@ -4226,10 +4226,15 @@ function renderGroupsTab() {
 }
 
 function makeSendAwayRow(isFirst) {
+  const numOpts = Array.from({length: 12}, (_, i) => `<option value="${i+1}">${i+1}</option>`).join('');
   return `<div class="send-away-row" style="display:flex;gap:8px;align-items:center;">
     <select class="send-away-sel" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:11px 12px;font-size:15px;cursor:pointer;">
       <option value="">Select pilot…</option>
       ${_sendAwayPilotOpts}
+    </select>
+    <select class="send-away-num" style="width:72px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:11px 8px;font-size:15px;cursor:pointer;text-align:center;">
+      <option value="">—</option>
+      ${numOpts}
     </select>
     ${isFirst ? '' : `<button onclick="this.closest('.send-away-row').remove()" style="padding:10px 14px;background:rgba(239,68,68,0.08);border:1px solid var(--danger);border-radius:8px;color:var(--danger);font-size:18px;font-weight:700;cursor:pointer;line-height:1;">×</button>`}
   </div>`;

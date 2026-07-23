@@ -1536,9 +1536,10 @@
           <button onclick="officeDeletePilot()" style="width:100%;padding:13px;background:rgba(239,68,68,0.08);border:1px solid var(--danger);border-radius:9999px;color:var(--danger);font-size:14px;font-weight:600;cursor:pointer;">Remove Pilot</button>
         </div>
 
-        <!-- Logout -->
+        <!-- Account -->
         <div class="card stat-section">
           <div class="stat-section-title" style="margin-bottom:6px;">Account</div>
+          <button onclick="showOfficeCpwModal()" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:10px;">🔑 Change Password</button>
           <button onclick="officeDoLogout()" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--danger);font-size:14px;font-weight:600;cursor:pointer;">Sign Out</button>
         </div>
 
@@ -5964,6 +5965,45 @@ function showVersionBanner(version) {
   document.body.appendChild(div);
 }
 
+// ─── Office Change Password ───────────────────────────────────────────────────
+function showOfficeCpwModal() {
+  document.getElementById('office-cpw-modal').style.display = 'flex';
+  document.getElementById('ocpw-current').value = '';
+  document.getElementById('ocpw-new').value = '';
+  document.getElementById('ocpw-confirm').value = '';
+  document.getElementById('ocpw-error').textContent = '';
+  document.getElementById('ocpw-current').focus();
+}
+function hideOfficeCpwModal() {
+  document.getElementById('office-cpw-modal').style.display = 'none';
+}
+async function submitOfficeCpw() {
+  const current = document.getElementById('ocpw-current').value;
+  const newPw   = document.getElementById('ocpw-new').value;
+  const confirm = document.getElementById('ocpw-confirm').value;
+  const errEl   = document.getElementById('ocpw-error');
+  errEl.textContent = '';
+  if (!current || !newPw || !confirm) { errEl.textContent = 'All fields are required'; return; }
+  if (newPw !== confirm) { errEl.textContent = 'New passwords do not match'; return; }
+  if (newPw.length < 6) { errEl.textContent = 'New password must be at least 6 characters'; return; }
+  const btn = document.getElementById('ocpw-submit');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const res = await officeFetch('/api/office/change-password', {
+      method: 'PUT',
+      body: JSON.stringify({ current_password: current, new_password: newPw })
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error || 'Failed'; return; }
+    hideOfficeCpwModal();
+    toast('Password changed successfully');
+  } catch (e) {
+    errEl.textContent = 'Network error';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Change Password';
+  }
+}
+
 // ─── Change Password ──────────────────────────────────────────────────────────
 function showChangePwModal() {
   document.getElementById('change-pw-modal').style.display = 'flex';
@@ -6019,6 +6059,25 @@ async function submitChangePassword() {
     <div style="display:flex;gap:10px;">
       <button onclick="hideChangePwModal()" style="flex:1;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
       <button id="cpw-submit" onclick="submitChangePassword()" style="flex:2;padding:12px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">Change Password</button>
+    </div>
+  </div>
+</div>
+
+<!-- Office Change Password Modal -->
+<div id="office-cpw-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:var(--card);border-radius:16px;padding:24px;width:100%;max-width:340px;border:1px solid var(--border);">
+    <div style="font-size:17px;font-weight:700;margin-bottom:16px;">🔑 Change Office Password</div>
+    <input id="ocpw-current" type="password" placeholder="Current password" maxlength="128"
+      style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:15px;margin-bottom:10px;box-sizing:border-box;" />
+    <input id="ocpw-new" type="password" placeholder="New password (min 6 chars)" maxlength="128"
+      style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:15px;margin-bottom:10px;box-sizing:border-box;" />
+    <input id="ocpw-confirm" type="password" placeholder="Confirm new password" maxlength="128"
+      style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:15px;margin-bottom:12px;box-sizing:border-box;"
+      onkeydown="if(event.key==='Enter')submitOfficeCpw()" />
+    <div id="ocpw-error" style="color:var(--danger);font-size:13px;margin-bottom:10px;min-height:18px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button onclick="hideOfficeCpwModal()" style="flex:1;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
+      <button id="ocpw-submit" onclick="submitOfficeCpw()" style="flex:2;padding:12px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">Change Password</button>
     </div>
   </div>
 </div>

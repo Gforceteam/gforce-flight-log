@@ -500,6 +500,28 @@ app.post('/api/auth/pilot', async (req, res) => {
   }
 });
 
+app.put('/api/office/change-password', verifyOffice, async (req, res) => {
+  const { current_password, new_password } = req.body;
+  if (!current_password || !new_password) return res.status(400).json({ error: 'Both fields required' });
+  if (new_password.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' });
+  try {
+    const stored = await queryOne("SELECT value FROM app_settings WHERE key = 'office_password_hash'");
+    let valid = false;
+    if (stored && stored.value) {
+      valid = await bcrypt.compare(current_password, stored.value);
+    } else {
+      valid = safeCompare(current_password, OFFICE_PASSWORD);
+    }
+    if (!valid) return res.status(401).json({ error: 'Current password is incorrect' });
+    const hash = await bcrypt.hash(new_password, 12);
+    await run("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('office_password_hash', ?)", [hash]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
 app.post('/api/auth/office', async (req, res) => {
   const ip = req.ip || req.connection.remoteAddress;
   const rl = checkRateLimit(ip);
@@ -509,7 +531,15 @@ app.post('/api/auth/office', async (req, res) => {
   try {
     const { password } = req.body;
     if (!password) return res.status(400).json({ error: 'Password required' });
-    if (!safeCompare(password, OFFICE_PASSWORD)) {
+    // Check DB-stored hash first (set via in-app change password), fall back to env var
+    const stored = await queryOne("SELECT value FROM app_settings WHERE key = 'office_password_hash'");
+    let valid = false;
+    if (stored && stored.value) {
+      valid = await bcrypt.compare(password, stored.value);
+    } else {
+      valid = safeCompare(password, OFFICE_PASSWORD);
+    }
+    if (!valid) {
       return res.status(401).json({ error: 'Invalid password' });
     }
     clearRateLimit(ip);

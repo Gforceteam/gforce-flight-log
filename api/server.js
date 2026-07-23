@@ -814,8 +814,9 @@ app.get('/api/flights', verifyToken, async (req, res) => {
     // Always use the authenticated pilot's own ID — never allow cross-pilot reads
     let sql = 'SELECT * FROM flights WHERE pilot_id = ?';
     const params = [req.pilot.id];
-    if (date_from) { sql += ' AND date >= ?'; params.push(date_from); }
-    if (date_to) { sql += ' AND date <= ?'; params.push(date_to); }
+    const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+    if (date_from && dateRe.test(date_from)) { sql += ' AND date >= ?'; params.push(date_from); }
+    if (date_to && dateRe.test(date_to)) { sql += ' AND date <= ?'; params.push(date_to); }
     sql += ' ORDER BY date DESC, flight_num ASC';
     const flights = await queryAll(sql, params);
     res.json(flights);
@@ -889,7 +890,7 @@ app.delete('/api/flights/:id', verifyToken, async (req, res) => {
 app.put('/api/pilot/wing', verifyToken, async (req, res) => {
   try {
     const { wing_reg } = req.body;
-    await run('UPDATE pilots SET current_wing = ? WHERE id = ?', [wing_reg || null, req.pilot.id]);
+    await run('UPDATE pilots SET current_wing = ? WHERE id = ?', [sanitize(wing_reg, 10) || null, req.pilot.id]);
     res.json({ message: 'Wing updated', wing_reg: wing_reg || null });
   } catch (e) {
     console.error(e);
@@ -1328,7 +1329,7 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
 app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
   try {
     const { group_name, pilot_ids, pilot_nums, is_peak_trip } = req.body;
-    if (!pilot_ids || !pilot_ids.length) return res.status(400).json({ error: 'pilot_ids required' });
+    if (!Array.isArray(pilot_ids) || !pilot_ids.length) return res.status(400).json({ error: 'pilot_ids required' });
 
     const now = new Date();
     const duration = is_peak_trip ? 120 : 60; // peak trips get 2 hours, standard 1 hour

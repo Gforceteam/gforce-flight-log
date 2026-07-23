@@ -1425,10 +1425,6 @@
     <div class="office-tab-content active" id="office-tab-pilots">
       <div id="away-list"></div>
       <div id="groups-panel"></div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 4px;">
-        <div class="section-title" style="margin-bottom:0;">Pilots</div>
-      </div>
-      <div id="pilots-list"></div>
     </div>
 
     <div class="office-tab-content" id="office-tab-loop">
@@ -4193,100 +4189,73 @@ function officePresenceVal(p) {
   return Number(p.available) === 1 ? 1 : 0;
 }
 
-// ─── Groups Tab ───────────────────────────────────────────────────────────────
-function renderGroupsTab() {
-  _groupSelected.clear();
-  const el = document.getElementById('groups-panel');
-  const alpha = (a, b) => a.name.localeCompare(b.name);
-  const available = officePilots.filter(p => p.status !== 'airborne' && officePresenceVal(p) === 1).sort(alpha);
-  const airborne = officePilots.filter(p => p.status === 'airborne').sort(alpha);
+// ─── Groups Tab (Send Away) ───────────────────────────────────────────────────
+let _sendAwayPilotOpts = '';
 
-  let html = `
+function renderGroupsTab() {
+  const el = document.getElementById('groups-panel');
+  if (!el) return;
+  const notAirborne = officePilots.filter(p => p.status !== 'airborne').sort((a, b) => a.name.localeCompare(b.name));
+  _sendAwayPilotOpts = notAirborne.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  el.innerHTML = `
     <div style="padding:16px 0 8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <div class="section-title" style="margin-top:0;margin-bottom:0;">Send Pilot(s) Away</div>
+        <div class="section-title" style="margin-top:0;margin-bottom:0;">Send Away</div>
         <button onclick="loadOfficeData()" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">↻ Refresh</button>
       </div>
       <div class="card" style="margin-bottom:16px;">
-        <div style="display:flex;gap:10px;align-items:flex-start;">
-          <div class="field" style="flex:1;margin-bottom:0;">
-            <label>Group Name / Booking <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
-            <input type="text" id="group-name-input" placeholder="e.g. Smith Family or BK-2042" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:16px;outline:none;" />
-          </div>
-          <button onclick="submitGroupAway()" style="margin-top:20px;padding:12px 20px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;">Send Away</button>
+        <div id="send-away-rows" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+          ${makeSendAwayRow(true)}
         </div>
-        <div class="field">
-          <label>Select Pilots</label>
-          <div id="group-pilot-checkboxes" style="display:flex;flex-direction:column;gap:8px;">`;
-
-  if (available.length === 0) {
-    html += `<div style="color:var(--muted);font-size:14px;">No pilots have set themselves as available</div>`;
-  } else {
-    available.forEach(p => {
-      html += `
-        <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--surface);border-radius:8px;cursor:pointer;border:2px solid transparent;" id="grp-row-${p.id}" onclick="toggleGroupPilot('${p.id}')">
-          <div style="width:22px;height:22px;border-radius:5px;border:2px solid var(--accent);background:var(--card);display:flex;align-items:center;justify-content:center;flex-shrink:0;" id="grp-chk-${p.id}">
-            <span id="grp-tick-${p.id}" style="display:none;color:var(--accent);font-size:16px;line-height:1;">✓</span>
-          </div>
-          <span style="font-size:15px;font-weight:500;">${esc(p.name)}</span>
-        </div>`;
-    });
-  }
-
-  html += `
+        <div style="display:flex;gap:10px;">
+          <button onclick="addSendAwayRow()" style="padding:11px 20px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:22px;font-weight:400;cursor:pointer;line-height:1;">+</button>
+          <button onclick="submitSendAway()" style="flex:1;padding:12px 20px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;">Send Away</button>
         </div>
       </div>
     </div>`;
-
-
-
-  el.innerHTML = html;
 }
 
-const _groupSelected = new Set();
-
-function toggleGroupPilot(id) {
-  const row = document.getElementById('grp-row-' + id);
-  const tick = document.getElementById('grp-tick-' + id);
-  const chk  = document.getElementById('grp-chk-'  + id);
-  if (!row) return;
-  if (_groupSelected.has(id)) {
-    _groupSelected.delete(id);
-    tick.style.display = 'none';
-    row.style.borderColor = 'transparent';
-    chk.style.background = 'var(--card)';
-    tick.style.color = 'var(--accent)';
-  } else {
-    _groupSelected.add(id);
-    tick.style.display = 'block';
-    row.style.borderColor = 'var(--accent)';
-    chk.style.background = 'var(--accent)';
-    tick.style.color = '#000';
-  }
+function makeSendAwayRow(isFirst) {
+  return `<div class="send-away-row" style="display:flex;gap:8px;align-items:center;">
+    <select class="send-away-sel" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:11px 12px;font-size:15px;cursor:pointer;">
+      <option value="">Select pilot…</option>
+      ${_sendAwayPilotOpts}
+    </select>
+    ${isFirst ? '' : `<button onclick="this.closest('.send-away-row').remove()" style="padding:10px 14px;background:rgba(239,68,68,0.08);border:1px solid var(--danger);border-radius:8px;color:var(--danger);font-size:18px;font-weight:700;cursor:pointer;line-height:1;">×</button>`}
+  </div>`;
 }
 
-async function submitGroupAway() {
-  const name = document.getElementById('group-name-input').value.trim() || 'Group';
-  if (_groupSelected.size === 0) { toast('Select at least one pilot'); return; }
-  const availablePilots = officePilots.filter(p => p.status !== 'airborne' && officePresenceVal(p) === 1);
-  const pilot_ids = availablePilots.filter(p => _groupSelected.has(p.id)).map(p => p.id);
-  const pilot_names = availablePilots.filter(p => _groupSelected.has(p.id)).map(p => p.name);
+function addSendAwayRow() {
+  const container = document.getElementById('send-away-rows');
+  if (!container) return;
+  const div = document.createElement('div');
+  div.innerHTML = makeSendAwayRow(false);
+  container.appendChild(div.firstElementChild);
+}
+
+async function submitSendAway() {
+  const sels = [...document.querySelectorAll('#send-away-rows .send-away-sel')];
+  const pilots = sels.reduce((acc, sel) => {
+    if (sel.value && !acc.find(p => p.id === sel.value))
+      acc.push({ id: sel.value, name: sel.options[sel.selectedIndex].textContent });
+    return acc;
+  }, []);
+  if (pilots.length === 0) { toast('Select at least one pilot', 'warn'); return; }
   try {
-    const res = await officeFetch('/api/office/group-leave', {
-      method: 'POST',
-      body: JSON.stringify({ group_name: name, pilot_ids })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      toast(`Group "${name}" away — ${pilot_names.join(', ')}`);
-      document.getElementById('group-name-input').value = '';
-      _groupSelected.clear();
-      await loadOfficeData();
-      renderGroupsTab();
+    let res, data;
+    if (pilots.length === 1) {
+      res = await officeFetch('/api/office/leave', { method: 'POST', body: JSON.stringify({ pilot_id: pilots[0].id, client_name: '' }) });
+      data = await res.json();
+      if (res.ok) toast(`${pilots[0].name} sent away`);
+      else toast(data.error || 'Error', 'err');
     } else {
-      toast('Error: ' + (data.error || 'Failed'));
+      res = await officeFetch('/api/office/group-leave', { method: 'POST', body: JSON.stringify({ group_name: '', pilot_ids: pilots.map(p => p.id) }) });
+      data = await res.json();
+      if (res.ok) toast(`Away: ${pilots.map(p => p.name).join(', ')}`);
+      else toast(data.error || 'Error', 'err');
     }
-  } catch (e) { toast('Error: ' + e.message); }
+    if (res.ok) { await loadOfficeData(); renderGroupsTab(); }
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
 }
 
 // ─── Currently Away Tab ───────────────────────────────────────────────────────
@@ -4385,8 +4354,9 @@ function renderAwayTab() {
   updateTimers();
 }
 
-// ─── Office Tab (Flight Following) ───────────────────────────────────────────
-function renderOfficeTab() {
+// ─── Office Tab (Flight Following) — presence panel removed ──────────────────
+function renderOfficeTab() { /* presence system removed */ }
+function _renderOfficeTab_unused() {
   const el = document.getElementById('pilots-list');
 
   // Sort available by last_landed_at ascending — longest wait first (null = never flown, top priority)

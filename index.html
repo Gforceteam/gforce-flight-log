@@ -4241,7 +4241,9 @@ async function submitSendAway() {
       if (res.ok) toast(`${pilots[0].name} sent away`);
       else toast(data.error || 'Error', 'err');
     } else {
-      res = await officeFetch('/api/office/group-leave', { method: 'POST', body: JSON.stringify({ group_name: pilots.map(p => p.num).filter(Boolean).join('/'), pilot_ids: pilots.map(p => p.id) }) });
+      const pilotNums = {};
+      pilots.forEach(p => { pilotNums[p.id] = p.num || ''; });
+      res = await officeFetch('/api/office/group-leave', { method: 'POST', body: JSON.stringify({ pilot_ids: pilots.map(p => p.id), pilot_nums: pilotNums }) });
       data = await res.json();
       if (res.ok) toast(`Away: ${pilots.map(p => p.name).join(', ')}`);
       else toast(data.error || 'Error', 'err');
@@ -4330,7 +4332,7 @@ function renderAwayTab() {
         html += `
           <tr id="pilot-card-${p.id}" class="group-row">
             <td class="col-pilot">${esc(p.name)}</td>
-            <td style="text-align:center;font-weight:700;color:var(--accent);font-size:14px;">—</td>
+            <td style="text-align:center;font-weight:700;color:var(--accent);font-size:14px;">${p.client_name ? esc(p.client_name) : '—'}</td>
             <td class="col-timer">
               <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="margin:0;">--:--</div>
             </td>

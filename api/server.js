@@ -1887,7 +1887,7 @@ app.post('/api/office/loop-board/tally', verifyOffice, async (req, res) => {
     const { slot, col, value } = req.body;
     if (!slot || slot < 1 || slot > 20) return res.status(400).json({ error: 'Invalid slot' });
     if (!col || col < 1 || col > 12) return res.status(400).json({ error: 'Invalid column' });
-    const allowed = ['', '1', 'L', ',.,'];
+    const allowed = ['', '1', 'L', '-'];
     if (!allowed.includes(value || '')) return res.status(400).json({ error: 'Invalid value' });
     const row = await queryOne('SELECT tallies FROM loop_board WHERE slot = ?', [slot]);
     if (!row) return res.status(404).json({ error: 'Slot not found' });

@@ -5033,7 +5033,7 @@ function renderLoopBoard() {
   const el = document.getElementById('loop-board-list');
   if (!el) return;
   const available = (officePilots || []).sort((a, b) => a.name.localeCompare(b.name));
-  const tallyOpts = ['', '1', 'L', ',.,'];
+  const tallyOpts = ['', '1', 'L', '-'];
   let html = '<table class="loop-table"><thead><tr>';
   html += '<th class="loop-th-slot">#</th><th class="loop-th-pilot">Pilot</th>';
   for (let c = 1; c <= 12; c++) html += `<th class="loop-th-tally">${c}</th>`;

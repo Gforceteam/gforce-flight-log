@@ -1398,7 +1398,6 @@
   <div class="office-tab-bar">
     <button class="office-tab-btn active" onclick="showOfficeTab('pilots')" id="office-tab-pilots-btn">Flight Following</button>
     <button class="office-tab-btn" onclick="showOfficeTab('loop')" id="office-tab-loop-btn">Loop Board</button>
-    <button class="office-tab-btn" onclick="showOfficeTab('today')" id="office-tab-today-btn">Today</button>
     <button class="office-tab-btn" onclick="showOfficeTab('settings')" id="office-tab-settings-btn">⚙</button>
   </div>
 
@@ -1412,16 +1411,14 @@
       <div class="loop-board" id="loop-board-list"><p style="color:var(--muted);padding:20px;text-align:center;">Loading...</p></div>
     </div>
 
-    <div class="office-tab-content" id="office-tab-today">
-      <div class="today-summary" id="today-summary"></div>
-      <div id="office-today-list"></div>
-    </div>
 
     <div class="office-tab-content" id="office-tab-ff">
       <div class="ff-wrap" id="office-ff-content"><div class="empty-state">Loading…</div></div>
     </div>
 
     <div class="office-tab-content" id="office-tab-settings">
+      <div class="today-summary" id="today-summary"></div>
+      <div id="office-today-list"></div>
       <div style="padding:4px 0 24px;">
 
         <!-- Push Notifications toggle -->
@@ -4131,7 +4128,7 @@ function refreshOfficeUiAfterLoad() {
   switch (officeActiveTab) {
     case 'pilots': renderAwayTab(); renderGroupsTab(); renderOfficeTab(); break;
     case 'loop': renderLoopBoard(); break;
-    case 'today': renderTodayTab(); break;
+    case 'settings': renderTodayTab(); break;
     case 'flights': renderFlightsTab(); break;
     case 'ff': renderOfficeFF(); break;
     case 'settings': break;
@@ -5094,14 +5091,15 @@ function showOfficeTab(name) {
   officeActiveTab = name;
   document.querySelectorAll('.office-tab-content').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.office-tab-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById(`office-tab-${name}`).classList.add('active');
-  document.getElementById(`office-tab-${name}-btn`).classList.add('active');
+  const tabEl = document.getElementById(`office-tab-${name}`);
+  if (tabEl) tabEl.classList.add('active');
+  const btnEl = document.getElementById(`office-tab-${name}-btn`);
+  if (btnEl) btnEl.classList.add('active');
   if (name === 'ff') renderOfficeFF();
   if (name === 'pilots') { renderAwayTab(); renderGroupsTab(); renderOfficeTab(); }
   if (name === 'loop') loadLoopBoard();
-  if (name === 'today') renderTodayTab();
   if (name === 'flights') renderFlightsTab();
-  if (name === 'settings') { populateOfficeResetPilots(); populateOfficeDeletePilots(); loadOfficeSettings(); }
+  if (name === 'settings') { renderTodayTab(); populateOfficeResetPilots(); populateOfficeDeletePilots(); loadOfficeSettings(); }
 }
 
 let _officePushEnabled = false;

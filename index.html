@@ -5148,7 +5148,8 @@ async function autoFillLoopBoard(fromSlot, firstPilotId) {
   const sorted = [...(officePilots || [])].sort(pilotSort);
   const startIdx = sorted.findIndex(p => p.id === firstPilotId);
   if (startIdx === -1) return;
-  const toFill = sorted.slice(startIdx + 1, startIdx + 1 + (loopBoardRows - fromSlot));
+  const count = loopBoardRows - fromSlot;
+  const toFill = Array.from({ length: count }, (_, i) => sorted[(startIdx + 1 + i) % sorted.length]);
   await Promise.all(toFill.map((p, i) =>
     officeFetch('/api/office/loop-board/slot', {
       method: 'POST',

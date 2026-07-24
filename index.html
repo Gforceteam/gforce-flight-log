@@ -2756,9 +2756,7 @@ async function setPilotPresenceClient(next, opts = {}) {
     renderDashboard();
     const msgs = { 0: '🔴 Signed out', 1: '🟢 Available for dispatch', 2: '🟣 Down Below (off dispatch)' };
     toast(msgs[pilotPresence] || 'Status updated');
-    if (pilotPresence === 1 && 'Notification' in window && Notification.permission === 'default') {
-      requestAndSubscribePush(null);
-    } else if (pilotPresence === 1 && 'Notification' in window && Notification.permission === 'granted') {
+    if (pilotPresence === 1 && 'Notification' in window && Notification.permission === 'granted') {
       subscribeToPush();
     }
   } catch (e) {
@@ -2862,12 +2860,7 @@ function renderDashboard() {
         <div style="font-size:15px;font-weight:700;color:var(--warning);margin-bottom:4px;">⏳ Awaiting Office Confirmation</div>
         <div style="font-size:13px;color:var(--muted);">${pendingFlights.length} flight${pendingFlights.length !== 1 ? 's' : ''} pending — office needs to confirm your landing${pendingFlights.length !== 1 ? 's' : ''}.</div>
       </div>` : '';
-    const notifPrompt = ('Notification' in window && Notification.permission !== 'granted') ? `
-      <div style="margin-top:20px;padding:14px 16px;background:rgba(243,115,41,0.12);border:1px solid rgba(243,115,41,0.4);border-radius:12px;text-align:center;">
-        <div style="font-size:15px;font-weight:700;color:var(--accent);margin-bottom:6px;">🔔 Enable Push Notifications</div>
-        <div style="font-size:13px;color:var(--muted);margin-bottom:12px;">Get an alert on your phone when office sends you away — even when the app is closed.</div>
-        <button onclick="requestAndSubscribePush(this)" style="background:var(--accent);border:none;border-radius:9999px;color:#fff;padding:10px 24px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">Enable Notifications</button>
-      </div>` : '';
+    const notifPrompt = '';
     const cachedUrl = avatarCache[pilotId];
     const avatarHtml = cachedUrl
       ? `<div class="dashboard-avatar has-photo"><img src="${cachedUrl}" alt="" /></div>`

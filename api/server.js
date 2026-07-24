@@ -1894,6 +1894,15 @@ app.put('/api/office/settings/push-notifications', verifyOffice, async (req, res
 });
 
 // ─── Loop Board ───────────────────────────────────────────────────────────────
+app.get('/api/pilot/loop-board', verifyPilotOrOffice, async (req, res) => {
+  try {
+    const rows = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board ORDER BY slot ASC');
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/office/loop-board', verifyOffice, async (req, res) => {
   try {
     const rows = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board ORDER BY slot ASC');

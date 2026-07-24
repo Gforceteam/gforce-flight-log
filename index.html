@@ -145,6 +145,51 @@
     /* ── PILOT APP ─────────────────────────────────────────────────────── */
     #app-page { display: none; }
 
+    /* Pilot tab bar */
+    .pilot-tab-bar {
+      display: flex; background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 49px; z-index: 9;
+    }
+    .pilot-tab-btn {
+      flex: 1; padding: 13px 8px; background: none; border: none;
+      color: var(--muted); font-size: 13px; font-weight: 700;
+      font-family: 'Montserrat', sans-serif; letter-spacing: 0.3px;
+      cursor: pointer; border-bottom: 3px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .pilot-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .pilot-tab-content { display: none; padding: 16px; padding-bottom: 40px; max-width: 500px; margin: 0 auto; }
+    .pilot-tab-content.active { display: block; animation: tabFadeIn 0.18s ease; }
+
+    /* Settings icon in pilot header */
+    .pilot-icon-btn {
+      background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.10);
+      border-radius: 8px; color: var(--text); font-size: 18px;
+      padding: 5px 9px; cursor: pointer; line-height: 1;
+    }
+    @media (prefers-color-scheme: dark) {
+      .pilot-icon-btn { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.12); }
+    }
+    :root[data-theme="light"] .pilot-icon-btn { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.10); }
+    :root[data-theme="dark"]  .pilot-icon-btn { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.12); }
+
+    /* Sub-page back button */
+    .pilot-back-btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: none; border: none; color: var(--accent);
+      font-size: 14px; font-weight: 700; padding: 4px 0 16px;
+      cursor: pointer; font-family: 'Montserrat', sans-serif;
+    }
+
+    /* Sub-pages (flights, stats, ff, log) */
+    .page { display: none; padding: 16px; padding-bottom: 40px; max-width: 500px; margin: 0 auto; }
+    .page.active { display: block; animation: tabFadeIn 0.18s ease; }
+
+    /* Stats month nav inside page (no longer sticky header) */
+    .stats-page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .stats-page-header h2 { font-size: 20px; font-weight: 800; font-family: 'Montserrat', sans-serif; color: var(--text); margin: 0; }
+
     .status-bar {
       background: var(--card);
       border-bottom: 1px solid var(--border);
@@ -1086,6 +1131,7 @@
 
 <!-- ── PILOT APP PAGE ──────────────────────────────────────────────────────── -->
 <div id="app-page">
+  <!-- Header -->
   <div class="status-bar">
     <img src="icon-192.png" alt="GForce" class="status-bar-logo">
     <div class="pilot-left">
@@ -1100,35 +1146,79 @@
     </div>
     <div class="status-right">
       <span class="server-badge" id="server-badge">...</span>
-      <button onclick="doLogout()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;padding:4px 10px;cursor:pointer">Logout</button>
+      <button onclick="showPilotTab('settings')" class="pilot-icon-btn" title="Settings">⚙</button>
     </div>
   </div>
 
-  <div class="page-header" id="header-dashboard">
-    <h1>Dashboard</h1>
-    <p id="header-dashboard-sub"></p>
+  <!-- Main pilot tab bar -->
+  <div class="pilot-tab-bar" id="pilot-tab-bar">
+    <button class="pilot-tab-btn active" onclick="showPilotTab('ff')" id="pilot-tab-ff-btn">Flight Following</button>
+    <button class="pilot-tab-btn" onclick="showPilotTab('loop')" id="pilot-tab-loop-btn">Loop Board</button>
   </div>
-  <div class="page-header" id="header-flights" style="display:none">
-    <h1>My Flights</h1>
-    <p id="header-flights-sub"></p>
+
+  <!-- Tab: Flight Following -->
+  <div class="pilot-tab-content active" id="pilot-tab-ff">
+    <div class="dashboard-status" id="dashboard-content"></div>
   </div>
-  <div class="page-header" id="header-settings" style="display:none">
-    <h1>Settings</h1>
-    <p>Profile, gliders &amp; preferences</p>
+
+  <!-- Tab: Loop Board -->
+  <div class="pilot-tab-content" id="pilot-tab-loop">
+    <div id="pilot-loop-board-wrap"><p style="color:var(--muted);padding:20px;text-align:center;">Loading…</p></div>
   </div>
-  <div class="page-header" id="header-stats" style="display:none">
-    <div class="stats-title-row">
-      <h1>Stats</h1>
+
+  <!-- Tab: Settings (opened via ⚙, not in tab bar) -->
+  <div class="pilot-tab-content" id="pilot-tab-settings">
+    <div style="padding:4px 0 24px;">
+
+      <!-- My Flights -->
+      <div class="card stat-section" style="margin-bottom:12px;">
+        <div class="stat-section-title" style="margin-bottom:6px;">📋 My Flights</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">View, search and export your personal flight log.</div>
+        <button onclick="showSubPage('flights')" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Open My Flights</button>
+      </div>
+
+      <!-- Stats -->
+      <div class="card stat-section" style="margin-bottom:12px;">
+        <div class="stat-section-title" style="margin-bottom:6px;">📊 Stats</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Monthly flight totals, trends and breakdowns.</div>
+        <button onclick="showSubPage('stats')" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Open Stats</button>
+      </div>
+
+      <!-- Duty Sheet -->
+      <div class="card stat-section" style="margin-bottom:12px;">
+        <div class="stat-section-title" style="margin-bottom:6px;">📅 Duty Sheet</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Weekly flight-following records and hours worked.</div>
+        <button onclick="showSubPage('ff')" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Open Duty Sheet</button>
+      </div>
+
+      <!-- Existing settings content injected here at runtime -->
+      <div id="pilot-settings-inner"></div>
+    </div>
+  </div>
+
+  <!-- Sub-pages: full-screen overlays with a back button -->
+  <div class="page" id="page-flights">
+    <button class="pilot-back-btn" onclick="showPilotTab('settings')">← Back</button>
+    <div id="flights-list"></div>
+  </div>
+
+  <div class="page" id="page-stats">
+    <button class="pilot-back-btn" onclick="showPilotTab('settings')">← Back</button>
+    <div class="stats-page-header">
+      <h2>Stats</h2>
       <div class="stats-month-nav">
         <button onclick="changeStatsMonth(-1)" id="stats-prev-btn">‹</button>
         <span id="stats-month-label"></span>
         <button onclick="changeStatsMonth(1)" id="stats-next-btn">›</button>
       </div>
     </div>
+    <div class="stats-grid" id="stats-grid"></div>
+    <div id="stats-breakdown"></div>
   </div>
 
-  <div class="page active" id="page-dashboard">
-    <div class="dashboard-status" id="dashboard-content"></div>
+  <div class="page" id="page-ff">
+    <button class="pilot-back-btn" onclick="showPilotTab('settings')">← Back</button>
+    <div id="ff-content"><div class="empty-state">Loading…</div></div>
   </div>
 
   <div class="page" id="page-log">
@@ -1205,20 +1295,8 @@
     </div>
   </div>
 
-  <div class="page" id="page-flights">
-    <div id="flights-list"></div>
-  </div>
-
-  <div class="page" id="page-stats">
-    <div class="stats-grid" id="stats-grid"></div>
-    <div id="stats-breakdown"></div>
-  </div>
-
-  <div class="page" id="page-ff">
-    <div id="ff-content"><div class="empty-state">Loading…</div></div>
-  </div>
-
-  <div class="page" id="page-settings">
+  <!-- Settings inner content (moved into pilot-settings-inner at runtime) -->
+  <div id="page-settings-source" style="display:none">
     <div class="settings-page-inner">
 
       <p class="settings-intro">Profile photo, export name, and gliders sync with logging and weekly CSV. Everything else stays on this device.</p>
@@ -1361,31 +1439,6 @@
     </div>
   </div>
 </div>
-
-
-<!-- ── BOTTOM NAV (pilot only) ────────────────────────────────────────────── -->
-<nav id="bottom-nav" style="display:none">
-  <button class="active" onclick="showPage('dashboard')" id="nav-dashboard">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
-    Dashboard
-  </button>
-  <button onclick="showPage('flights')" id="nav-flights">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-    Flights
-  </button>
-  <button onclick="showPage('stats')" id="nav-stats">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-    Stats
-  </button>
-  <button onclick="showPage('ff')" id="nav-ff">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="14" x2="21" y2="14"/><line x1="8" y1="4" x2="8" y2="20"/></svg>
-    D/Sheet
-  </button>
-  <button onclick="showPage('settings')" id="nav-settings">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-    Settings
-  </button>
-</nav>
 
 <!-- ── OFFICE DASHBOARD ────────────────────────────────────────────────────── -->
 <div id="office-dashboard">
@@ -2212,7 +2265,6 @@ function doLogout() {
   localStorage.removeItem('gforce_pilot_name');
   localStorage.removeItem('gforce_pilot_refresh');
   document.getElementById('app-page').style.display = 'none';
-  document.getElementById('bottom-nav').style.display = 'none';
   document.getElementById('login-page').style.display = 'flex';
   document.getElementById('pilot-pin').value = '';
   loadPilotList();
@@ -2227,7 +2279,6 @@ function openPilotExportNameSettings() {
 function showApp(name) {
   document.getElementById('login-page').style.display = 'none';
   document.getElementById('app-page').style.display = 'block';
-  document.getElementById('bottom-nav').style.display = 'flex';
   document.getElementById('pilot-name-display').textContent = name;
   const av = document.getElementById('pilot-avatar');
   if (av) {
@@ -3969,37 +4020,95 @@ function renderStats() {
   document.getElementById('stats-breakdown').innerHTML = rowCards + wingCard + wingPredictionCard + compCard + chartCard + takeoffCard + landingCard + gondolaCard + climbCard + drivesCard + exportCard;
 }
 
-function showPage(name) {
+// ─── Pilot Tab System ────────────────────────────────────────────────────────
+let pilotActiveTab = 'ff';
+let pilotLoopBoard = [];
+
+function showPilotTab(name) {
+  pilotActiveTab = name;
+  // Hide any open sub-pages
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.page-header').forEach(h => h.style.display = 'none');
-  document.getElementById('page-'+name).classList.add('active');
-  const navBtn = document.getElementById('nav-'+name);
-  if (navBtn) navBtn.classList.add('active');
-  const hdr = document.getElementById('header-'+name);
-  if (hdr) hdr.style.display = 'block';
-  if (name === 'stats') {
-    statsMonthOffset = 0;
-    renderStats();
-    window.scrollTo({ top: 0, behavior: 'instant' });
-    document.getElementById('header-stats').classList.remove('stats-scrolled');
-  }
-  if (name === 'ff') renderPilotFF();
+  // Switch tab content
+  document.querySelectorAll('.pilot-tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.pilot-tab-btn').forEach(b => b.classList.remove('active'));
+  const tab = document.getElementById('pilot-tab-' + name);
+  if (tab) tab.classList.add('active');
+  const btn = document.getElementById('pilot-tab-' + name + '-btn');
+  if (btn) btn.classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'instant' });
+  if (name === 'loop') loadPilotLoopBoard();
   if (name === 'settings') {
-    const sp = document.getElementById('page-settings');
-    if (sp) sp.scrollTop = 0;
+    // Move settings HTML into the settings tab on first open
+    const src = document.getElementById('page-settings-source');
+    const dst = document.getElementById('pilot-settings-inner');
+    if (src && dst && src.firstElementChild && !dst.firstElementChild) {
+      dst.appendChild(src.firstElementChild);
+    }
     void renderSettingsPage();
   }
+}
+
+/** Open a full-screen sub-page (flights, stats, ff, log) over the tab UI. */
+function showSubPage(name) {
+  document.querySelectorAll('.pilot-tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const pg = document.getElementById('page-' + name);
+  if (pg) pg.classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'instant' });
+  if (name === 'stats') { statsMonthOffset = 0; renderStats(); }
+  if (name === 'ff') renderPilotFF();
   if (name === 'log') refreshWingDropdown();
 }
 
-// Collapse stats header on scroll
-{
-  const _statsHdr = document.getElementById('header-stats');
-  window.addEventListener('scroll', () => {
-    if (!_statsHdr || _statsHdr.style.display === 'none') return;
-    _statsHdr.classList.toggle('stats-scrolled', window.scrollY > 30);
-  }, { passive: true });
+/** Legacy helper — log flight page still called via showPage('log'). */
+function showPage(name) {
+  if (name === 'log') { showSubPage('log'); return; }
+  if (name === 'dashboard') { showPilotTab('ff'); return; }
+  if (name === 'settings') { showPilotTab('settings'); return; }
+  showSubPage(name);
+}
+
+// ─── Pilot Loop Board (read-only) ────────────────────────────────────────────
+async function loadPilotLoopBoard() {
+  try {
+    const res = await apiFetch('/api/pilot/loop-board');
+    if (!res || !res.ok) return;
+    pilotLoopBoard = await res.json();
+    renderPilotLoopBoard();
+  } catch (_) {}
+}
+
+function renderPilotLoopBoard() {
+  const el = document.getElementById('pilot-loop-board-wrap');
+  if (!el) return;
+  const board = pilotLoopBoard || [];
+  const maxSlot = board.reduce((m, s) => s.pilot_id ? Math.max(m, s.slot) : m, 0);
+  if (maxSlot === 0) {
+    el.innerHTML = '<div class="empty-state">Loop Board is empty</div>';
+    return;
+  }
+  const tallyLabels = ['', '1', 'L', '-'];
+  let html = '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table class="loop-table"><thead><tr>';
+  html += '<th class="loop-th-slot">#</th><th class="loop-th-pilot">Pilot</th>';
+  for (let c = 1; c <= 12; c++) html += `<th class="loop-th-tally">${c}</th>`;
+  html += '</tr></thead><tbody>';
+  for (let i = 1; i <= maxSlot; i++) {
+    const slot = board.find(s => s.slot === i) || { slot: i, pilot_name: null, tallies: null };
+    let tallies = Array(12).fill('');
+    try { const t = JSON.parse(slot.tallies || '[]'); if (Array.isArray(t)) tallies = t; } catch (_) {}
+    while (tallies.length < 12) tallies.push('');
+    const isMe = slot.pilot_name === pilotName;
+    html += `<tr${isMe ? ' style="background:rgba(243,115,41,0.08);"' : ''}>`;
+    html += `<td class="loop-td-slot">${i}</td>`;
+    html += `<td class="loop-td-pilot" style="font-weight:${isMe ? '800' : '500'};color:${isMe ? 'var(--accent)' : 'var(--text)'};">${slot.pilot_name ? esc(slot.pilot_name) : '<span style="color:var(--muted)">—</span>'}</td>`;
+    for (let c = 1; c <= 12; c++) {
+      const v = tallies[c - 1] || '';
+      html += `<td class="loop-td-tally"><span class="loop-tally-sel${v ? ' has-val' : ''}" style="display:block;text-align:center;padding:8px 4px;font-size:14px;">${v || '–'}</span></td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
 }
 
 // Swipe left/right on stats page to change month
@@ -5539,6 +5648,8 @@ function connectWS() {
       case 'LOOP_BOARD_UPDATE':
         loopBoard = data.board;
         if (officeActiveTab === 'loop') renderLoopBoard();
+        pilotLoopBoard = data.board;
+        if (pilotActiveTab === 'loop') renderPilotLoopBoard();
         break;
       case 'PILOT_DELETED':
         toast(`${data.pilot_name} removed`);

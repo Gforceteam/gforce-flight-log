@@ -1196,6 +1196,44 @@ app.post('/api/pilot/cancel-timer', verifyToken, async (req, res) => {
   }
 });
 
+// ─── Pilot self-reports landing — clears timer, creates pending flight record ──
+app.post('/api/pilot/land', verifyToken, async (req, res) => {
+  try {
+    const timer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
+    if (!timer) return res.status(404).json({ error: 'No active timer' });
+
+    const now = new Date().toISOString();
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+    const flightId = uuidv4();
+
+    const todayCount = await queryOne(
+      'SELECT COUNT(*) as c FROM flights WHERE pilot_id = ? AND date = ?',
+      [req.pilot.id, today]
+    );
+    const flightNum = (Number(todayCount?.c) || 0) + 1;
+
+    const pilotRec = await queryOne('SELECT current_wing FROM pilots WHERE id = ?', [req.pilot.id]);
+
+    await run(
+      `INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, sent_away_at, wing_reg)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [flightId, req.pilot.id, timer.client_name || '', today, flightNum,
+       0, '', '', 0, 0, 'PENDING_PILOT_FILL', now, timer.started_at || null, pilotRec?.current_wing || null]
+    );
+
+    await run('DELETE FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
+    await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)',
+      [uuidv4(), req.pilot.id, 'pilot_landed', now]);
+
+    broadcast({ type: 'LANDED_EARLY', pilot_id: req.pilot.id, pilot_name: req.pilot.name, landed_at: now, flight_id: flightId });
+
+    res.json({ flight_id: flightId });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ─── Daily Hours Worked — stored on last flight of the day ───────────────────
 app.put('/api/pilot/hours', verifyToken, async (req, res) => {
   const { date, hours } = req.body;

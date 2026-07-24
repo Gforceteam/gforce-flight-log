@@ -198,12 +198,14 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      position: relative;
       position: sticky;
       top: 0;
       z-index: 10;
     }
     .status-bar-logo { height: 32px; width: 32px; border-radius: 50%; flex-shrink: 0; filter: drop-shadow(0 0 8px rgba(243,115,41,0.5)); }
     .pilot-left { display: flex; align-items: center; gap: 10px; }
+    .status-bar-center { display: flex; align-items: center; gap: 8px; position: absolute; left: 50%; transform: translateX(-50%); }
     .pilot-avatar-sm {
       width: 34px; height: 34px; border-radius: 50%;
       background: linear-gradient(135deg, var(--accent), #c95f1a);
@@ -555,6 +557,10 @@
       letter-spacing: 4px; text-transform: uppercase;
       font-family: 'Montserrat', sans-serif;
     }
+    .office-header-center { position: absolute; left: 50%; transform: translateX(-50%); pointer-events: none; }
+    .office-dispatch-label { font-size: 18px; font-weight: 800; font-family: 'Montserrat', sans-serif; letter-spacing: 3px; color: #111111; text-transform: uppercase; }
+    @media (prefers-color-scheme: dark) { .office-dispatch-label { color: var(--text); } }
+    :root[data-theme="dark"] .office-dispatch-label { color: var(--text); }
     .office-header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .office-airborne-chip {
       display: none; align-items: center; gap: 6px;
@@ -1134,15 +1140,9 @@
   <!-- Header -->
   <div class="status-bar">
     <img src="./logo-icon.png" alt="GForce" class="status-bar-logo">
-    <div class="pilot-left">
+    <div class="status-bar-center">
       <div class="pilot-avatar-sm" id="pilot-avatar">B</div>
-      <div>
-        <div class="pilot-greeting">Pilot</div>
-        <div class="pilot-name-sm pilot-name-tappable" id="pilot-name-display" role="button" tabindex="0"
-          title="Edit name on export (Settings)"
-          onclick="openPilotExportNameSettings()"
-          onkeydown="if(event.key==='Enter'||event.key===' ') { event.preventDefault(); openPilotExportNameSettings(); }">Brooke</div>
-      </div>
+      <div class="pilot-name-sm" id="pilot-name-display">Brooke</div>
     </div>
     <div class="status-right">
       <span class="server-badge" id="server-badge">...</span>
@@ -1449,6 +1449,9 @@
         <h1>GFORCE</h1>
         <span class="office-subtitle">PARAGLIDING</span>
       </div>
+    </div>
+    <div class="office-header-center">
+      <span class="office-dispatch-label">Dispatch</span>
     </div>
     <div class="office-header-right">
       <div class="office-airborne-chip" id="office-airborne-chip">

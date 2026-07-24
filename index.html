@@ -346,6 +346,7 @@
     .ff-group-pilots { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
     .ff-secondary-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
     .ff-flights-section { margin-bottom: 16px; }
+    .pilot-tab-date { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: 0.3px; margin-bottom: 16px; }
     .ff-flights-heading { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
     .ff-flight-row { display: flex; align-items: center; justify-content: space-between; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 8px; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background 0.1s; }
     .ff-flight-row:active { background: var(--surface); }
@@ -1195,11 +1196,13 @@
 
   <!-- Tab: Flight Following -->
   <div class="pilot-tab-content active" id="pilot-tab-ff">
+    <div class="pilot-tab-date" id="pilot-date-ff"></div>
     <div class="dashboard-status" id="dashboard-content"></div>
   </div>
 
   <!-- Tab: Loop Board -->
   <div class="pilot-tab-content" id="pilot-tab-loop">
+    <div class="pilot-tab-date" id="pilot-date-loop"></div>
     <div id="pilot-loop-board-wrap"><p style="color:var(--muted);padding:20px;text-align:center;">Loading…</p></div>
   </div>
 
@@ -2306,6 +2309,7 @@ function showApp(name) {
   }
   setupBtnGroups();
   setupForm();
+  setPilotTabDates();
   loadMyData();
   startStatusPoll();
 }
@@ -4119,6 +4123,14 @@ function renderStats() {
 // ─── Pilot Tab System ────────────────────────────────────────────────────────
 let pilotActiveTab = 'ff';
 let pilotLoopBoard = [];
+
+function pilotTabDateStr() {
+  return new Date().toLocaleDateString('en-NZ', { timeZone: NZ_TZ, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+function setPilotTabDates() {
+  const d = pilotTabDateStr();
+  ['pilot-date-ff', 'pilot-date-loop'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = d; });
+}
 
 function togglePilotMenu() {
   const drawer = document.getElementById('pilot-menu-drawer');

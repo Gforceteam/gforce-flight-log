@@ -2845,12 +2845,58 @@ function renderFlyingList(excludeSelf = false) {
 }
 
 let _lastDashboardKey = '';
+let _pilotLandedAt = null;        // timestamp when "Land" was clicked
+let _pilotLandExpiredUnlogged = false; // true after 5-min window expired without logging
+let _pilotPostLandTimer = null;   // setTimeout handle for 5-min window
+let _pilotPostLandCountdown = null; // setInterval handle for countdown display
+
+function pilotLand() {
+  _pilotLandedAt = Date.now();
+  _pilotLandExpiredUnlogged = false;
+  clearInterval(window._dashboardTimer);
+  clearTimeout(_pilotPostLandTimer);
+  clearInterval(_pilotPostLandCountdown);
+  renderDashboard();
+  _pilotPostLandTimer = setTimeout(() => {
+    _pilotLandedAt = null;
+    _pilotLandExpiredUnlogged = (myStatus.status === 'airborne');
+    clearInterval(_pilotPostLandCountdown);
+    renderDashboard();
+  }, 5 * 60 * 1000);
+}
+
+function clearPilotLandState() {
+  _pilotLandedAt = null;
+  _pilotLandExpiredUnlogged = false;
+  clearTimeout(_pilotPostLandTimer);
+  clearInterval(_pilotPostLandCountdown);
+}
+
+function startPostLandCountdown() {
+  clearInterval(_pilotPostLandCountdown);
+  _pilotPostLandCountdown = setInterval(() => {
+    const el = document.getElementById('post-land-countdown');
+    if (!el || !_pilotLandedAt) { clearInterval(_pilotPostLandCountdown); return; }
+    const remaining = Math.max(0, Math.round((_pilotLandedAt + 5 * 60 * 1000 - Date.now()) / 1000));
+    const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+    const ss = String(remaining % 60).padStart(2, '0');
+    el.textContent = `${mm}:${ss}`;
+  }, 1000);
+}
 function renderTodayFlightsList() {
   const today = todayStr();
   const todayFlights = myFlights
     .filter(f => f.date === today)
     .sort((a, b) => (Number(a.flight_num) || 0) - (Number(b.flight_num) || 0));
-  if (!todayFlights.length) return '';
+  const unloggedRow = _pilotLandExpiredUnlogged ? `
+    <div class="ff-flight-row ff-flight-row-unlogged" onclick="goToLogFlight()">
+      <div class="ff-flight-row-left">
+        <div class="ff-flight-row-num"><span style="width:7px;height:7px;border-radius:50%;background:var(--warning);display:inline-block;margin-right:6px;flex-shrink:0;"></span>Flight #${todayFlights.length + 1}</div>
+        <div class="ff-flight-row-detail" style="color:var(--warning);">⚠ Log not completed — tap to finish</div>
+      </div>
+      <div class="ff-flight-row-arrow">›</div>
+    </div>` : '';
+  if (!todayFlights.length && !unloggedRow) return '';
   const rows = todayFlights.map(f => {
     const pending = !f.office_ack_emoji;
     const pendingDot = pending ? `<span style="width:7px;height:7px;border-radius:50%;background:var(--warning);display:inline-block;margin-right:6px;flex-shrink:0;"></span>` : '';
@@ -2867,24 +2913,35 @@ function renderTodayFlightsList() {
   return `
     <div class="ff-flights-section">
       <div class="ff-flights-heading">Today's Flights</div>
-      ${rows}
+      ${rows}${unloggedRow}
     </div>`;
 }
 
 function renderDashboard() {
   const el = document.getElementById('dashboard-content');
   if (!el) return;
-  const key = JSON.stringify({ s: myStatus.status, g: myStatus.group_pilots, fp: flyingPilots.length, mf: myFlights.length });
-  if (key === _lastDashboardKey && myStatus.status !== 'airborne') { return; }
+
+  // If server says no longer airborne, clear any local landing state
+  if (myStatus.status !== 'airborne' && (_pilotLandedAt || _pilotLandExpiredUnlogged)) {
+    clearPilotLandState();
+  }
+
+  const key = JSON.stringify({ s: myStatus.status, la: !!_pilotLandedAt, lx: _pilotLandExpiredUnlogged, mf: myFlights.length });
+  if (key === _lastDashboardKey) return;
   _lastDashboardKey = key;
-  if (myStatus.status === 'airborne') {
+
+  if (myStatus.status === 'airborne' && !_pilotLandedAt && !_pilotLandExpiredUnlogged) {
+    // ── Flying ──────────────────────────────────────────────────────────────
     el.innerHTML = `
       <div class="ff-status-card ff-status-flying">
         <div class="ff-status-pill flying">Flying</div>
         ${myStatus.group_name ? `<div class="ff-group-name">📋 ${esc(myStatus.group_name)}</div>` : ''}
         ${myStatus.group_pilots && myStatus.group_pilots.length ? `<div class="ff-group-pilots">${myStatus.group_pilots.map(esc).join(' · ')}</div>` : ''}
         <div class="dashboard-timer" id="dashboard-timer">--:--</div>
-        <button class="btn-log-flight" onclick="goToLogFlight()">Land</button>
+        <div style="display:flex;gap:10px;margin-top:4px;">
+          <button class="btn-log-flight" style="flex:1;" onclick="pilotLand()">Land</button>
+          <button class="btn-log-flight" style="flex:1;background:transparent;color:var(--accent);border:2px solid var(--accent);box-shadow:none;" onclick="goToLogFlight()">Log Flight</button>
+        </div>
         <div class="ff-secondary-actions">
           <button class="btn-extend" id="btn-extend" onclick="requestExtension()">Request More Time</button>
           <button class="btn-extend" id="btn-dnf" onclick="didNotFly()" style="border-color:var(--muted);color:var(--muted);">✕ Did Not Fly</button>
@@ -2894,8 +2951,29 @@ function renderDashboard() {
       ${renderFlyingList(true)}
     `;
     startDashboardCountdown(myStatus.timer_expires_at);
-  } else {
+
+  } else if (_pilotLandedAt) {
+    // ── Just Landed — 5-min log window ──────────────────────────────────────
     clearInterval(window._dashboardTimer);
+    const remaining = Math.max(0, Math.round((_pilotLandedAt + 5 * 60 * 1000 - Date.now()) / 1000));
+    const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+    const ss = String(remaining % 60).padStart(2, '0');
+    el.innerHTML = `
+      <div class="ff-status-card" style="background:rgba(16,185,129,0.06);border-color:rgba(16,185,129,0.3);text-align:center;padding:24px 20px;">
+        <div class="ff-status-pill" style="background:rgba(16,185,129,0.15);color:#10b981;margin-bottom:12px;">Just Landed</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:6px;">Log your flight within</div>
+        <div style="font-size:36px;font-weight:800;color:#10b981;font-family:'Montserrat',sans-serif;margin-bottom:16px;" id="post-land-countdown">${mm}:${ss}</div>
+        <button class="btn-log-flight" onclick="goToLogFlight()">Log Flight</button>
+      </div>
+      ${renderTodayFlightsList()}
+      ${renderFlyingList(false)}
+    `;
+    startPostLandCountdown();
+
+  } else {
+    // ── Landed ───────────────────────────────────────────────────────────────
+    clearInterval(window._dashboardTimer);
+    clearInterval(_pilotPostLandCountdown);
     el.innerHTML = `
       <div class="ff-status-card ff-status-landed">
         <div class="ff-status-pill landed">Landed</div>
@@ -3290,6 +3368,7 @@ async function saveFlight() {
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       toast('Flight logged! Office notified.');
+      clearPilotLandState();
       await loadMyData();
       resetForm();
       showPage('dashboard');

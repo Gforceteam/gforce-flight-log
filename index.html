@@ -1099,8 +1099,6 @@
       </div>
     </div>
     <div class="status-right">
-      <button type="button" id="availability-btn" title="Tap to cycle: Signed out → Available → Down Below"
-        style="background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:4px 9px;font-weight:600;cursor:pointer;">🔴 Signed out</button>
       <span class="server-badge" id="server-badge">...</span>
       <button onclick="doLogout()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;padding:4px 10px;cursor:pointer">Logout</button>
     </div>
@@ -2783,7 +2781,7 @@ function renderDashboard() {
   const el = document.getElementById('dashboard-content');
   if (!el) return;
   // Skip full rebuild if nothing relevant changed (timer updates handled by startDashboardCountdown)
-  const key = JSON.stringify({ s: myStatus.status, p: pilotPresence, g: myStatus.group_pilots, fp: flyingPilots.length });
+  const key = JSON.stringify({ s: myStatus.status, g: myStatus.group_pilots, fp: flyingPilots.length });
   if (key === _lastDashboardKey && myStatus.status !== 'airborne') { return; }
   _lastDashboardKey = key;
   if (myStatus.status === 'airborne') {
@@ -2825,17 +2823,7 @@ function renderDashboard() {
       : `<div class="dashboard-avatar" id="dashboard-avatar-placeholder">${pilotName ? pilotName.charAt(0).toUpperCase() : '?'}</div>`;
     el.innerHTML = `
       ${avatarHtml}
-      <div class="dashboard-status-label">Status</div>
-      <div class="dashboard-status-value">${pilotPresenceLabel()}</div>
-      <p style="color:var(--muted);font-size:14px;margin-top:8px;">${pilotPresence === 1 ? 'Office can send you away' : pilotPresence === 2 ? 'Waiting down below — not on dispatch list' : 'Signed out — not on dispatch list'}</p>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:16px;">
-        <button type="button" onclick="toggleAvailability()" style="padding:12px 18px;background:${pilotPresence === 1 ? 'rgba(239,83,80,0.15)' : 'rgba(74,143,30,0.2)'};border:1px solid ${pilotPresence === 1 ? 'var(--danger)' : '#4a8f1e'};border-radius:9999px;color:${pilotPresence === 1 ? 'var(--danger)' : '#7bc950'};font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
-          ${pilotPresence === 1 ? 'Complete' : 'Available'}
-        </button>
-        <button type="button" onclick="toggleDownBottomFromDashboard()" style="padding:12px 18px;background:rgba(139,92,246,0.15);border:1px solid #8b5cf6;border-radius:9999px;color:#c4b5fd;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
-          ${pilotPresence === 2 ? 'Coming Up Condola' : 'Down Below'}
-        </button>
-      </div>
+      <div class="dashboard-status-label" style="margin-top:10px;">${esc(pilotName || 'Pilot')}</div>
       ${pendingBanner}
       ${notifPrompt}
       ${renderFlyingList(false)}

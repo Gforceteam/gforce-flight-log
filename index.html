@@ -2957,22 +2957,16 @@ function renderDashboard() {
     startDashboardCountdown(myStatus.timer_expires_at);
 
   } else if (_pilotLandedAt) {
-    // ── Just Landed — 5-min log window ──────────────────────────────────────
+    // ── Just Landed — 5-min background window ───────────────────────────────
     clearInterval(window._dashboardTimer);
-    const remaining = Math.max(0, Math.round((_pilotLandedAt + 5 * 60 * 1000 - Date.now()) / 1000));
-    const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
-    const ss = String(remaining % 60).padStart(2, '0');
     el.innerHTML = `
       <div class="ff-status-card" style="background:rgba(16,185,129,0.06);border-color:rgba(16,185,129,0.3);text-align:center;padding:24px 20px;">
-        <div class="ff-status-pill" style="background:rgba(16,185,129,0.15);color:#10b981;margin-bottom:12px;">Just Landed</div>
-        <div style="font-size:13px;color:var(--muted);margin-bottom:6px;">Log your flight within</div>
-        <div style="font-size:36px;font-weight:800;color:#10b981;font-family:'Montserrat',sans-serif;margin-bottom:16px;" id="post-land-countdown">${mm}:${ss}</div>
+        <div class="ff-status-pill" style="background:rgba(16,185,129,0.15);color:#10b981;margin-bottom:16px;">Just Landed</div>
         <button class="btn-log-flight" onclick="goToLogFlight()">Log Flight</button>
       </div>
       ${renderTodayFlightsList()}
       ${renderFlyingList(false)}
     `;
-    startPostLandCountdown();
 
   } else {
     // ── Landed ───────────────────────────────────────────────────────────────

@@ -335,6 +335,25 @@
     .btn-extend:active { opacity: 0.8; }
     .btn-extend:disabled { opacity: 0.35; cursor: not-allowed; }
 
+    /* Flight Following tab redesign */
+    .ff-status-card { border-radius: 16px; border: 1px solid var(--border); padding: 24px 20px; text-align: center; margin-bottom: 20px; }
+    .ff-status-flying { background: rgba(243,115,41,0.06); border-color: rgba(243,115,41,0.3); }
+    .ff-status-landed { background: var(--surface); }
+    .ff-status-pill { display: inline-block; font-size: 13px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; padding: 5px 16px; border-radius: 9999px; margin-bottom: 16px; }
+    .ff-status-pill.flying { background: rgba(243,115,41,0.15); color: var(--accent); }
+    .ff-status-pill.landed { background: rgba(16,185,129,0.12); color: #10b981; }
+    .ff-group-name { font-size: 15px; font-weight: 600; color: var(--accent); margin-bottom: 6px; }
+    .ff-group-pilots { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+    .ff-secondary-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+    .ff-flights-section { margin-bottom: 16px; }
+    .ff-flights-heading { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+    .ff-flight-row { display: flex; align-items: center; justify-content: space-between; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 8px; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background 0.1s; }
+    .ff-flight-row:active { background: var(--surface); }
+    .ff-flight-row-left { display: flex; flex-direction: column; gap: 3px; }
+    .ff-flight-row-num { font-size: 15px; font-weight: 700; color: var(--text); display: flex; align-items: center; }
+    .ff-flight-row-detail { font-size: 12px; color: var(--muted); }
+    .ff-flight-row-arrow { font-size: 20px; color: var(--muted); font-weight: 300; }
+
     .card {
       background: var(--card);
       border: 1px solid var(--border);
@@ -2826,64 +2845,69 @@ function renderFlyingList(excludeSelf = false) {
 }
 
 let _lastDashboardKey = '';
+function renderTodayFlightsList() {
+  const today = todayStr();
+  const todayFlights = myFlights
+    .filter(f => f.date === today)
+    .sort((a, b) => (Number(a.flight_num) || 0) - (Number(b.flight_num) || 0));
+  if (!todayFlights.length) return '';
+  const rows = todayFlights.map(f => {
+    const pending = !f.office_ack_emoji;
+    const pendingDot = pending ? `<span style="width:7px;height:7px;border-radius:50%;background:var(--warning);display:inline-block;margin-right:6px;flex-shrink:0;"></span>` : '';
+    const detail = [f.weight ? `${f.weight}kg` : null, f.time ? `${f.time}min` : null, f.takeoff ? esc(f.takeoff) : null].filter(Boolean).join(' · ');
+    return `
+      <div class="ff-flight-row" onclick="editFlightFromFF('${f.id}')">
+        <div class="ff-flight-row-left">
+          <div class="ff-flight-row-num">${pendingDot}Flight #${f.flight_num}</div>
+          ${detail ? `<div class="ff-flight-row-detail">${detail}</div>` : ''}
+        </div>
+        <div class="ff-flight-row-arrow">›</div>
+      </div>`;
+  }).join('');
+  return `
+    <div class="ff-flights-section">
+      <div class="ff-flights-heading">Today's Flights</div>
+      ${rows}
+    </div>`;
+}
+
 function renderDashboard() {
   const el = document.getElementById('dashboard-content');
   if (!el) return;
-  // Skip full rebuild if nothing relevant changed (timer updates handled by startDashboardCountdown)
-  const key = JSON.stringify({ s: myStatus.status, g: myStatus.group_pilots, fp: flyingPilots.length });
+  const key = JSON.stringify({ s: myStatus.status, g: myStatus.group_pilots, fp: flyingPilots.length, mf: myFlights.length });
   if (key === _lastDashboardKey && myStatus.status !== 'airborne') { return; }
   _lastDashboardKey = key;
   if (myStatus.status === 'airborne') {
-    const expires = myStatus.timer_expires_at ? new Date(myStatus.timer_expires_at).getTime() : 0;
     el.innerHTML = `
-      <div class="dashboard-status-icon">🪂</div>
-      <div class="dashboard-status-label">Currently Flying</div>
-      ${myStatus.group_name ? `<div class="dashboard-client" style="font-size:16px;">📋 ${esc(myStatus.group_name)}</div>` : ''}
-      ${myStatus.group_pilots && myStatus.group_pilots.length ? `
-        <div style="margin-top:10px;padding:10px 14px;background:var(--surface);border-radius:10px;border:1px solid var(--border);">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Flying with</div>
-          <div style="font-size:15px;font-weight:600;color:var(--text);">${myStatus.group_pilots.map(esc).join(' · ')}</div>
-        </div>` : ''}
-      <div class="dashboard-timer" id="dashboard-timer">--:--</div>
-      <button class="btn-log-flight" onclick="goToLogFlight()">Landed → Log Flight</button>
-      <button class="btn-extend" id="btn-extend" onclick="requestExtension()">Request More Time</button>
-      <button class="btn-extend" id="btn-dnf" onclick="didNotFly()" style="border-color:var(--muted);color:var(--muted);margin-top:6px;">✕ Did Not Fly</button>
+      <div class="ff-status-card ff-status-flying">
+        <div class="ff-status-pill flying">Flying</div>
+        ${myStatus.group_name ? `<div class="ff-group-name">📋 ${esc(myStatus.group_name)}</div>` : ''}
+        ${myStatus.group_pilots && myStatus.group_pilots.length ? `<div class="ff-group-pilots">${myStatus.group_pilots.map(esc).join(' · ')}</div>` : ''}
+        <div class="dashboard-timer" id="dashboard-timer">--:--</div>
+        <button class="btn-log-flight" onclick="goToLogFlight()">Land</button>
+        <div class="ff-secondary-actions">
+          <button class="btn-extend" id="btn-extend" onclick="requestExtension()">Request More Time</button>
+          <button class="btn-extend" id="btn-dnf" onclick="didNotFly()" style="border-color:var(--muted);color:var(--muted);">✕ Did Not Fly</button>
+        </div>
+      </div>
+      ${renderTodayFlightsList()}
       ${renderFlyingList(true)}
     `;
     startDashboardCountdown(myStatus.timer_expires_at);
   } else {
     clearInterval(window._dashboardTimer);
-    const today = todayStr();
-    const pendingFlights = myFlights.filter(f => f.date === today && !f.office_ack_emoji);
-    const pendingBanner = pendingFlights.length ? `
-      <div style="margin-top:16px;padding:14px 16px;background:rgba(245,166,35,0.1);border:1px solid rgba(245,166,35,0.4);border-radius:12px;text-align:center;">
-        <div style="font-size:15px;font-weight:700;color:var(--warning);margin-bottom:4px;">⏳ Awaiting Office Confirmation</div>
-        <div style="font-size:13px;color:var(--muted);">${pendingFlights.length} flight${pendingFlights.length !== 1 ? 's' : ''} pending — office needs to confirm your landing${pendingFlights.length !== 1 ? 's' : ''}.</div>
-      </div>` : '';
-    const notifPrompt = '';
-    const cachedUrl = avatarCache[pilotId];
-    const avatarHtml = cachedUrl
-      ? `<div class="dashboard-avatar has-photo"><img src="${cachedUrl}" alt="" /></div>`
-      : `<div class="dashboard-avatar" id="dashboard-avatar-placeholder">${pilotName ? pilotName.charAt(0).toUpperCase() : '?'}</div>`;
     el.innerHTML = `
-      ${avatarHtml}
-      <div class="dashboard-status-label" style="margin-top:10px;">${esc(pilotName || 'Pilot')}</div>
-      ${pendingBanner}
-      ${notifPrompt}
+      <div class="ff-status-card ff-status-landed">
+        <div class="ff-status-pill landed">Landed</div>
+      </div>
+      ${renderTodayFlightsList()}
       ${renderFlyingList(false)}
     `;
-    // Async-fill avatar if it wasn't cached yet
-    if (!cachedUrl && pilotHasAvatar) {
-      fetchPilotAvatarCached(pilotId).then(url => {
-        if (!url) return;
-        const placeholder = document.getElementById('dashboard-avatar-placeholder');
-        if (placeholder) {
-          placeholder.classList.add('has-photo');
-          placeholder.innerHTML = `<img src="${url}" alt="" />`;
-        }
-      });
-    }
   }
+}
+
+function editFlightFromFF(id) {
+  editFlight(id);
 }
 
 function goToLogFlight() { showPage('log'); }

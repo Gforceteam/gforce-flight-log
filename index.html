@@ -206,6 +206,14 @@
     .status-bar-logo { height: 32px; width: 32px; border-radius: 50%; flex-shrink: 0; filter: drop-shadow(0 0 8px rgba(243,115,41,0.5)); }
     .pilot-left { display: flex; align-items: center; gap: 10px; }
     .status-bar-center { display: flex; align-items: center; gap: 8px; position: absolute; left: 50%; transform: translateX(-50%); }
+    #pilot-menu-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:200; }
+    #pilot-menu-overlay.open { display:block; }
+    #pilot-menu-drawer { position:fixed; top:0; right:0; width:220px; height:100%; background:var(--card); z-index:201; transform:translateX(100%); transition:transform 0.22s ease; box-shadow:-4px 0 24px rgba(0,0,0,0.18); display:flex; flex-direction:column; }
+    #pilot-menu-drawer.open { transform:translateX(0); }
+    .pilot-menu-header { font-size:13px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); padding:56px 20px 12px; border-bottom:1px solid var(--border); }
+    .pilot-menu-item { display:flex; align-items:center; gap:12px; padding:16px 20px; font-size:15px; font-weight:600; color:var(--text); cursor:pointer; border-bottom:1px solid var(--border); -webkit-tap-highlight-color:transparent; }
+    .pilot-menu-item:active { background:var(--surface); }
+    .pilot-menu-icon { font-size:18px; width:24px; text-align:center; }
     .pilot-avatar-sm {
       width: 34px; height: 34px; border-radius: 50%;
       background: linear-gradient(135deg, var(--accent), #c95f1a);
@@ -1146,8 +1154,18 @@
     </div>
     <div class="status-right">
       <span class="server-badge" id="server-badge">...</span>
-      <button onclick="showPilotTab('settings')" class="pilot-icon-btn" title="Settings">⚙</button>
+      <button onclick="togglePilotMenu()" class="pilot-icon-btn" title="Menu">☰</button>
     </div>
+  </div>
+
+  <!-- Menu drawer -->
+  <div id="pilot-menu-overlay" onclick="closePilotMenu()"></div>
+  <div id="pilot-menu-drawer">
+    <div class="pilot-menu-header">Menu</div>
+    <div class="pilot-menu-item" onclick="closePilotMenu(); showSubPage('flights')"><span class="pilot-menu-icon">📋</span>My Flights</div>
+    <div class="pilot-menu-item" onclick="closePilotMenu(); showSubPage('stats')"><span class="pilot-menu-icon">📊</span>Stats</div>
+    <div class="pilot-menu-item" onclick="closePilotMenu(); showSubPage('ff')"><span class="pilot-menu-icon">📅</span>Duty Sheet</div>
+    <div class="pilot-menu-item" onclick="closePilotMenu(); showPilotTab('settings')"><span class="pilot-menu-icon">⚙️</span>Settings</div>
   </div>
 
   <!-- Main pilot tab bar -->
@@ -1166,44 +1184,23 @@
     <div id="pilot-loop-board-wrap"><p style="color:var(--muted);padding:20px;text-align:center;">Loading…</p></div>
   </div>
 
-  <!-- Tab: Settings (opened via ⚙, not in tab bar) -->
+  <!-- Tab: Settings (opened via menu) -->
   <div class="pilot-tab-content" id="pilot-tab-settings">
     <div style="padding:4px 0 24px;">
-
-      <!-- My Flights -->
-      <div class="card stat-section" style="margin-bottom:12px;">
-        <div class="stat-section-title" style="margin-bottom:6px;">📋 My Flights</div>
-        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">View, search and export your personal flight log.</div>
-        <button onclick="showSubPage('flights')" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Open My Flights</button>
-      </div>
-
-      <!-- Stats -->
-      <div class="card stat-section" style="margin-bottom:12px;">
-        <div class="stat-section-title" style="margin-bottom:6px;">📊 Stats</div>
-        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Monthly flight totals, trends and breakdowns.</div>
-        <button onclick="showSubPage('stats')" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Open Stats</button>
-      </div>
-
-      <!-- Duty Sheet -->
-      <div class="card stat-section" style="margin-bottom:12px;">
-        <div class="stat-section-title" style="margin-bottom:6px;">📅 Duty Sheet</div>
-        <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Weekly flight-following records and hours worked.</div>
-        <button onclick="showSubPage('ff')" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Open Duty Sheet</button>
-      </div>
-
-      <!-- Existing settings content injected here at runtime -->
+      <button class="pilot-back-btn" onclick="showPilotTab('ff')">← Back</button>
+      <!-- Settings content injected here at runtime -->
       <div id="pilot-settings-inner"></div>
     </div>
   </div>
 
   <!-- Sub-pages: full-screen overlays with a back button -->
   <div class="page" id="page-flights">
-    <button class="pilot-back-btn" onclick="showPilotTab('settings')">← Back</button>
+    <button class="pilot-back-btn" onclick="showPilotTab('ff')">← Back</button>
     <div id="flights-list"></div>
   </div>
 
   <div class="page" id="page-stats">
-    <button class="pilot-back-btn" onclick="showPilotTab('settings')">← Back</button>
+    <button class="pilot-back-btn" onclick="showPilotTab('ff')">← Back</button>
     <div class="stats-page-header">
       <h2>Stats</h2>
       <div class="stats-month-nav">
@@ -1217,7 +1214,7 @@
   </div>
 
   <div class="page" id="page-ff">
-    <button class="pilot-back-btn" onclick="showPilotTab('settings')">← Back</button>
+    <button class="pilot-back-btn" onclick="showPilotTab('ff')">← Back</button>
     <div id="ff-content"><div class="empty-state">Loading…</div></div>
   </div>
 
@@ -4026,6 +4023,16 @@ function renderStats() {
 // ─── Pilot Tab System ────────────────────────────────────────────────────────
 let pilotActiveTab = 'ff';
 let pilotLoopBoard = [];
+
+function togglePilotMenu() {
+  const drawer = document.getElementById('pilot-menu-drawer');
+  if (drawer.classList.contains('open')) closePilotMenu();
+  else { document.getElementById('pilot-menu-overlay').classList.add('open'); drawer.classList.add('open'); }
+}
+function closePilotMenu() {
+  document.getElementById('pilot-menu-overlay').classList.remove('open');
+  document.getElementById('pilot-menu-drawer').classList.remove('open');
+}
 
 function showPilotTab(name) {
   pilotActiveTab = name;

@@ -1242,11 +1242,8 @@
 
   <div class="page" id="page-log">
     <div class="card" id="flight-card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="margin-bottom:14px;">
         <h2 id="card-title" style="margin-bottom:0;">New Flight</h2>
-        <button id="peak-drive-btn" onclick="togglePeakDrive()" style="display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--surface);border:2px solid var(--border);border-radius:20px;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s;">
-          🚗 Peak Drive
-        </button>
       </div>
 
       <div class="flight-num-row" id="field-flightnum">
@@ -2988,7 +2985,13 @@ function editFlightFromFF(id) {
   editFlight(id);
 }
 
-function goToLogFlight() { showPage('log'); }
+function goToLogFlight() {
+  if (editingId === null) {
+    const dateEl = document.getElementById('f-date');
+    if (dateEl) updateFlightNumForDate(dateEl.value);
+  }
+  showPage('log');
+}
 
 async function didNotFly() {
   const btn = document.getElementById('btn-dnf');
@@ -3199,36 +3202,6 @@ function onDateChange() {
   updateFlightNumForDate(date);
 }
 
-// ─── Peak Drive Toggle ────────────────────────────────────────────────────────
-let isPeakDrive = false;
-
-function togglePeakDrive() {
-  if (editingId !== null) return; // can't switch mode while editing
-  isPeakDrive = !isPeakDrive;
-  const btn = document.getElementById('peak-drive-btn');
-  const greyFields = ['field-weight', 'field-takeoff', 'field-landing', 'field-time', 'field-wing', 'field-flightnum'];
-  if (isPeakDrive) {
-    btn.style.background = 'var(--warning)';
-    btn.style.borderColor = 'var(--warning)';
-    btn.style.color = '#1a1200';
-    document.getElementById('card-title').textContent = 'Peak Drive';
-    document.getElementById('save-btn').textContent = '🚗 Log Drive';
-    greyFields.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) { el.style.opacity = '0.35'; el.style.pointerEvents = 'none'; }
-    });
-  } else {
-    btn.style.background = 'var(--surface)';
-    btn.style.borderColor = 'var(--border)';
-    btn.style.color = 'var(--muted)';
-    document.getElementById('card-title').textContent = 'New Flight';
-    document.getElementById('save-btn').textContent = 'Save Flight';
-    greyFields.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) { el.style.opacity = ''; el.style.pointerEvents = ''; }
-    });
-  }
-}
 
 function logPostsaveDeadlineKey() {
   return pilotId ? `gforce_log_postsave_deadline_${pilotId}` : 'gforce_log_postsave_deadline';
@@ -3299,26 +3272,6 @@ async function saveFlight() {
   const date = document.getElementById('f-date').value;
   const notes = document.getElementById('f-notes').value;
 
-  // Peak Drive mode — log to drives (separate from flights, no client data needed)
-  if (isPeakDrive) {
-    setServerStatus('syncing');
-    try {
-      const res = await apiFetch('/api/drives', {
-        method: 'POST',
-        body: JSON.stringify({ date, notes, group_id: myStatus.group_id || null })
-      });
-      if (!res.ok) throw new Error(await res.text());
-      toast('🚗 Drive logged!');
-      resetForm();
-      await loadMyData();
-      showPage('dashboard');
-    } catch (e) {
-      toast('Save failed: ' + e.message);
-      setServerStatus('offline');
-    }
-    return;
-  }
-
   const flightNum = parseInt(document.getElementById('f-num-display').textContent);
   const weight = document.getElementById('f-weight').value;
   const takeoff = getGroupVal('fg-takeoff');
@@ -3382,10 +3335,6 @@ async function saveFlight() {
 function resetForm() {
   clearLogPostSaveState();
   editingId = null;
-  // Reset peak drive mode
-  isPeakDrive = false;
-  const btn = document.getElementById('peak-drive-btn');
-  if (btn) { btn.style.background = 'var(--surface)'; btn.style.borderColor = 'var(--border)'; btn.style.color = 'var(--muted)'; }
   ['field-weight','field-takeoff','field-landing','field-time','field-wing','field-flightnum'].forEach(id => {
     const el = document.getElementById(id); if (el) { el.style.opacity = ''; el.style.pointerEvents = ''; }
   });

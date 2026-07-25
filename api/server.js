@@ -848,12 +848,23 @@ app.get('/api/flights', verifyToken, async (req, res) => {
   try {
     const { date_from, date_to } = req.query;
     // Always use the authenticated pilot's own ID — never allow cross-pilot reads
-    let sql = 'SELECT * FROM flights WHERE pilot_id = ?';
+    let sql = `
+      SELECT f.*,
+        (SELECT GROUP_CONCAT(p.name, ', ')
+         FROM flights f2
+         JOIN pilots p ON p.id = f2.pilot_id
+         WHERE f2.sent_away_at = f.sent_away_at
+           AND f2.date = f.date
+           AND f2.pilot_id != f.pilot_id
+           AND f2.sent_away_at IS NOT NULL
+        ) as group_pilot_names
+      FROM flights f
+      WHERE f.pilot_id = ?`;
     const params = [req.pilot.id];
     const dateRe = /^\d{4}-\d{2}-\d{2}$/;
-    if (date_from && dateRe.test(date_from)) { sql += ' AND date >= ?'; params.push(date_from); }
-    if (date_to && dateRe.test(date_to)) { sql += ' AND date <= ?'; params.push(date_to); }
-    sql += ' ORDER BY date DESC, flight_num ASC';
+    if (date_from && dateRe.test(date_from)) { sql += ' AND f.date >= ?'; params.push(date_from); }
+    if (date_to && dateRe.test(date_to)) { sql += ' AND f.date <= ?'; params.push(date_to); }
+    sql += ' ORDER BY f.date DESC, f.flight_num ASC';
     const flights = await queryAll(sql, params);
     res.json(flights);
   } catch (e) {

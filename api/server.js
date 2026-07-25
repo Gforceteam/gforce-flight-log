@@ -1517,7 +1517,7 @@ app.post('/api/office/land-pilot', verifyOffice, async (req, res) => {
 
     const now = new Date().toISOString();
     const flightId = uuidv4();
-    const today = now.split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
 
     const todayFlights = await queryAll('SELECT COUNT(*) as c FROM flights WHERE pilot_id = ? AND date = ?', [pilot_id, today]);
     const flightNum = (Number(todayFlights?.[0]?.c) || 0) + 1;
@@ -1560,7 +1560,7 @@ app.post('/api/office/landed-early', verifyOffice, async (req, res) => {
 
     const now = new Date().toISOString();
     const flightId = uuidv4();
-    const today = now.split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
 
     const todayFlights = await queryAll('SELECT COUNT(*) as c FROM flights WHERE pilot_id = ? AND date = ?', [pilot_id, today]);
     const flightNum = (Number(todayFlights?.[0]?.c) || 0) + 1;

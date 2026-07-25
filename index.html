@@ -2691,7 +2691,7 @@ function updateStatusBadge() {
   if (sub) sub.textContent = '';
   if (!availBtn) return;
   if (myStatus.status === 'airborne') {
-    availBtn.textContent = '🪂 Flying';
+    availBtn.textContent = 'Flying';
     availBtn.style.background = 'rgba(255,183,77,0.2)';
     availBtn.style.borderColor = 'var(--warning)';
     availBtn.style.color = 'var(--warning)';
@@ -2840,7 +2840,7 @@ function renderFlyingList(excludeSelf = false) {
   }).join('');
   return `
     <div style="margin-top:20px;padding:12px 14px;background:var(--surface);border-radius:12px;border:1px solid var(--border);text-align:left;">
-      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">🪂 Currently Flying (${list.length})</div>
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Currently Flying (${list.length})</div>
       ${rows}
     </div>`;
 }
@@ -5874,7 +5874,7 @@ function notifyPilotSentAway() {
   modal.innerHTML = `
     <style>@keyframes pulse-border{0%,100%{box-shadow:0 0 0 0 rgba(243,115,41,0.7)}50%{box-shadow:0 0 0 16px rgba(243,115,41,0)}}</style>
     <div style="background:var(--card);border:3px solid var(--accent);border-radius:16px;padding:32px 28px;text-align:center;max-width:340px;width:90%;animation:pulse-border 1.2s ease-in-out 4;">
-      <div style="font-size:64px;margin-bottom:12px;">🪂</div>
+
       <div style="font-size:24px;font-weight:700;color:var(--accent);font-family:Montserrat,sans-serif;letter-spacing:1px;margin-bottom:8px;">YOU'RE AWAY!</div>
       <div style="color:var(--text-2);font-size:14px;">Office has started your timer. Have a great flight!</div>
       ${groupSection}
@@ -5884,7 +5884,7 @@ function notifyPilotSentAway() {
   setTimeout(() => { modal.remove(); showPage('dashboard'); }, 5000);
 
   // System notification via service worker (works on iOS 16.4+ PWA, Android Chrome)
-  const pushTitle = '🪂 GForce — YOU\'RE AWAY!';
+  const pushTitle = 'GForce — YOU\'RE AWAY!';
   const pushBody = groupPilotsList
     ? `You're away! Flying with ${groupPilotsList}.`
     : "Office has started your timer. Have a great flight!";

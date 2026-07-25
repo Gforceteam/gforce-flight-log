@@ -263,12 +263,23 @@ async function createTables() {
   await db.execute(`CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT)`);
   await run("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('push_notifications_enabled', 'false')");
   try { await db.execute('ALTER TABLE loop_board ADD COLUMN tallies TEXT'); } catch (_) {}
-  // Seed 20 slots on first run
-  const lbCount = await queryOne('SELECT COUNT(*) as c FROM loop_board');
-  if (!lbCount || Number(lbCount.c) === 0) {
-    for (let i = 1; i <= 20; i++) {
-      await run('INSERT OR IGNORE INTO loop_board (slot, pilot_id, pilot_name, tallies) VALUES (?, NULL, NULL, NULL)', [i]);
-    }
+  // Date-aware loop board table
+  await db.execute(`CREATE TABLE IF NOT EXISTS loop_board_v2 (
+    date TEXT NOT NULL,
+    slot INTEGER NOT NULL,
+    pilot_id TEXT,
+    pilot_name TEXT,
+    tallies TEXT,
+    PRIMARY KEY (date, slot)
+  )`);
+  // Migrate existing loop_board rows into loop_board_v2 for today's date
+  const todayForMigration = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+  const legacyRows = await queryAll('SELECT * FROM loop_board');
+  for (const row of legacyRows) {
+    await run(
+      'INSERT OR IGNORE INTO loop_board_v2 (date, slot, pilot_id, pilot_name, tallies) VALUES (?, ?, ?, ?, ?)',
+      [todayForMigration, row.slot, row.pilot_id, row.pilot_name, row.tallies]
+    );
   }
   console.log('✅ Tables ready');
 }
@@ -299,6 +310,14 @@ const NZ_TZ = 'Pacific/Auckland';
 function isoToNZDateString(iso) {
   if (!iso) return '';
   return new Date(iso).toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+}
+function nzToday() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+}
+async function ensureLoopBoardDate(date) {
+  for (let i = 1; i <= 20; i++) {
+    await run('INSERT OR IGNORE INTO loop_board_v2 (date, slot, pilot_id, pilot_name, tallies) VALUES (?, ?, NULL, NULL, NULL)', [date, i]);
+  }
 }
 
 /** presence: 0 signed out, 1 available, 2 down bottom — keeps legacy `available` in sync (1 iff presence===1) */
@@ -1182,6 +1201,7 @@ app.delete('/api/office/pilots/:id', verifyOffice, async (req, res) => {
     await run('DELETE FROM active_timers WHERE pilot_id = ?', [id]);
     await run('DELETE FROM push_subscriptions WHERE pilot_id = ?', [id]);
     await run('UPDATE loop_board SET pilot_id = NULL, pilot_name = NULL WHERE pilot_id = ?', [id]);
+    await run('UPDATE loop_board_v2 SET pilot_id = NULL, pilot_name = NULL WHERE pilot_id = ?', [id]);
     await run('DELETE FROM pilots WHERE id = ?', [id]);
     broadcast({ type: 'PILOT_DELETED', pilot_id: id, pilot_name: pilot.name });
     res.json({ ok: true, pilot_name: pilot.name });
@@ -1945,7 +1965,9 @@ app.put('/api/office/settings/push-notifications', verifyOffice, async (req, res
 // ─── Loop Board ───────────────────────────────────────────────────────────────
 app.get('/api/pilot/loop-board', verifyPilotOrOffice, async (req, res) => {
   try {
-    const rows = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board ORDER BY slot ASC');
+    const date = nzToday();
+    await ensureLoopBoardDate(date);
+    const rows = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
     res.json(rows);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1954,7 +1976,9 @@ app.get('/api/pilot/loop-board', verifyPilotOrOffice, async (req, res) => {
 
 app.get('/api/office/loop-board', verifyOffice, async (req, res) => {
   try {
-    const rows = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board ORDER BY slot ASC');
+    const date = req.query.date || nzToday();
+    await ensureLoopBoardDate(date);
+    const rows = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
     res.json(rows);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1963,14 +1987,16 @@ app.get('/api/office/loop-board', verifyOffice, async (req, res) => {
 
 app.post('/api/office/loop-board/slot', verifyOffice, async (req, res) => {
   try {
-    const { slot, pilot_id, pilot_name } = req.body;
+    const { slot, pilot_id, pilot_name, date: reqDate } = req.body;
+    const date = reqDate || nzToday();
     if (!slot || slot < 1 || slot > 20) return res.status(400).json({ error: 'Invalid slot' });
+    await ensureLoopBoardDate(date);
     await run(
-      'UPDATE loop_board SET pilot_id = ?, pilot_name = ? WHERE slot = ?',
-      [pilot_id || null, pilot_name || null, slot]
+      'UPDATE loop_board_v2 SET pilot_id = ?, pilot_name = ? WHERE date = ? AND slot = ?',
+      [pilot_id || null, pilot_name || null, date, slot]
     );
-    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board ORDER BY slot ASC');
-    broadcast({ type: 'LOOP_BOARD_UPDATE', board });
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    broadcast({ type: 'LOOP_BOARD_UPDATE', board, date });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1979,9 +2005,11 @@ app.post('/api/office/loop-board/slot', verifyOffice, async (req, res) => {
 
 app.post('/api/office/loop-board/reset', verifyOffice, async (req, res) => {
   try {
-    await run('UPDATE loop_board SET pilot_id = NULL, pilot_name = NULL, tallies = NULL');
-    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board ORDER BY slot ASC');
-    broadcast({ type: 'LOOP_BOARD_UPDATE', board });
+    const { date: reqDate } = req.body || {};
+    const date = reqDate || nzToday();
+    await run('UPDATE loop_board_v2 SET pilot_id = NULL, pilot_name = NULL, tallies = NULL WHERE date = ?', [date]);
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    broadcast({ type: 'LOOP_BOARD_UPDATE', board, date });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1990,20 +2018,22 @@ app.post('/api/office/loop-board/reset', verifyOffice, async (req, res) => {
 
 app.post('/api/office/loop-board/tally', verifyOffice, async (req, res) => {
   try {
-    const { slot, col, value } = req.body;
+    const { slot, col, value, date: reqDate } = req.body;
+    const date = reqDate || nzToday();
     if (!slot || slot < 1 || slot > 20) return res.status(400).json({ error: 'Invalid slot' });
     if (!col || col < 1 || col > 12) return res.status(400).json({ error: 'Invalid column' });
     const allowed = ['', 'I', 'L', '-'];
     if (!allowed.includes(value || '')) return res.status(400).json({ error: 'Invalid value' });
-    const row = await queryOne('SELECT tallies FROM loop_board WHERE slot = ?', [slot]);
+    await ensureLoopBoardDate(date);
+    const row = await queryOne('SELECT tallies FROM loop_board_v2 WHERE date = ? AND slot = ?', [date, slot]);
     if (!row) return res.status(404).json({ error: 'Slot not found' });
     let tallies = Array(12).fill('');
     try { const t = JSON.parse(row.tallies || '[]'); if (Array.isArray(t)) tallies = t; } catch (_) {}
     while (tallies.length < 12) tallies.push('');
     tallies[col - 1] = value || '';
-    await run('UPDATE loop_board SET tallies = ? WHERE slot = ?', [JSON.stringify(tallies), slot]);
-    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board ORDER BY slot ASC');
-    broadcast({ type: 'LOOP_BOARD_UPDATE', board });
+    await run('UPDATE loop_board_v2 SET tallies = ? WHERE date = ? AND slot = ?', [JSON.stringify(tallies), date, slot]);
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    broadcast({ type: 'LOOP_BOARD_UPDATE', board, date });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });

@@ -1042,6 +1042,12 @@
 
     /* ── LOOP BOARD ─────────────────────────────────────────────────────── */
     .loop-board { padding: 0; overflow-x: auto; overflow-y: visible; }
+    .loop-date-bar { display: flex; align-items: center; gap: 8px; padding: 10px 12px 8px; border-bottom: 1px solid var(--border); }
+    .loop-date-btn { width: 36px; height: 36px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .loop-date-btn:hover { background: var(--hover); }
+    .loop-date-center { display: flex; align-items: center; gap: 8px; flex: 1; }
+    .loop-date-input { flex: 1; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 15px; font-weight: 600; padding: 6px 10px; cursor: pointer; }
+    .loop-date-today-badge { background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
     .loop-board-controls { display: flex; gap: 8px; padding: 10px 8px; border-top: 1px solid var(--border); }
     .loop-table { border-collapse: collapse; font-size: 15px; }
     .loop-table thead th {
@@ -5400,7 +5406,7 @@ async function respondExtension(requestId, action) {
 // ─── Loop Board ───────────────────────────────────────────────────────────────
 async function loadLoopBoard() {
   try {
-    const res = await officeFetch('/api/office/loop-board');
+    const res = await officeFetch(`/api/office/loop-board?date=${encodeURIComponent(loopBoardDate)}`);
     if (!res.ok) return;
     loopBoard = await res.json();
     // Expand row count to show all slots that have a pilot assigned
@@ -5413,7 +5419,22 @@ async function loadLoopBoard() {
   } catch (_) {}
 }
 
+function changeLoopDate(dateStr) {
+  loopBoardDate = dateStr;
+  _lastLoopChange = null;
+  loadLoopBoard();
+}
+
+function shiftLoopDate(days) {
+  const d = new Date(loopBoardDate + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  loopBoardDate = d.toLocaleDateString('en-CA');
+  _lastLoopChange = null;
+  loadLoopBoard();
+}
+
 let loopBoardRows = Math.max(1, Math.min(20, parseInt(localStorage.getItem('loopBoardRows') || '1', 10)));
+let loopBoardDate = todayStr();
 let _lastLoopChange = null;
 let _pendingLoopApiCalls = 0;
 
@@ -5425,7 +5446,16 @@ function renderLoopBoard() {
   if (!el) return;
   const available = (officePilots || []).sort(pilotSort);
   const tallyOpts = ['', 'I', 'L', '-'];
-  let html = '<table class="loop-table"><thead><tr>';
+  const isToday = loopBoardDate === todayStr();
+  let html = `<div class="loop-date-bar">
+    <button class="loop-date-btn" onclick="shiftLoopDate(-1)" title="Previous day">‹</button>
+    <div class="loop-date-center">
+      <input type="date" class="loop-date-input" value="${loopBoardDate}" onchange="changeLoopDate(this.value)">
+      ${isToday ? '<span class="loop-date-today-badge">Today</span>' : ''}
+    </div>
+    <button class="loop-date-btn" onclick="shiftLoopDate(1)" title="Next day">›</button>
+  </div>`;
+  html += '<table class="loop-table"><thead><tr>';
   html += '<th class="loop-th-slot">#</th><th class="loop-th-pilot">Pilot</th>';
   for (let c = 1; c <= 12; c++) html += `<th class="loop-th-tally">${c}</th>`;
   html += '</tr></thead><tbody>';
@@ -5462,11 +5492,11 @@ async function undoLoopChange() {
   _lastLoopChange = null;
   try {
     if (c.type === 'tally') {
-      await officeFetch('/api/office/loop-board/tally', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slot: c.slot, col: c.col, value: c.oldValue }) });
+      await officeFetch('/api/office/loop-board/tally', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slot: c.slot, col: c.col, value: c.oldValue, date: loopBoardDate }) });
     } else if (c.type === 'slot') {
-      await officeFetch('/api/office/loop-board/slot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slot: c.slot, pilot_id: c.oldPilotId, pilot_name: c.oldPilotName }) });
+      await officeFetch('/api/office/loop-board/slot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slot: c.slot, pilot_id: c.oldPilotId, pilot_name: c.oldPilotName, date: loopBoardDate }) });
     }
-    loopBoard = await (await officeFetch('/api/office/loop-board')).json();
+    loopBoard = await (await officeFetch(`/api/office/loop-board?date=${encodeURIComponent(loopBoardDate)}`)).json();
     renderLoopBoard();
   } catch (e) { toast('Undo failed', 'err'); }
 }
@@ -5474,8 +5504,8 @@ async function undoLoopChange() {
 async function resetLoopBoard() {
   if (!confirm('Clear all pilots and tallies from the Loop Board?')) return;
   try {
-    const res = await officeFetch('/api/office/loop-board/reset', { method: 'POST' });
-    if (res && res.ok) { loopBoard = await (await officeFetch('/api/office/loop-board')).json(); renderLoopBoard(); }
+    const res = await officeFetch('/api/office/loop-board/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: loopBoardDate }) });
+    if (res && res.ok) { loopBoard = await (await officeFetch(`/api/office/loop-board?date=${encodeURIComponent(loopBoardDate)}`)).json(); renderLoopBoard(); }
     else toast('Reset failed', 'err');
   } catch (e) { toast('Reset failed', 'err'); }
 }
@@ -5508,7 +5538,7 @@ async function setLoopTally(slot, col, selectEl) {
     const res = await officeFetch('/api/office/loop-board/tally', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slot, col, value })
+      body: JSON.stringify({ slot, col, value, date: loopBoardDate })
     });
     if (!res.ok) {
       toast('Failed to update tally', 'err');
@@ -5536,7 +5566,7 @@ async function setLoopSlot(slot, selectEl) {
     const res = await officeFetch('/api/office/loop-board/slot', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slot, pilot_id, pilot_name })
+      body: JSON.stringify({ slot, pilot_id, pilot_name, date: loopBoardDate })
     });
     if (!res.ok) { toast('Failed to update slot', 'err'); _loopApiEnd(); return; }
     if (pilot_id) await autoFillLoopBoard(slot, pilot_id);
@@ -5559,7 +5589,7 @@ async function autoFillLoopBoard(fromSlot, firstPilotId) {
       officeFetch('/api/office/loop-board/slot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slot: fromSlot + 1 + i, pilot_id: p.id, pilot_name: p.name })
+        body: JSON.stringify({ slot: fromSlot + 1 + i, pilot_id: p.id, pilot_name: p.name, date: loopBoardDate })
       })
     ));
   } finally {
@@ -5886,12 +5916,18 @@ function connectWS() {
         loadOfficeData();
         break;
       }
-      case 'LOOP_BOARD_UPDATE':
-        loopBoard = data.board;
-        pilotLoopBoard = data.board;
-        if (officeActiveTab === 'loop' && _pendingLoopApiCalls === 0) renderLoopBoard();
-        if (pilotActiveTab === 'loop') renderPilotLoopBoard();
+      case 'LOOP_BOARD_UPDATE': {
+        const today = todayStr();
+        if (!data.date || data.date === today) {
+          pilotLoopBoard = data.board;
+          if (pilotActiveTab === 'loop') renderPilotLoopBoard();
+        }
+        if (!data.date || data.date === loopBoardDate) {
+          loopBoard = data.board;
+          if (officeActiveTab === 'loop' && _pendingLoopApiCalls === 0) renderLoopBoard();
+        }
         break;
+      }
       case 'PILOT_DELETED':
         toast(`${data.pilot_name} removed`);
         loadOfficeData();

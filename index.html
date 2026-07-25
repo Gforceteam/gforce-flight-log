@@ -205,6 +205,9 @@
     }
     .status-bar-logo { height: 32px; width: 32px; border-radius: 50%; flex-shrink: 0; filter: drop-shadow(0 0 8px rgba(243,115,41,0.5)); }
     .pilot-left { display: flex; align-items: center; gap: 10px; }
+    .pilot-title-block { display: flex; flex-direction: column; gap: 1px; }
+    .pilot-title-main { font-size: 17px; font-weight: 800; font-family: 'Montserrat', sans-serif; letter-spacing: 2px; color: var(--text); line-height: 1; }
+    .pilot-title-sub { font-size: 7px; font-weight: 700; color: var(--muted); letter-spacing: 3px; text-transform: uppercase; font-family: 'Montserrat', sans-serif; }
     .status-bar-center { display: flex; align-items: center; gap: 8px; position: absolute; left: 50%; transform: translateX(-50%); }
     #pilot-menu-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:200; }
     #pilot-menu-overlay.open { display:block; }
@@ -1157,7 +1160,13 @@
 <div id="app-page">
   <!-- Header -->
   <div class="status-bar">
-    <img src="./logo-icon.png" alt="GForce" class="status-bar-logo">
+    <div class="pilot-left">
+      <img src="./logo-icon.png" alt="GForce" class="status-bar-logo">
+      <div class="pilot-title-block">
+        <div class="pilot-title-main">GFORCE</div>
+        <div class="pilot-title-sub">PARAGLIDING</div>
+      </div>
+    </div>
     <div class="status-bar-center">
       <div class="pilot-avatar-sm" id="pilot-avatar">B</div>
       <div class="pilot-name-sm" id="pilot-name-display">Brooke</div>

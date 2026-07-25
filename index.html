@@ -5405,6 +5405,10 @@ async function loadLoopBoard() {
 
 let loopBoardRows = Math.max(1, Math.min(20, parseInt(localStorage.getItem('loopBoardRows') || '1', 10)));
 let _lastLoopChange = null;
+let _pendingLoopApiCalls = 0;
+
+function _loopApiStart() { _pendingLoopApiCalls++; }
+function _loopApiEnd() { setTimeout(() => { _pendingLoopApiCalls = Math.max(0, _pendingLoopApiCalls - 1); }, 600); }
 
 function renderLoopBoard() {
   const el = document.getElementById('loop-board-list');
@@ -5489,15 +5493,26 @@ async function setLoopTally(slot, col, selectEl) {
   _lastLoopChange = { type: 'tally', slot, col, oldValue, newValue: value };
   selectEl.classList.toggle('has-val', !!value);
   selectEl.classList.toggle('has-val-L', value === 'L');
+  _loopApiStart();
   try {
     const res = await officeFetch('/api/office/loop-board/tally', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ slot, col, value })
     });
-    if (!res.ok) toast('Failed to update tally', 'err');
+    if (!res.ok) {
+      toast('Failed to update tally', 'err');
+      selectEl.value = oldValue;
+      selectEl.classList.toggle('has-val', !!oldValue);
+      selectEl.classList.toggle('has-val-L', oldValue === 'L');
+    }
   } catch (_) {
     toast('Cannot reach server', 'err');
+    selectEl.value = oldValue;
+    selectEl.classList.toggle('has-val', !!oldValue);
+    selectEl.classList.toggle('has-val-L', oldValue === 'L');
+  } finally {
+    _loopApiEnd();
   }
 }
 
@@ -5506,16 +5521,19 @@ async function setLoopSlot(slot, selectEl) {
   const pilot_name = pilot_id ? (selectEl.options[selectEl.selectedIndex].dataset.name || null) : null;
   const oldSlotData = loopBoard.find(s => s.slot === slot);
   _lastLoopChange = { type: 'slot', slot, oldPilotId: oldSlotData?.pilot_id || null, oldPilotName: oldSlotData?.pilot_name || null };
+  _loopApiStart();
   try {
     const res = await officeFetch('/api/office/loop-board/slot', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ slot, pilot_id, pilot_name })
     });
-    if (!res.ok) { toast('Failed to update slot', 'err'); return; }
+    if (!res.ok) { toast('Failed to update slot', 'err'); _loopApiEnd(); return; }
     if (pilot_id) await autoFillLoopBoard(slot, pilot_id);
   } catch (_) {
     toast('Cannot reach server', 'err');
+  } finally {
+    _loopApiEnd();
   }
 }
 
@@ -5525,13 +5543,18 @@ async function autoFillLoopBoard(fromSlot, firstPilotId) {
   if (startIdx === -1) return;
   const count = loopBoardRows - fromSlot;
   const toFill = Array.from({ length: count }, (_, i) => sorted[(startIdx + 1 + i) % sorted.length]);
-  await Promise.all(toFill.map((p, i) =>
-    officeFetch('/api/office/loop-board/slot', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slot: fromSlot + 1 + i, pilot_id: p.id, pilot_name: p.name })
-    })
-  ));
+  _loopApiStart();
+  try {
+    await Promise.all(toFill.map((p, i) =>
+      officeFetch('/api/office/loop-board/slot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slot: fromSlot + 1 + i, pilot_id: p.id, pilot_name: p.name })
+      })
+    ));
+  } finally {
+    _loopApiEnd();
+  }
   await loadLoopBoard();
 }
 
@@ -5855,8 +5878,8 @@ function connectWS() {
       }
       case 'LOOP_BOARD_UPDATE':
         loopBoard = data.board;
-        if (officeActiveTab === 'loop') renderLoopBoard();
         pilotLoopBoard = data.board;
+        if (officeActiveTab === 'loop' && _pendingLoopApiCalls === 0) renderLoopBoard();
         if (pilotActiveTab === 'loop') renderPilotLoopBoard();
         break;
       case 'PILOT_DELETED':

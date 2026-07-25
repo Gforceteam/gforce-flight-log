@@ -4404,7 +4404,7 @@ function officeDoLogout() {
 function refreshOfficeUiAfterLoad() {
   switch (officeActiveTab) {
     case 'pilots': renderAwayTab(); renderGroupsTab(); renderTodayFlights(); renderOfficeTab(); break;
-    case 'loop': renderLoopBoard(); break;
+    case 'loop': _loopSafeRender(); break;
     case 'today': renderTodayTab(); break;
     case 'flights': renderFlightsTab(); break;
     case 'ff': renderOfficeFF(); break;
@@ -4454,6 +4454,9 @@ let _sendAwayPilotOpts = '';
 function renderGroupsTab() {
   const el = document.getElementById('groups-panel');
   if (!el) return;
+  // Skip re-render if user is actively filling in the send-away form
+  const rows = document.getElementById('send-away-rows');
+  if (rows && rows.contains(document.activeElement)) return;
   const notAirborne = officePilots.filter(p => p.status !== 'airborne').sort(pilotSort);
   _sendAwayPilotOpts = notAirborne.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
   el.innerHTML = `

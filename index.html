@@ -1080,6 +1080,7 @@
     .loop-tally-sel:focus { outline: none; border-color: var(--border); }
     .loop-tally-sel.has-val { background: #ffffff; border-color: var(--border); color: #111111; font-weight: 700; }
     .loop-tally-sel.has-val-L { background: #fefce8; border-color: #fde68a; color: #92400e; }
+    .loop-tally-sel.has-val-IF { background: #f0fdf4; border-color: #86efac; color: #166534; }
 
     /* ── STATS EXTRAS ──────────────────────────────────────────────────── */
     .stat-section { margin-bottom: 14px; }
@@ -4227,7 +4228,7 @@ function renderPilotLoopBoard() {
     html += `<td class="loop-td-pilot" style="font-weight:${isMe ? '800' : '500'};color:${isMe ? 'var(--accent)' : 'var(--text)'};">${slot.pilot_name ? esc(slot.pilot_name) : '<span style="color:var(--muted)">—</span>'}</td>`;
     for (let c = 1; c <= 12; c++) {
       const v = tallies[c - 1] || '';
-      html += `<td class="loop-td-tally"><span class="loop-tally-sel${v ? (v === 'L' ? ' has-val has-val-L' : ' has-val') : ''}" style="display:block;text-align:center;padding:8px 4px;font-size:14px;">${v || '–'}</span></td>`;
+      html += `<td class="loop-td-tally"><span class="loop-tally-sel${v ? (v === 'L' ? ' has-val has-val-L' : v === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" style="display:block;text-align:center;padding:8px 4px;font-size:14px;">${v || '–'}</span></td>`;
     }
     html += '</tr>';
   }
@@ -5470,7 +5471,7 @@ function renderLoopBoard() {
   const el = document.getElementById('loop-board-list');
   if (!el) return;
   const available = (officePilots || []).sort(pilotSort);
-  const tallyOpts = ['', 'I', 'L', '-'];
+  const tallyOpts = ['', 'I', 'L', 'IF', '-'];
   const isToday = loopBoardDate === todayStr();
   let html = `<div class="loop-date-bar">
     <button class="loop-date-btn" onclick="shiftLoopDate(-1)" title="Previous day">‹</button>
@@ -5497,7 +5498,7 @@ function renderLoopBoard() {
     for (let c = 1; c <= 12; c++) {
       const val = tallies[c - 1] || '';
       const tOpts = tallyOpts.map(v => `<option value="${v}" ${val === v ? 'selected' : ''}>${v || '–'}</option>`).join('');
-      html += `<td class="loop-td-tally"><select class="loop-tally-sel${val ? (val === 'L' ? ' has-val has-val-L' : ' has-val') : ''}" onchange="setLoopTally(${i},${c},this)">${tOpts}</select></td>`;
+      html += `<td class="loop-td-tally"><select class="loop-tally-sel${val ? (val === 'L' ? ' has-val has-val-L' : val === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" onchange="setLoopTally(${i},${c},this)">${tOpts}</select></td>`;
     }
     html += '</tr>';
   }
@@ -5558,6 +5559,7 @@ async function setLoopTally(slot, col, selectEl) {
   _lastLoopChange = { type: 'tally', slot, col, oldValue, newValue: value };
   selectEl.classList.toggle('has-val', !!value);
   selectEl.classList.toggle('has-val-L', value === 'L');
+  selectEl.classList.toggle('has-val-IF', value === 'IF');
   _loopApiStart();
   try {
     const res = await officeFetch('/api/office/loop-board/tally', {

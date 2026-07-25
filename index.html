@@ -4577,9 +4577,14 @@ function renderAwayTab() {
           <td class="col-actions">${actionBtns(p)}</td>
         </tr>`;
     } else {
+      const gid = entry.pilots[0].group_id;
+      const gname = esc(entry.groupName || 'Group');
       html += `
         <tr class="group-header">
-          <td colspan="4">${entry.pilots.length} Pilots</td>
+          <td colspan="3">${entry.pilots.length} Pilots — ${gname}</td>
+          <td style="text-align:right;">
+            <button onclick="showAddToGroupModal('${gid}','${gname}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:16px;font-weight:700;padding:4px 12px;cursor:pointer;line-height:1;" title="Add pilot to group">+</button>
+          </td>
         </tr>`;
       entry.pilots.forEach(p => {
         html += `
@@ -4599,6 +4604,46 @@ function renderAwayTab() {
   html += `</tbody></table></div>`;
   el.innerHTML = html;
   updateTimers();
+}
+
+function showAddToGroupModal(groupId, groupName) {
+  const available = officePilots.filter(p => p.status !== 'airborne');
+  if (!available.length) { toast('No available pilots to add'); return; }
+  const opts = available.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  const modal = document.createElement('div');
+  modal.id = 'add-to-group-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:999;display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;padding:28px 24px;width:90%;max-width:340px;box-shadow:0 8px 40px rgba(0,0,0,0.3);">
+      <div style="font-size:17px;font-weight:800;margin-bottom:6px;">Add Pilot to Group</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:18px;">${groupName}</div>
+      <select id="atg-pilot-sel" style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:15px;margin-bottom:16px;">
+        <option value="">Select pilot…</option>
+        ${opts}
+      </select>
+      <div style="display:flex;gap:10px;">
+        <button onclick="document.getElementById('add-to-group-modal').remove()" style="flex:1;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Cancel</button>
+        <button onclick="confirmAddToGroup('${groupId}')" style="flex:1;padding:12px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Add to Group</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+async function confirmAddToGroup(groupId) {
+  const sel = document.getElementById('atg-pilot-sel');
+  if (!sel || !sel.value) { toast('Select a pilot first'); return; }
+  const pilotId = sel.value;
+  document.getElementById('add-to-group-modal')?.remove();
+  try {
+    const res = await officeFetch('/api/office/add-to-group', {
+      method: 'POST',
+      body: JSON.stringify({ pilot_id: pilotId, group_id: groupId })
+    });
+    const data = await res.json();
+    if (res.ok) { toast(data.message); await loadOfficeData(); }
+    else toast(data.error || 'Failed to add pilot');
+  } catch (e) { toast('Error: ' + e.message); }
 }
 
 // ─── Office Tab (Flight Following) — presence panel removed ──────────────────

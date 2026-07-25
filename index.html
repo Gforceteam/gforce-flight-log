@@ -4437,19 +4437,16 @@ function renderTodayFlights() {
     const grp = groupMap.get(key);
     const isGroup = grp.length > 1;
     const sentTime = fmtTime(grp[0].sent_away_at);
-    html += `<div class="tdf-entry">`;
-    if (isGroup) html += `<div class="tdf-group-label">${grp.length} pilots · ${esc(sentTime)}</div>`;
     for (const f of grp) {
       const landedTime = fmtTime(f.landed_at);
       const stillUp = !f.landed_at;
       html += `<div class="tdf-card${isGroup ? ' tdf-card-group' : ''}">
+        ${isGroup ? `<div class="tdf-group-label" style="margin-bottom:6px;">${grp.length}-pilot group</div>` : ''}
         <div class="tdf-pilot" title="${esc(f.pilot_name)}">${esc(f.pilot_name)}</div>
-        <div class="tdf-row"><span class="tdf-lbl">Flight</span><span class="tdf-val">${esc(f.client_name || '—')}</span></div>
         <div class="tdf-row"><span class="tdf-lbl">Away</span><span class="tdf-val">${esc(sentTime)}</span></div>
         <div class="tdf-row"><span class="tdf-lbl">Landed</span><span class="tdf-val${stillUp ? ' tdf-airborne' : ''}">${stillUp ? 'Airborne' : esc(landedTime)}</span></div>
       </div>`;
     }
-    html += `</div>`;
   }
 
   html += `</div></div>`;

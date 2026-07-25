@@ -5371,6 +5371,7 @@ async function loadLoopBoard() {
 }
 
 let loopBoardRows = Math.max(1, Math.min(20, parseInt(localStorage.getItem('loopBoardRows') || '1', 10)));
+let _lastLoopChange = null;
 
 function renderLoopBoard() {
   const el = document.getElementById('loop-board-list');
@@ -5402,9 +5403,25 @@ function renderLoopBoard() {
   html += `<div class="loop-board-controls">
     <button onclick="addLoopRow()" style="padding:8px 22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:22px;line-height:1;cursor:pointer;" ${loopBoardRows >= 20 ? 'disabled' : ''}>+</button>
     <button onclick="removeLoopRow()" style="padding:8px 22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:22px;line-height:1;cursor:pointer;" ${loopBoardRows <= 1 ? 'disabled' : ''}>−</button>
-    <button onclick="resetLoopBoard()" style="padding:8px 20px;background:rgba(239,68,68,0.08);border:1px solid var(--danger);border-radius:8px;color:var(--danger);font-size:13px;font-weight:700;cursor:pointer;margin-left:auto;">Reset</button>
+    <button onclick="undoLoopChange()" ${!_lastLoopChange ? 'disabled' : ''} style="padding:8px 20px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;margin-left:auto;opacity:${_lastLoopChange ? '1' : '0.4'};">↩ Reverse</button>
+    <button onclick="resetLoopBoard()" style="padding:8px 20px;background:rgba(239,68,68,0.08);border:1px solid var(--danger);border-radius:8px;color:var(--danger);font-size:13px;font-weight:700;cursor:pointer;">Reset</button>
   </div>`;
   el.innerHTML = html;
+}
+
+async function undoLoopChange() {
+  if (!_lastLoopChange) { toast('Nothing to undo'); return; }
+  const c = _lastLoopChange;
+  _lastLoopChange = null;
+  try {
+    if (c.type === 'tally') {
+      await officeFetch('/api/office/loop-board/tally', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slot: c.slot, col: c.col, value: c.oldValue }) });
+    } else if (c.type === 'slot') {
+      await officeFetch('/api/office/loop-board/slot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slot: c.slot, pilot_id: c.oldPilotId, pilot_name: c.oldPilotName }) });
+    }
+    loopBoard = await (await officeFetch('/api/office/loop-board')).json();
+    renderLoopBoard();
+  } catch (e) { toast('Undo failed', 'err'); }
 }
 
 async function resetLoopBoard() {
@@ -5432,6 +5449,11 @@ function removeLoopRow() {
 
 async function setLoopTally(slot, col, selectEl) {
   const value = selectEl.value || '';
+  const oldSlotData = loopBoard.find(s => s.slot === slot);
+  let oldTallies = [];
+  try { oldTallies = JSON.parse(oldSlotData?.tallies || '[]'); } catch (_) {}
+  const oldValue = oldTallies[col - 1] || '';
+  _lastLoopChange = { type: 'tally', slot, col, oldValue, newValue: value };
   selectEl.classList.toggle('has-val', !!value);
   selectEl.classList.toggle('has-val-L', value === 'L');
   try {
@@ -5449,6 +5471,8 @@ async function setLoopTally(slot, col, selectEl) {
 async function setLoopSlot(slot, selectEl) {
   const pilot_id = selectEl.value || null;
   const pilot_name = pilot_id ? (selectEl.options[selectEl.selectedIndex].dataset.name || null) : null;
+  const oldSlotData = loopBoard.find(s => s.slot === slot);
+  _lastLoopChange = { type: 'slot', slot, oldPilotId: oldSlotData?.pilot_id || null, oldPilotName: oldSlotData?.pilot_name || null };
   try {
     const res = await officeFetch('/api/office/loop-board/slot', {
       method: 'POST',

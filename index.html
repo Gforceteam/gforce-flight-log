@@ -5448,7 +5448,20 @@ let _lastLoopChange = null;
 let _pendingLoopApiCalls = 0;
 
 function _loopApiStart() { _pendingLoopApiCalls++; }
-function _loopApiEnd() { setTimeout(() => { _pendingLoopApiCalls = Math.max(0, _pendingLoopApiCalls - 1); }, 600); }
+function _loopApiEnd() {
+  setTimeout(() => {
+    _pendingLoopApiCalls = Math.max(0, _pendingLoopApiCalls - 1);
+    // Flush any WS updates that were suppressed during the API window
+    if (_pendingLoopApiCalls === 0 && officeActiveTab === 'loop') _loopSafeRender();
+  }, 600);
+}
+// Re-render only when no dropdown/input inside the board is actively focused.
+// Prevents innerHTML replacement from closing an open dropdown mid-selection.
+function _loopSafeRender() {
+  const el = document.getElementById('loop-board-list');
+  if (el && el.contains(document.activeElement)) return;
+  renderLoopBoard();
+}
 
 function renderLoopBoard() {
   const el = document.getElementById('loop-board-list');
@@ -5577,8 +5590,12 @@ async function setLoopSlot(slot, selectEl) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ slot, pilot_id, pilot_name, date: loopBoardDate })
     });
-    if (!res.ok) { toast('Failed to update slot', 'err'); _loopApiEnd(); return; }
-    if (pilot_id) await autoFillLoopBoard(slot, pilot_id);
+    if (!res.ok) { toast('Failed to update slot', 'err'); return; }
+    if (pilot_id) {
+      await autoFillLoopBoard(slot, pilot_id);
+    } else {
+      await loadLoopBoard();
+    }
   } catch (_) {
     toast('Cannot reach server', 'err');
   } finally {
@@ -5933,7 +5950,7 @@ function connectWS() {
         }
         if (!data.date || data.date === loopBoardDate) {
           loopBoard = data.board;
-          if (officeActiveTab === 'loop' && _pendingLoopApiCalls === 0) renderLoopBoard();
+          if (officeActiveTab === 'loop' && _pendingLoopApiCalls === 0) _loopSafeRender();
         }
         break;
       }

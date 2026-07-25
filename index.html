@@ -4450,7 +4450,7 @@ function renderTodayFlights() {
         const stillUp = !f.landed_at;
         return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);">
           <span style="font-size:14px;font-weight:600;">${esc(f.pilot_name)}</span>
-          <span style="font-size:13px;color:${stillUp ? 'var(--accent)' : 'var(--muted)'};">${stillUp ? 'Airborne' : esc(landedTime)}</span>
+          <span style="font-size:13px;color:${stillUp ? 'var(--accent)' : 'var(--muted)'};">${stillUp ? 'Airborne' : `Landed ${esc(landedTime)}`}</span>
         </div>`;
       }).join('');
       html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;">
@@ -4469,9 +4469,8 @@ function renderTodayFlights() {
           <span class="tdf-pilot">${esc(f.pilot_name)}</span>
           <span style="font-size:12px;color:var(--muted);">Away ${esc(sentTime)}</span>
         </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
-          <span style="font-size:13px;color:var(--muted);">Landed</span>
-          <span style="font-size:13px;font-weight:600;color:${stillUp ? 'var(--accent)' : 'var(--text)'};">${stillUp ? 'Airborne' : esc(landedTime)}</span>
+        <div style="margin-top:4px;text-align:right;">
+          <span style="font-size:13px;color:${stillUp ? 'var(--accent)' : 'var(--muted)'};">${stillUp ? 'Airborne' : `Landed ${esc(landedTime)}`}</span>
         </div>
       </div>`;
     }

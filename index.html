@@ -64,6 +64,13 @@
       --shadow-sm: 0 2px 8px rgba(0,0,0,0.08);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    /* Prevent iOS Safari auto-zoom (triggered when a focused input is < 16px).
+       Exclude intentionally compact fields: duty-hrs-input, loop-tally-sel. */
+    input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not(.duty-hrs-input),
+    select:not(.loop-tally-sel),
+    textarea { font-size: 16px !important; }
+    /* Remove double-tap zoom delay on all buttons and interactive elements */
+    button, a, [role="button"] { touch-action: manipulation; }
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
       background: var(--bg);
@@ -6438,12 +6445,12 @@ async function submitChangePassword() {
 <div id="change-pw-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;padding:20px;">
   <div style="background:var(--card);border-radius:16px;padding:24px;width:100%;max-width:340px;border:1px solid var(--border);">
     <div style="font-size:17px;font-weight:700;margin-bottom:16px;">🔑 Change Password</div>
-    <input id="cpw-current" type="password" placeholder="Current password" maxlength="128"
-      style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:15px;margin-bottom:10px;" />
-    <input id="cpw-new" type="password" placeholder="New password (min 6 chars)" maxlength="128"
-      style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:15px;margin-bottom:10px;" />
-    <input id="cpw-confirm" type="password" placeholder="Confirm new password" maxlength="128"
-      style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:15px;margin-bottom:12px;"
+    <input id="cpw-current" type="password" placeholder="Current password" maxlength="128" autocomplete="current-password"
+      style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);margin-bottom:10px;" />
+    <input id="cpw-new" type="password" placeholder="New password (min 6 chars)" maxlength="128" autocomplete="new-password"
+      style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);margin-bottom:10px;" />
+    <input id="cpw-confirm" type="password" placeholder="Confirm new password" maxlength="128" autocomplete="new-password"
+      style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);margin-bottom:12px;"
       onkeydown="if(event.key==='Enter')submitChangePassword()" />
     <div id="cpw-error" style="color:var(--danger);font-size:13px;margin-bottom:10px;min-height:18px;"></div>
     <div style="display:flex;gap:10px;">
@@ -6457,12 +6464,12 @@ async function submitChangePassword() {
 <div id="office-cpw-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;padding:20px;">
   <div style="background:var(--card);border-radius:16px;padding:24px;width:100%;max-width:340px;border:1px solid var(--border);">
     <div style="font-size:17px;font-weight:700;margin-bottom:16px;">🔑 Change Office Password</div>
-    <input id="ocpw-current" type="password" placeholder="Current password" maxlength="128"
-      style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:15px;margin-bottom:10px;box-sizing:border-box;" />
-    <input id="ocpw-new" type="password" placeholder="New password (min 6 chars)" maxlength="128"
-      style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:15px;margin-bottom:10px;box-sizing:border-box;" />
-    <input id="ocpw-confirm" type="password" placeholder="Confirm new password" maxlength="128"
-      style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:15px;margin-bottom:12px;box-sizing:border-box;"
+    <input id="ocpw-current" type="password" placeholder="Current password" maxlength="128" autocomplete="current-password"
+      style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);margin-bottom:10px;" />
+    <input id="ocpw-new" type="password" placeholder="New password (min 6 chars)" maxlength="128" autocomplete="new-password"
+      style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);margin-bottom:10px;" />
+    <input id="ocpw-confirm" type="password" placeholder="Confirm new password" maxlength="128" autocomplete="new-password"
+      style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);margin-bottom:12px;"
       onkeydown="if(event.key==='Enter')submitOfficeCpw()" />
     <div id="ocpw-error" style="color:var(--danger);font-size:13px;margin-bottom:10px;min-height:18px;"></div>
     <div style="display:flex;gap:10px;">

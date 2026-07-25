@@ -242,6 +242,9 @@
     }
     .pilot-name-sm.pilot-name-tappable:active { opacity: 0.85; }
     .status-right { display: flex; align-items: center; gap: 8px; }
+    .pilot-airborne-chip { display: none; align-items: center; gap: 6px; background: rgba(245,166,35,0.10); border: 1px solid rgba(245,166,35,0.28); border-radius: 9999px; padding: 4px 10px; font-size: 11px; font-weight: 700; color: var(--warning); white-space: nowrap; }
+    .pilot-airborne-chip.show { display: flex; }
+    .pilot-clock { font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: 1px; padding: 4px 8px; background: rgba(0,0,0,0.05); border-radius: 7px; }
     .server-badge {
       font-size: 11px; padding: 3px 8px; border-radius: 10px; font-weight: 600;
     }
@@ -1044,7 +1047,7 @@
     .loop-td-slot { text-align: center; font-weight: 800; color: var(--text); font-family: 'Montserrat', sans-serif; font-size: 17px; padding: 10px 6px; white-space: nowrap; }
     .loop-td-pilot { padding: 10px 8px 10px 6px; }
     .loop-td-tally { padding: 6px 4px; text-align: center; }
-    .loop-pilot-sel { width: 100%; background: rgba(0,0,0,0.04); color: var(--text); border: 1px solid var(--border); border-radius: 7px; padding: 10px 8px; font-size: 17px; cursor: pointer; }
+    .loop-pilot-sel { width: 100%; background: #ffffff; color: #111111; border: 1px solid var(--border); border-radius: 7px; padding: 10px 8px; font-size: 17px; cursor: pointer; }
     .loop-pilot-sel:focus { outline: none; border-color: var(--border); }
     .loop-tally-sel { width: 60px; background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 6px; padding: 10px 4px; font-size: 15px; text-align: center; cursor: pointer; }
     .loop-tally-sel:focus { outline: none; border-color: var(--border); }
@@ -1173,6 +1176,8 @@
       <div class="pilot-name-sm" id="pilot-name-display">Brooke</div>
     </div>
     <div class="status-right">
+      <div class="pilot-airborne-chip" id="pilot-airborne-chip"><span class="airborne-dot"></span><span id="pilot-airborne-count">0</span>&nbsp;airborne</div>
+      <div class="pilot-clock" id="pilot-clock"></div>
       <span class="server-badge" id="server-badge">...</span>
       <button onclick="togglePilotMenu()" class="pilot-icon-btn" title="Menu">☰</button>
     </div>
@@ -2296,6 +2301,24 @@ function openPilotExportNameSettings() {
   editPilotExportName();
 }
 
+let _pilotClockInterval;
+function startPilotClock() {
+  if (_pilotClockInterval) clearInterval(_pilotClockInterval);
+  const el = document.getElementById('pilot-clock');
+  function tick() {
+    if (el) el.textContent = new Date().toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: NZ_TZ });
+  }
+  tick();
+  _pilotClockInterval = setInterval(tick, 1000);
+}
+function updatePilotAirborneChip() {
+  const chip = document.getElementById('pilot-airborne-chip');
+  const countEl = document.getElementById('pilot-airborne-count');
+  if (!chip || !countEl) return;
+  countEl.textContent = flyingPilots.length;
+  chip.classList.toggle('show', flyingPilots.length > 0);
+}
+
 function showApp(name) {
   document.getElementById('login-page').style.display = 'none';
   document.getElementById('app-page').style.display = 'block';
@@ -2310,6 +2333,7 @@ function showApp(name) {
   setPilotTabDates();
   loadMyData();
   startStatusPoll();
+  startPilotClock();
   connectWS();
 }
 
@@ -2347,7 +2371,7 @@ function startStatusPoll() {
         localStorage.setItem(lastGliderRegKey(), currentWing);
         refreshWingDropdown();
       }
-      if (flyingRes && flyingRes.ok) flyingPilots = await flyingRes.json();
+      if (flyingRes && flyingRes.ok) { flyingPilots = await flyingRes.json(); updatePilotAirborneChip(); }
 
       // In-app notification when office acknowledges a landing (covers foreground case)
       if (newStatus.latest_ack) {
@@ -2672,6 +2696,7 @@ async function loadMyData() {
     myFlights = flightsRes.ok ? await flightsRes.json() : [];
     myDrives = drivesRes.ok ? await drivesRes.json() : [];
     flyingPilots = flyingRes.ok ? await flyingRes.json() : [];
+    updatePilotAirborneChip();
     renderDashboard();
     renderFlights();
     updateStatusBadge();

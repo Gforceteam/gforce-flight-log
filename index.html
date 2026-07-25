@@ -2271,6 +2271,7 @@ async function doLogin() {
 function doLogout() {
   unsubscribeFromPush();
   pilotToken = pilotId = pilotName = null;
+  if (ws && !officeToken) { ws.close(); ws = null; }
   clearInterval(window._statusPoll);
   clearInterval(window._dashboardTimer);
   if (window._statusPollAbort) { window._statusPollAbort.abort(); window._statusPollAbort = null; }
@@ -2309,6 +2310,7 @@ function showApp(name) {
   setPilotTabDates();
   loadMyData();
   startStatusPoll();
+  connectWS();
 }
 
 function startStatusPoll() {
@@ -5661,19 +5663,20 @@ async function officeCreatePilot() {
 
 // ─── WebSocket ────────────────────────────────────────────────────────────────
 function connectWS() {
-  if (!officeToken) return;
-  ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(officeToken)}`);
+  const token = officeToken || pilotToken;
+  if (!token) return;
+  ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`);
   ws.onopen = () => {
-    document.getElementById('ws-indicator').classList.add('connected');
-    document.getElementById('ws-indicator').title = 'Connected';
+    const ind = document.getElementById('ws-indicator');
+    if (ind) { ind.classList.add('connected'); ind.title = 'Connected'; }
     const badge = document.getElementById('office-ws-badge');
     const label = document.getElementById('ws-badge-label');
     if (badge) badge.classList.remove('offline');
     if (label) label.textContent = 'LIVE';
   };
   ws.onclose = () => {
-    document.getElementById('ws-indicator').classList.remove('connected');
-    document.getElementById('ws-indicator').title = 'Disconnected';
+    const ind = document.getElementById('ws-indicator');
+    if (ind) { ind.classList.remove('connected'); ind.title = 'Disconnected'; }
     const badge = document.getElementById('office-ws-badge');
     const label = document.getElementById('ws-badge-label');
     if (badge) badge.classList.add('offline');
@@ -5696,6 +5699,21 @@ function connectWS() {
           }
         } catch (_) {}
         if (officeToken) connectWS();
+      }, 5000);
+    } else if (pilotToken) {
+      setTimeout(async () => {
+        try {
+          const r = await fetch(`${API_URL}/api/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refresh_token: localStorage.getItem('gforce_pilot_refresh') })
+          });
+          if (r.ok) {
+            const d = await r.json();
+            if (d.token) { pilotToken = d.token; localStorage.setItem('gforce_pilot_token', pilotToken); }
+          }
+        } catch (_) {}
+        if (pilotToken) connectWS();
       }, 5000);
     }
   };

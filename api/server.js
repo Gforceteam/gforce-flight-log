@@ -281,6 +281,25 @@ async function createTables() {
       [todayForMigration, row.slot, row.pilot_id, row.pilot_name, row.tallies]
     );
   }
+  // Fix flights where date was stored as UTC date instead of NZ date (timezone bug in office landing endpoints).
+  // Only corrects flights whose stored date equals the raw UTC date extracted from landed_at —
+  // meaning they were written by the buggy server code, not manually entered by a pilot.
+  try {
+    const buggyFlights = await queryAll(
+      `SELECT id, landed_at, date FROM flights WHERE landed_at IS NOT NULL AND landed_at != '' AND (notes LIKE '%PENDING_PILOT_FILL%' OR notes LIKE '%Office landed pilot%')`
+    );
+    let fixedCount = 0;
+    for (const f of buggyFlights) {
+      const utcDate = f.landed_at.slice(0, 10);
+      const nzDate = new Date(f.landed_at).toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+      if (f.date === utcDate && nzDate !== utcDate) {
+        await run('UPDATE flights SET date = ? WHERE id = ?', [nzDate, f.id]);
+        fixedCount++;
+      }
+    }
+    if (fixedCount > 0) console.log(`✅ Corrected ${fixedCount} flight(s) with UTC date → NZ date`);
+  } catch (e) { console.error('Date migration error:', e.message); }
+
   console.log('✅ Tables ready');
 }
 
@@ -903,6 +922,7 @@ app.put('/api/flights/:id', verifyToken, async (req, res) => {
       `UPDATE flights SET date=?, flight_num=?, weight=?, takeoff=?, landing=?, time=?, photos=?, notes=?, wing_reg=? WHERE id=? AND pilot_id=?`,
       [sanitize(date, 10), flight_num, weight, sanitize(takeoff, 10), sanitize(landing, 10), time, photos || 0, sanitize(notes, 500) || '', sanitize(wing_reg, 10), id, pilotId]
     );
+    broadcast({ type: 'FLIGHT_UPDATED', pilot_id: pilotId, pilot_name: req.pilot.name, flight_id: id });
     res.json({ id, message: 'Flight updated' });
   } catch (e) {
     console.error(e);

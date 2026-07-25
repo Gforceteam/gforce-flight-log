@@ -5878,6 +5878,9 @@ function connectWS() {
         dismissAlert(data.pilot_name);
         loadOfficeData();
         break;
+      case 'FLIGHT_UPDATED':
+        loadOfficeData();
+        break;
       case 'DID_NOT_FLY':
         toast(`${data.pilot_name} — did not fly, timer cancelled`);
         dismissAlert(data.pilot_name);

@@ -2997,13 +2997,11 @@ function renderDashboard() {
     `;
 
   } else {
-    // ── Landed ───────────────────────────────────────────────────────────────
+    // ── Idle / Landed ─────────────────────────────────────────────────────────
     clearInterval(window._dashboardTimer);
-    clearInterval(_pilotPostLandCountdown);
+    const hasFlewToday = todayFlights.length > 0;
     el.innerHTML = `
-      <div class="ff-status-card ff-status-landed">
-        <div class="ff-status-pill landed">Landed</div>
-      </div>
+      ${hasFlewToday ? `<div class="ff-status-card ff-status-landed"><div class="ff-status-pill landed">Landed</div></div>` : ''}
       ${renderTodayFlightsList()}
       ${renderFlyingList(false)}
     `;

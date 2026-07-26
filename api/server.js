@@ -1383,6 +1383,24 @@ app.get('/api/flying', verifyToken, async (req, res) => {
   }
 });
 
+// ─── Today's Flights (pilot-facing) ──────────────────────────────────────────
+app.get('/api/today-flights', verifyToken, async (req, res) => {
+  try {
+    const today = nzToday();
+    const flights = await queryAll(`
+      SELECT f.id, f.pilot_id, f.flight_num, f.date, f.landed_at, f.sent_away_at, f.client_name,
+             p.name AS pilot_name
+      FROM flights f
+      JOIN pilots p ON f.pilot_id = p.id
+      WHERE f.date = ?
+      ORDER BY f.sent_away_at ASC, f.flight_num ASC
+    `, [today]);
+    res.json(flights);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Flight Following ─────────────────────────────────────────────────────────
 app.get('/api/flight-following', verifyToken, async (req, res) => {
   try {

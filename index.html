@@ -3103,7 +3103,7 @@ function renderAllTodayFlights() {
       }).join('');
       html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-          <span class="tdf-group-label">${grp.length}-pilot group</span>
+          <span class="tdf-group-label">${grp.length}-Pax Group</span>
           <span style="font-size:12px;color:var(--muted);">Away ${esc(sentTime)}</span>
         </div>
         ${pilotRows}
@@ -3112,12 +3112,13 @@ function renderAllTodayFlights() {
       const f = grp[0];
       const landedTime = fmtTime(f.landed_at);
       const stillUp = !f.landed_at;
-      html += `<div class="tdf-card" style="padding:12px 14px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-          <span class="tdf-pilot" style="flex:1;min-width:0;">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
-          <span style="font-size:12px;color:var(--muted);flex-shrink:0;">Away ${esc(sentTime)}</span>
+      html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span class="tdf-group-label">Single Pax</span>
+          <span style="font-size:12px;color:var(--muted);">Away ${esc(sentTime)}</span>
         </div>
-        <div style="margin-top:6px;display:flex;justify-content:flex-end;align-items:center;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);gap:8px;">
+          <span class="tdf-pilot" style="flex:1;min-width:0;">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
           <span style="font-size:13px;color:${stillUp ? 'var(--accent)' : 'var(--muted)'};">${stillUp ? 'Airborne' : `Landed ${esc(landedTime)}`}</span>
         </div>
       </div>`;
@@ -4632,7 +4633,7 @@ function renderTodayFlights() {
       }).join('');
       html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-          <span class="tdf-group-label">${grp.length}-pilot group</span>
+          <span class="tdf-group-label">${grp.length}-Pax Group</span>
           <span style="font-size:12px;color:var(--muted);">Away ${esc(sentTime)}</span>
         </div>
         ${pilotRows}
@@ -4641,14 +4642,15 @@ function renderTodayFlights() {
       const f = grp[0];
       const landedTime = fmtTime(f.landed_at);
       const stillUp = !f.landed_at;
-      html += `<div class="tdf-card" style="padding:12px 14px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-          <span class="tdf-pilot" style="flex:1;min-width:0;">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
-          <span style="font-size:12px;color:var(--muted);flex-shrink:0;">Away ${esc(sentTime)}</span>
+      html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span class="tdf-group-label">Single Pax</span>
+          <span style="font-size:12px;color:var(--muted);">Away ${esc(sentTime)}</span>
         </div>
-        <div style="margin-top:6px;display:flex;justify-content:flex-end;align-items:center;gap:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);gap:8px;">
+          <span class="tdf-pilot" style="flex:1;min-width:0;">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
           <span style="font-size:13px;color:${stillUp ? 'var(--accent)' : 'var(--muted)'};">${stillUp ? 'Airborne' : `Landed ${esc(landedTime)}`}</span>
-          ${!stillUp ? `<button onclick="officeEditFlight('${esc(f.id)}')" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid var(--border-hi);background:var(--surface);color:var(--text-2);cursor:pointer;touch-action:manipulation;">Edit</button>` : ''}
+          ${!stillUp ? `<button onclick="officeEditFlight('${esc(f.id)}')" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid var(--border-hi);background:var(--surface);color:var(--text-2);cursor:pointer;flex-shrink:0;touch-action:manipulation;">Edit</button>` : ''}
         </div>
       </div>`;
     }
@@ -4763,14 +4765,19 @@ function renderAwayTab() {
     if (entry.type === 'solo') {
       const p = entry.pilot;
       html += `
-        <div class="tdf-card" id="pilot-card-${p.id}" style="padding:12px 14px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
-            <span class="tdf-pilot">${esc(p.name)}</span>
-            ${p.client_name ? `<span style="font-size:13px;color:var(--accent);font-weight:600;flex-shrink:0;">${esc(p.client_name)}</span>` : ''}
+        <div class="tdf-card tdf-card-group" id="pilot-card-${p.id}" style="padding:12px 14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px;">
+            <span class="tdf-group-label">Single Pax</span>
+            ${p.client_name ? `<span style="font-size:12px;color:var(--accent);font-weight:600;flex-shrink:0;">${esc(p.client_name)}</span>` : ''}
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-            <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="margin:0;">--:--</div>
-            ${actionBtns(p)}
+          <div style="border-top:1px solid var(--border);padding-top:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+              <span class="tdf-pilot">${esc(p.name)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+              <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="margin:0;">--:--</div>
+              ${actionBtns(p)}
+            </div>
           </div>
         </div>`;
     } else {
@@ -4785,7 +4792,7 @@ function renderAwayTab() {
       html += `
         <div class="tdf-card tdf-card-group" style="padding:12px 14px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px;">
-            <span class="tdf-group-label">${entry.pilots.length}-pilot group</span>
+            <span class="tdf-group-label">${entry.pilots.length}-Pax Group</span>
             <div style="display:flex;align-items:center;gap:8px;">
               ${entry.groupName ? `<span style="font-size:12px;color:var(--accent);font-weight:600;">${gname}</span>` : ''}
               <button onclick="showAddToGroupModal('${gid}','${gname}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:16px;font-weight:700;padding:2px 10px;cursor:pointer;line-height:1.4;touch-action:manipulation;" title="Add pilot to group">+</button>

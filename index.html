@@ -4579,9 +4579,12 @@ function renderTodayFlights() {
 
   const completedCount = todayF.filter(f => f.landed_at).length;
   let html = `<div class="tdf-wrap">
-    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;">
       <div class="section-title" style="margin:0;">Today's Flights</div>
-      <div style="font-size:13px;font-weight:700;color:var(--accent);">${completedCount} Completed Flight${completedCount !== 1 ? 's' : ''} Today</div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="font-size:13px;font-weight:700;color:var(--accent);">${completedCount} Completed Flight${completedCount !== 1 ? 's' : ''} Today</div>
+        <button onclick="exportTodayFlightsCSV()" style="font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;border:1px solid var(--border-hi);background:var(--surface);color:var(--text-2);cursor:pointer;touch-action:manipulation;white-space:nowrap;">↓ Export CSV</button>
+      </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:8px;">`;
 
@@ -5359,6 +5362,42 @@ function filterByPilot(name) {
 function officeFmtDate(s) {
   const d = new Date(s + 'T00:00:00');
   return d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
+}
+
+function exportTodayFlightsCSV() {
+  const today = todayStr();
+  const todayF = allFlights.filter(f => f.date === today);
+  if (todayF.length === 0) { toast('No flights today to export'); return; }
+
+  // Build group lookup so we can label solo vs group flights
+  const groupCount = {};
+  todayF.forEach(f => { if (f.sent_away_at) groupCount[f.sent_away_at] = (groupCount[f.sent_away_at] || 0) + 1; });
+
+  const fmtNZ = ts => ts ? new Date(ts).toLocaleString('en-NZ', { timeZone: NZ_TZ, hour: 'numeric', minute: '2-digit', hour12: true }) : '';
+  const durationMins = (sent, landed) => {
+    if (!sent || !landed) return '';
+    return Math.round((new Date(landed) - new Date(sent)) / 60000);
+  };
+
+  const header = ['Pilot', 'Flight #', 'Client', 'Type', 'Sent Away', 'Landed', 'Duration (min)'];
+  const rows = todayF
+    .sort((a, b) => (a.sent_away_at || '').localeCompare(b.sent_away_at || '') || (a.flight_num || 0) - (b.flight_num || 0))
+    .map(f => {
+      const count = f.sent_away_at ? (groupCount[f.sent_away_at] || 1) : 1;
+      const type = count > 1 ? `${count}-Pax Group` : 'Single Pax';
+      return [
+        f.pilot_name || '',
+        f.flight_num || '',
+        f.client_name || '',
+        type,
+        fmtNZ(f.sent_away_at),
+        fmtNZ(f.landed_at),
+        durationMins(f.sent_away_at, f.landed_at)
+      ];
+    });
+
+  const csv = [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+  downloadCSV(csv, `gforce_today_${today}.csv`);
 }
 
 function exportAllCSV() {

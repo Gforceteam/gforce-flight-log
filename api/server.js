@@ -2016,8 +2016,9 @@ app.get('/api/pilot/loop-board', verifyPilotOrOffice, async (req, res) => {
   try {
     const date = nzToday();
     await ensureLoopBoardDate(date);
-    const rows = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
-    res.json(rows);
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    const completed = await queryAll('SELECT id, pilot_id, pilot_name, completed_at, slot, tallies FROM loop_board_completed WHERE date = ? ORDER BY completed_at ASC', [date]);
+    res.json({ board, completed });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

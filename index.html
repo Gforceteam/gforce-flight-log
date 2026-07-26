@@ -4198,6 +4198,7 @@ function renderStats() {
 // ─── Pilot Tab System ────────────────────────────────────────────────────────
 let pilotActiveTab = 'ff';
 let pilotLoopBoard = [];
+let pilotLoopBoardCompleted = [];
 
 function pilotTabDateStr() {
   return new Date().toLocaleDateString('en-NZ', { timeZone: NZ_TZ, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -4266,7 +4267,9 @@ async function loadPilotLoopBoard() {
   try {
     const res = await apiFetch('/api/pilot/loop-board');
     if (!res || !res.ok) return;
-    pilotLoopBoard = await res.json();
+    const data = await res.json();
+    pilotLoopBoard = Array.isArray(data) ? data : (data.board || []);
+    pilotLoopBoardCompleted = Array.isArray(data) ? [] : (data.completed || []);
     renderPilotLoopBoard();
   } catch (_) {}
 }
@@ -4275,32 +4278,60 @@ function renderPilotLoopBoard() {
   const el = document.getElementById('pilot-loop-board-wrap');
   if (!el) return;
   const board = pilotLoopBoard || [];
+  const completed = pilotLoopBoardCompleted || [];
   const maxSlot = board.reduce((m, s) => s.pilot_id ? Math.max(m, s.slot) : m, 0);
-  if (maxSlot === 0) {
+
+  const renderTallyRow = (pilotNameVal, talliesJson, highlight) => {
+    let tallies = Array(12).fill('');
+    try { const t = JSON.parse(talliesJson || '[]'); if (Array.isArray(t)) tallies = t; } catch (_) {}
+    while (tallies.length < 12) tallies.push('');
+    const isMe = pilotNameVal === pilotName;
+    const nameStyle = `font-weight:${isMe ? '800' : '500'};color:${isMe ? 'var(--accent)' : (highlight ? 'var(--muted)' : 'var(--text)')};${highlight ? 'text-decoration:line-through;' : ''}`;
+    let row = `<tr${isMe && !highlight ? ' style="background:rgba(243,115,41,0.08);"' : ''}>`;
+    row += `<td class="loop-td-pilot" style="${nameStyle}">${pilotNameVal ? esc(pilotNameVal) : '<span style="color:var(--muted)">—</span>'}</td>`;
+    for (let c = 1; c <= 12; c++) {
+      const v = tallies[c - 1] || '';
+      row += `<td class="loop-td-tally"><span class="loop-tally-sel${v ? (v === 'L' ? ' has-val has-val-L' : v === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" style="display:block;text-align:center;padding:8px 4px;font-size:14px;">${v || '–'}</span></td>`;
+    }
+    row += '</tr>';
+    return row;
+  };
+
+  const tableHeader = () => {
+    let h = '<thead><tr><th class="loop-th-pilot">Pilot</th>';
+    for (let c = 1; c <= 12; c++) h += `<th class="loop-th-tally">${c}</th>`;
+    h += '</tr></thead>';
+    return h;
+  };
+
+  let html = '';
+
+  if (maxSlot === 0 && completed.length === 0) {
     el.innerHTML = '<div class="empty-state">Loop Board is empty</div>';
     return;
   }
-  const tallyLabels = ['', 'I', 'L', '-'];
-  let html = '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table class="loop-table"><thead><tr>';
-  html += '<th class="loop-th-slot">#</th><th class="loop-th-pilot">Pilot</th>';
-  for (let c = 1; c <= 12; c++) html += `<th class="loop-th-tally">${c}</th>`;
-  html += '</tr></thead><tbody>';
-  for (let i = 1; i <= maxSlot; i++) {
-    const slot = board.find(s => s.slot === i) || { slot: i, pilot_name: null, tallies: null };
-    let tallies = Array(12).fill('');
-    try { const t = JSON.parse(slot.tallies || '[]'); if (Array.isArray(t)) tallies = t; } catch (_) {}
-    while (tallies.length < 12) tallies.push('');
-    const isMe = slot.pilot_name === pilotName;
-    html += `<tr${isMe ? ' style="background:rgba(243,115,41,0.08);"' : ''}>`;
-    html += `<td class="loop-td-slot">${i}</td>`;
-    html += `<td class="loop-td-pilot" style="font-weight:${isMe ? '800' : '500'};color:${isMe ? 'var(--accent)' : 'var(--text)'};">${slot.pilot_name ? esc(slot.pilot_name) : '<span style="color:var(--muted)">—</span>'}</td>`;
-    for (let c = 1; c <= 12; c++) {
-      const v = tallies[c - 1] || '';
-      html += `<td class="loop-td-tally"><span class="loop-tally-sel${v ? (v === 'L' ? ' has-val has-val-L' : v === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" style="display:block;text-align:center;padding:8px 4px;font-size:14px;">${v || '–'}</span></td>`;
+
+  if (maxSlot > 0) {
+    html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table class="loop-table">';
+    html += tableHeader() + '<tbody>';
+    for (let i = 1; i <= maxSlot; i++) {
+      const slot = board.find(s => s.slot === i) || { slot: i, pilot_name: null, tallies: null };
+      html += renderTallyRow(slot.pilot_name, slot.tallies, false);
     }
-    html += '</tr>';
+    html += '</tbody></table></div>';
   }
-  html += '</tbody></table></div>';
+
+  if (completed.length > 0) {
+    html += `<div class="loop-completed-section">
+      <div class="loop-completed-title">Completed Pilots</div>
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table class="loop-table" style="opacity:0.75;">`;
+    html += tableHeader() + '<tbody>';
+    for (const p of completed) {
+      html += renderTallyRow(p.pilot_name, p.tallies, true);
+    }
+    html += '</tbody></table></div></div>';
+  }
+
   html += `<div style="text-align:center;margin-top:20px;padding-bottom:8px;">
     <button onclick="loadPilotLoopBoard()" style="padding:10px 28px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">↻ Refresh</button>
   </div>`;
@@ -6125,6 +6156,11 @@ function connectWS() {
         if (pilotId) refreshPilotTodayFlights();
         break;
       case 'LOOP_COMPLETED_UPDATE': {
+        const today = todayStr();
+        if (!data.date || data.date === today) {
+          pilotLoopBoardCompleted = data.completed;
+          if (pilotActiveTab === 'loop') renderPilotLoopBoard();
+        }
         if (!data.date || data.date === loopBoardDate) {
           loopBoardCompleted = data.completed;
           if (officeActiveTab === 'loop' && _pendingLoopApiCalls === 0) _loopSafeRender();
@@ -6204,6 +6240,7 @@ function connectWS() {
         const today = todayStr();
         if (!data.date || data.date === today) {
           pilotLoopBoard = data.board;
+          if (data.completed !== undefined) pilotLoopBoardCompleted = data.completed;
           if (pilotActiveTab === 'loop') renderPilotLoopBoard();
         }
         if (!data.date || data.date === loopBoardDate) {

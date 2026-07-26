@@ -5535,6 +5535,7 @@ function renderLoopBoard() {
   html += `<div class="loop-board-controls">
     <button onclick="addLoopRow()" style="padding:8px 22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:22px;line-height:1;cursor:pointer;" ${loopBoardRows >= 20 ? 'disabled' : ''}>+</button>
     <button onclick="removeLoopRow()" style="padding:8px 22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:22px;line-height:1;cursor:pointer;" ${loopBoardRows <= 1 ? 'disabled' : ''}>−</button>
+    <button onclick="loadLoopBoard()" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">↻ Refresh</button>
     <button onclick="undoLoopChange()" ${!_lastLoopChange ? 'disabled' : ''} style="padding:8px 20px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;margin-left:auto;opacity:${_lastLoopChange ? '1' : '0.4'};">↩ Reverse</button>
     <button onclick="resetLoopBoard()" style="padding:8px 20px;background:rgba(239,68,68,0.08);border:1px solid var(--danger);border-radius:8px;color:var(--danger);font-size:13px;font-weight:700;cursor:pointer;">Reset</button>
   </div>`;

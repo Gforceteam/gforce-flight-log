@@ -4755,12 +4755,14 @@ function renderAwayTab() {
           <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="margin:0;flex-shrink:0;">--:--</div>
           ${actionBtns(p)}
         </div>`).join('');
+      const pilotsData = esc(JSON.stringify(entry.pilots.map(p => ({ id: p.id, name: p.name }))));
       html += `
         <div class="tdf-card tdf-card-group" style="padding:12px 14px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px;">
             <span class="tdf-group-label">${entry.pilots.length}-Pax Group</span>
-            <div style="display:flex;align-items:center;gap:8px;">
+            <div style="display:flex;align-items:center;gap:6px;">
               ${entry.groupName ? `<span style="font-size:12px;color:var(--accent);font-weight:600;">${gname}</span>` : ''}
+              <button data-pilots="${pilotsData}" onclick="landAllGroup(JSON.parse(this.dataset.pilots))" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:700;padding:5px 10px;cursor:pointer;touch-action:manipulation;">Land All</button>
               <button onclick="showAddToGroupModal('${gid}','${gname}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:16px;font-weight:700;padding:2px 10px;cursor:pointer;line-height:1.4;touch-action:manipulation;" title="Add pilot to group">+</button>
             </div>
           </div>
@@ -4953,6 +4955,24 @@ async function doLandPilot(pilotId, pilotName) {
     if (res.ok) { toast(`${pilotName} landed`); await loadOfficeData(); }
     else toast(data.error || 'Failed');
   } catch (e) { toast('Error: ' + e.message); }
+}
+
+async function landAllGroup(pilots) {
+  const names = pilots.map(p => p.name).join(', ');
+  if (!confirm(`Land all ${pilots.length} pilots?\n${names}\n\nThis creates placeholder flights for each pilot to complete in the app.`)) return;
+  let errors = 0;
+  for (const p of pilots) {
+    try {
+      const res = await officeFetch('/api/office/land-pilot', {
+        method: 'POST',
+        body: JSON.stringify({ pilot_id: p.id })
+      });
+      if (!res || !res.ok) errors++;
+    } catch { errors++; }
+  }
+  if (errors) toast(`${pilots.length - errors} landed, ${errors} failed`);
+  else toast(`All ${pilots.length} pilots landed`);
+  await loadOfficeData();
 }
 
 function confirmLandedEarly(pilotId, pilotName) {

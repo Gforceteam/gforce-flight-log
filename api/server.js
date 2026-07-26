@@ -282,6 +282,7 @@ async function createTables() {
   )`);
   await db.execute('CREATE INDEX IF NOT EXISTS idx_lbc_date ON loop_board_completed(date)');
   try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN slot INTEGER'); } catch (_) {}
+  try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN tallies TEXT'); } catch (_) {}
   // Migrate existing loop_board rows into loop_board_v2 for today's date
   const todayForMigration = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
   const legacyRows = await queryAll('SELECT * FROM loop_board');
@@ -2009,7 +2010,7 @@ app.get('/api/office/loop-board', verifyOffice, async (req, res) => {
     const date = req.query.date || nzToday();
     await ensureLoopBoardDate(date);
     const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
-    const completed = await queryAll('SELECT id, pilot_id, pilot_name, completed_at, slot FROM loop_board_completed WHERE date = ? ORDER BY completed_at ASC', [date]);
+    const completed = await queryAll('SELECT id, pilot_id, pilot_name, completed_at, slot, tallies FROM loop_board_completed WHERE date = ? ORDER BY completed_at ASC', [date]);
     res.json({ board, completed });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -2077,13 +2078,13 @@ app.post('/api/office/loop-board/complete', verifyOffice, async (req, res) => {
     const date = reqDate || nzToday();
     if (!slot || slot < 1 || slot > 20) return res.status(400).json({ error: 'Invalid slot' });
 
-    const targetRow = await queryOne('SELECT pilot_id, pilot_name FROM loop_board_v2 WHERE date = ? AND slot = ?', [date, slot]);
+    const targetRow = await queryOne('SELECT pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? AND slot = ?', [date, slot]);
     if (!targetRow || !targetRow.pilot_name) return res.status(404).json({ error: 'No pilot in this slot' });
 
-    // Record as completed
+    // Record as completed — preserve tallies
     await run(
-      'INSERT INTO loop_board_completed (id, date, pilot_id, pilot_name, completed_at, slot) VALUES (?, ?, ?, ?, ?, ?)',
-      [uuidv4(), date, targetRow.pilot_id, targetRow.pilot_name, new Date().toISOString(), slot]
+      'INSERT INTO loop_board_completed (id, date, pilot_id, pilot_name, completed_at, slot, tallies) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [uuidv4(), date, targetRow.pilot_id, targetRow.pilot_name, new Date().toISOString(), slot, targetRow.tallies || null]
     );
 
     // Shift pilots in slots above the completed one upward by one
@@ -2102,8 +2103,34 @@ app.post('/api/office/loop-board/complete', verifyOffice, async (req, res) => {
     await run('UPDATE loop_board_v2 SET pilot_id = NULL, pilot_name = NULL, tallies = NULL WHERE date = ? AND slot = ?', [date, maxSlot]);
 
     const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
-    const completed = await queryAll('SELECT id, pilot_id, pilot_name, completed_at, slot FROM loop_board_completed WHERE date = ? ORDER BY completed_at ASC', [date]);
+    const completed = await queryAll('SELECT id, pilot_id, pilot_name, completed_at, slot, tallies FROM loop_board_completed WHERE date = ? ORDER BY completed_at ASC', [date]);
     broadcast({ type: 'LOOP_BOARD_UPDATE', board, completed, rowCountDelta: -1, date });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/office/loop-board/completed-tally', verifyOffice, async (req, res) => {
+  try {
+    const { id, col, value, date: reqDate } = req.body;
+    const date = reqDate || nzToday();
+    if (!id) return res.status(400).json({ error: 'id required' });
+    if (!col || col < 1 || col > 12) return res.status(400).json({ error: 'Invalid column' });
+    const allowed = ['', 'I', 'L', 'IF', '-'];
+    if (!allowed.includes(value || '')) return res.status(400).json({ error: 'Invalid value' });
+
+    const row = await queryOne('SELECT tallies FROM loop_board_completed WHERE id = ?', [id]);
+    if (!row) return res.status(404).json({ error: 'Completed record not found' });
+
+    let tallies = Array(12).fill('');
+    try { const t = JSON.parse(row.tallies || '[]'); if (Array.isArray(t)) tallies = t; } catch (_) {}
+    while (tallies.length < 12) tallies.push('');
+    tallies[col - 1] = value || '';
+    await run('UPDATE loop_board_completed SET tallies = ? WHERE id = ?', [JSON.stringify(tallies), id]);
+
+    const completed = await queryAll('SELECT id, pilot_id, pilot_name, completed_at, slot, tallies FROM loop_board_completed WHERE date = ? ORDER BY completed_at ASC', [date]);
+    broadcast({ type: 'LOOP_COMPLETED_UPDATE', completed, date });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -2140,17 +2167,17 @@ app.post('/api/office/loop-board/uncomplete', verifyOffice, async (req, res) => 
       );
     }
 
-    // Re-insert pilot at their original slot with cleared tallies
+    // Re-insert pilot at their original slot, restoring their tallies
     await run(
-      'UPDATE loop_board_v2 SET pilot_id = ?, pilot_name = ?, tallies = NULL WHERE date = ? AND slot = ?',
-      [record.pilot_id, record.pilot_name, date, targetSlot]
+      'UPDATE loop_board_v2 SET pilot_id = ?, pilot_name = ?, tallies = ? WHERE date = ? AND slot = ?',
+      [record.pilot_id, record.pilot_name, record.tallies || null, date, targetSlot]
     );
 
     // Remove from completed list
     await run('DELETE FROM loop_board_completed WHERE id = ?', [id]);
 
     const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
-    const completed = await queryAll('SELECT id, pilot_id, pilot_name, completed_at, slot FROM loop_board_completed WHERE date = ? ORDER BY completed_at ASC', [date]);
+    const completed = await queryAll('SELECT id, pilot_id, pilot_name, completed_at, slot, tallies FROM loop_board_completed WHERE date = ? ORDER BY completed_at ASC', [date]);
     broadcast({ type: 'LOOP_BOARD_UPDATE', board, completed, rowCountDelta: 1, date });
     res.json({ ok: true });
   } catch (e) {

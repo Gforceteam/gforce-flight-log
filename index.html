@@ -5539,10 +5539,32 @@ function renderLoopBoard() {
     <button onclick="resetLoopBoard()" style="padding:8px 20px;background:rgba(239,68,68,0.08);border:1px solid var(--danger);border-radius:8px;color:var(--danger);font-size:13px;font-weight:700;cursor:pointer;">Reset</button>
   </div>`;
   if (loopBoardCompleted.length > 0) {
-    html += `<div class="loop-completed-section">
-      <div class="loop-completed-title">Completed Pilots <span style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);opacity:0.7;">tap to re-add</span></div>
-      <div>${loopBoardCompleted.map(p => `<span class="loop-completed-pill" onclick="uncompleteLoopPilot('${esc(p.id)}')" title="Re-add ${esc(p.pilot_name)} to loop board">${esc(p.pilot_name)}</span>`).join('')}</div>
-    </div>`;
+    const tallyOpts2 = ['', 'I', 'L', 'IF', '-'];
+    let cHtml = `<div class="loop-completed-section">
+      <div class="loop-completed-title">Completed Pilots</div>
+      <table class="loop-table" style="opacity:0.75;">
+        <thead><tr>
+          <th class="loop-th-pilot">Pilot</th>`;
+    for (let c = 1; c <= 12; c++) cHtml += `<th class="loop-th-tally">${c}</th>`;
+    cHtml += `</tr></thead><tbody>`;
+    for (const p of loopBoardCompleted) {
+      let ct = Array(12).fill('');
+      try { const t = JSON.parse(p.tallies || '[]'); if (Array.isArray(t)) ct = t; } catch (_) {}
+      while (ct.length < 12) ct.push('');
+      cHtml += `<tr>
+        <td class="loop-td-pilot"><div class="loop-pilot-cell">
+          <span style="font-size:15px;font-weight:600;padding:2px 4px;text-decoration:line-through;color:var(--muted);">${esc(p.pilot_name)}</span>
+          <button class="loop-complete-btn" onclick="uncompleteLoopPilot('${esc(p.id)}')" title="Re-add to loop board" style="background:var(--accent);color:#fff;border-color:var(--accent);font-size:14px;">↑</button>
+        </div></td>`;
+      for (let c = 1; c <= 12; c++) {
+        const cv = ct[c - 1] || '';
+        const cOpts = tallyOpts2.map(v => `<option value="${v}" ${cv === v ? 'selected' : ''}>${v || '–'}</option>`).join('');
+        cHtml += `<td class="loop-td-tally"><select class="loop-tally-sel${cv ? (cv === 'L' ? ' has-val has-val-L' : cv === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" onchange="setCompletedTally('${esc(p.id)}',${c},this)">${cOpts}</select></td>`;
+      }
+      cHtml += `</tr>`;
+    }
+    cHtml += `</tbody></table></div>`;
+    html += cHtml;
   }
   el.innerHTML = html;
 }
@@ -5593,6 +5615,21 @@ async function completeLoopPilot(slot) {
   } finally {
     _loopApiEnd();
   }
+}
+
+async function setCompletedTally(completedId, col, selectEl) {
+  const value = selectEl.value || '';
+  selectEl.classList.toggle('has-val', !!value);
+  selectEl.classList.toggle('has-val-L', value === 'L');
+  selectEl.classList.toggle('has-val-IF', value === 'IF');
+  _loopApiStart();
+  try {
+    await officeFetch('/api/office/loop-board/completed-tally', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: completedId, col, value, date: loopBoardDate })
+    });
+  } catch (_) { toast('Cannot reach server', 'err'); }
+  finally { _loopApiEnd(); }
 }
 
 async function uncompleteLoopPilot(completedId) {
@@ -5964,6 +6001,13 @@ function connectWS() {
       case 'FLIGHT_UPDATED':
         loadOfficeData();
         break;
+      case 'LOOP_COMPLETED_UPDATE': {
+        if (!data.date || data.date === loopBoardDate) {
+          loopBoardCompleted = data.completed;
+          if (officeActiveTab === 'loop' && _pendingLoopApiCalls === 0) _loopSafeRender();
+        }
+        break;
+      }
       case 'DID_NOT_FLY':
         toast(`${data.pilot_name} — did not fly, timer cancelled`);
         dismissAlert(data.pilot_name);

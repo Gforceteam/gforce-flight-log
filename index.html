@@ -1731,8 +1731,10 @@
 
     <div id="oe-error" style="color:var(--danger);font-size:13px;margin-bottom:10px;min-height:18px;"></div>
 
+    <input type="hidden" id="oe-pilot-name" />
     <button onclick="officeUpdateFlight()" style="width:100%;padding:14px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;font-family:'Montserrat',sans-serif;letter-spacing:0.5px;box-shadow:0 4px 16px var(--accent-glow);">Save Changes</button>
-    <button onclick="closeOfficeEditModal()" style="width:100%;padding:13px;background:none;border:1px solid var(--border-hi);border-radius:9999px;color:var(--text-2);font-size:14px;font-weight:600;cursor:pointer;margin-top:10px;">Cancel</button>
+    <button onclick="officeDeleteFromModal()" style="width:100%;padding:13px;background:none;border:1px solid var(--danger,#ef4444);border-radius:9999px;color:var(--danger,#ef4444);font-size:14px;font-weight:700;cursor:pointer;margin-top:10px;">Delete Flight</button>
+    <button onclick="closeOfficeEditModal()" style="width:100%;padding:13px;background:none;border:1px solid var(--border-hi);border-radius:9999px;color:var(--text-2);font-size:14px;font-weight:600;cursor:pointer;margin-top:8px;">Cancel</button>
   </div>
 </div>
 
@@ -4520,9 +4522,10 @@ function renderTodayFlights() {
       const pilotRows = grp.map(f => {
         const landedTime = fmtTime(f.landed_at);
         const stillUp = !f.landed_at;
-        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);">
-          <span style="font-size:14px;font-weight:600;">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);gap:8px;">
+          <span style="font-size:14px;font-weight:600;flex:1;min-width:0;">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
           <span style="font-size:13px;color:${stillUp ? 'var(--accent)' : 'var(--muted)'};">${stillUp ? 'Airborne' : `Landed ${esc(landedTime)}`}</span>
+          ${!stillUp ? `<button onclick="officeEditFlight('${esc(f.id)}')" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid var(--border-hi);background:var(--surface);color:var(--text-2);cursor:pointer;flex-shrink:0;touch-action:manipulation;">Edit</button>` : ''}
         </div>`;
       }).join('');
       html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;">
@@ -4537,12 +4540,13 @@ function renderTodayFlights() {
       const landedTime = fmtTime(f.landed_at);
       const stillUp = !f.landed_at;
       html += `<div class="tdf-card" style="padding:12px 14px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span class="tdf-pilot">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
-          <span style="font-size:12px;color:var(--muted);">Away ${esc(sentTime)}</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <span class="tdf-pilot" style="flex:1;min-width:0;">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
+          <span style="font-size:12px;color:var(--muted);flex-shrink:0;">Away ${esc(sentTime)}</span>
         </div>
-        <div style="margin-top:4px;text-align:right;">
+        <div style="margin-top:6px;display:flex;justify-content:flex-end;align-items:center;gap:8px;">
           <span style="font-size:13px;color:${stillUp ? 'var(--accent)' : 'var(--muted)'};">${stillUp ? 'Airborne' : `Landed ${esc(landedTime)}`}</span>
+          ${!stillUp ? `<button onclick="officeEditFlight('${esc(f.id)}')" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid var(--border-hi);background:var(--surface);color:var(--text-2);cursor:pointer;touch-action:manipulation;">Edit</button>` : ''}
         </div>
       </div>`;
     }
@@ -4920,6 +4924,7 @@ function officeEditFlight(flightId) {
   const f = allFlights.find(f => f.id === flightId);
   if (!f) { toast('Flight not found'); return; }
   document.getElementById('oe-flight-id').value = f.id;
+  document.getElementById('oe-pilot-name').value = f.pilot_name || '';
   document.getElementById('oe-date').value = f.date;
   document.getElementById('oe-flight-num').value = f.flight_num;
   document.getElementById('oe-client').value = f.client_name || '';
@@ -4995,6 +5000,19 @@ async function officeDeleteFlight(flightId, pilotName) {
   try {
     const res = await officeFetch(`/api/office/flights/${flightId}`, { method: 'DELETE' });
     if (!res.ok) { const d = await res.json(); toast('Delete failed: ' + (d.error || 'unknown error')); return; }
+    toast('Flight deleted');
+    await loadOfficeData();
+  } catch (e) { toast('Network error: ' + e.message); }
+}
+
+async function officeDeleteFromModal() {
+  const id = document.getElementById('oe-flight-id').value;
+  const name = document.getElementById('oe-pilot-name').value || 'pilot';
+  if (!confirm(`Delete this flight for ${name}? This cannot be undone.`)) return;
+  try {
+    const res = await officeFetch(`/api/office/flights/${id}`, { method: 'DELETE' });
+    if (!res.ok) { const d = await res.json(); toast('Delete failed: ' + (d.error || 'unknown error')); return; }
+    closeOfficeEditModal();
     toast('Flight deleted');
     await loadOfficeData();
   } catch (e) { toast('Network error: ' + e.message); }

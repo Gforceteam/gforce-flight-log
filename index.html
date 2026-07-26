@@ -1081,6 +1081,13 @@
     .loop-tally-sel.has-val { background: #ffffff; border-color: var(--border); color: #111111; font-weight: 700; }
     .loop-tally-sel.has-val-L { background: #fefce8; border-color: #fde68a; color: #92400e; }
     .loop-tally-sel.has-val-IF { background: #f0fdf4; border-color: #86efac; color: #166534; }
+    .loop-complete-btn { flex-shrink: 0; width: 26px; height: 26px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--muted); font-size: 17px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; touch-action: manipulation; transition: background 0.15s, color 0.15s; }
+    .loop-complete-btn:hover { background: #ef4444; color: #fff; border-color: #ef4444; }
+    .loop-td-pilot { padding: 6px 8px 6px 6px; }
+    .loop-pilot-cell { display: flex; align-items: center; gap: 5px; }
+    .loop-completed-section { padding: 10px 12px 14px; border-top: 1px solid var(--border); }
+    .loop-completed-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 8px; }
+    .loop-completed-pill { display: inline-flex; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px; font-size: 13px; font-weight: 600; color: var(--muted); margin: 3px 4px 3px 0; text-decoration: line-through; }
 
     /* ── STATS EXTRAS ──────────────────────────────────────────────────── */
     .stat-section { margin-bottom: 14px; }
@@ -5439,7 +5446,9 @@ async function loadLoopBoard() {
   try {
     const res = await officeFetch(`/api/office/loop-board?date=${encodeURIComponent(loopBoardDate)}`);
     if (!res.ok) return;
-    loopBoard = await res.json();
+    const data = await res.json();
+    loopBoard = Array.isArray(data) ? data : (data.board || []);
+    loopBoardCompleted = Array.isArray(data) ? [] : (data.completed || []);
     // Expand row count to show all slots that have a pilot assigned
     const maxPopulated = loopBoard.reduce((max, s) => s.pilot_id ? Math.max(max, s.slot) : max, 0);
     if (maxPopulated > loopBoardRows) {
@@ -5466,6 +5475,7 @@ function shiftLoopDate(days) {
 
 let loopBoardRows = Math.max(1, Math.min(20, parseInt(localStorage.getItem('loopBoardRows') || '1', 10)));
 let loopBoardDate = todayStr();
+let loopBoardCompleted = [];
 let _lastLoopChange = null;
 let _pendingLoopApiCalls = 0;
 
@@ -5512,7 +5522,7 @@ function renderLoopBoard() {
       `<option value="${p.id}" data-name="${p.name.replace(/"/g, '&quot;')}" ${slot.pilot_id === p.id ? 'selected' : ''}>${p.name}</option>`
     ).join('');
     html += `<tr><td class="loop-td-slot">${i}</td>`;
-    html += `<td class="loop-td-pilot"><select class="loop-pilot-sel" onchange="setLoopSlot(${i},this)"><option value="">— empty —</option>${pilotOpts}</select></td>`;
+    html += `<td class="loop-td-pilot"><div class="loop-pilot-cell"><select class="loop-pilot-sel" onchange="setLoopSlot(${i},this)"><option value="">— empty —</option>${pilotOpts}</select>${slot.pilot_id ? `<button class="loop-complete-btn" onclick="completeLoopPilot(${i})" title="Done for the day">×</button>` : ''}</div></td>`;
     for (let c = 1; c <= 12; c++) {
       const val = tallies[c - 1] || '';
       const tOpts = tallyOpts.map(v => `<option value="${v}" ${val === v ? 'selected' : ''}>${v || '–'}</option>`).join('');
@@ -5527,6 +5537,12 @@ function renderLoopBoard() {
     <button onclick="undoLoopChange()" ${!_lastLoopChange ? 'disabled' : ''} style="padding:8px 20px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;margin-left:auto;opacity:${_lastLoopChange ? '1' : '0.4'};">↩ Reverse</button>
     <button onclick="resetLoopBoard()" style="padding:8px 20px;background:rgba(239,68,68,0.08);border:1px solid var(--danger);border-radius:8px;color:var(--danger);font-size:13px;font-weight:700;cursor:pointer;">Reset</button>
   </div>`;
+  if (loopBoardCompleted.length > 0) {
+    html += `<div class="loop-completed-section">
+      <div class="loop-completed-title">Completed Pilots</div>
+      <div>${loopBoardCompleted.map(p => `<span class="loop-completed-pill">${esc(p.pilot_name)}</span>`).join('')}</div>
+    </div>`;
+  }
   el.innerHTML = html;
 }
 
@@ -5540,8 +5556,7 @@ async function undoLoopChange() {
     } else if (c.type === 'slot') {
       await officeFetch('/api/office/loop-board/slot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slot: c.slot, pilot_id: c.oldPilotId, pilot_name: c.oldPilotName, date: loopBoardDate }) });
     }
-    loopBoard = await (await officeFetch(`/api/office/loop-board?date=${encodeURIComponent(loopBoardDate)}`)).json();
-    renderLoopBoard();
+    await loadLoopBoard();
   } catch (e) { toast('Undo failed', 'err'); }
 }
 
@@ -5549,9 +5564,34 @@ async function resetLoopBoard() {
   if (!confirm('Clear all pilots and tallies from the Loop Board?')) return;
   try {
     const res = await officeFetch('/api/office/loop-board/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: loopBoardDate }) });
-    if (res && res.ok) { loopBoard = await (await officeFetch(`/api/office/loop-board?date=${encodeURIComponent(loopBoardDate)}`)).json(); renderLoopBoard(); }
+    if (res && res.ok) { await loadLoopBoard(); }
     else toast('Reset failed', 'err');
   } catch (e) { toast('Reset failed', 'err'); }
+}
+
+async function completeLoopPilot(slot) {
+  const slotData = loopBoard.find(s => s.slot === slot);
+  if (!slotData || !slotData.pilot_id) { toast('No pilot in this slot'); return; }
+  _loopApiStart();
+  loopBoardRows = Math.max(1, loopBoardRows - 1);
+  localStorage.setItem('loopBoardRows', loopBoardRows);
+  try {
+    const res = await officeFetch('/api/office/loop-board/complete', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slot, date: loopBoardDate })
+    });
+    if (!res.ok) {
+      loopBoardRows++;
+      localStorage.setItem('loopBoardRows', loopBoardRows);
+      toast('Failed to complete pilot', 'err');
+    }
+  } catch (_) {
+    loopBoardRows++;
+    localStorage.setItem('loopBoardRows', loopBoardRows);
+    toast('Cannot reach server', 'err');
+  } finally {
+    _loopApiEnd();
+  }
 }
 
 function addLoopRow() {
@@ -5976,6 +6016,11 @@ function connectWS() {
         }
         if (!data.date || data.date === loopBoardDate) {
           loopBoard = data.board;
+          if (data.completed !== undefined) loopBoardCompleted = data.completed;
+          if (data.rowCountDelta !== undefined) {
+            loopBoardRows = Math.max(1, loopBoardRows + data.rowCountDelta);
+            localStorage.setItem('loopBoardRows', loopBoardRows);
+          }
           if (officeActiveTab === 'loop' && _pendingLoopApiCalls === 0) _loopSafeRender();
         }
         break;

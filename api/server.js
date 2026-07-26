@@ -272,6 +272,15 @@ async function createTables() {
     tallies TEXT,
     PRIMARY KEY (date, slot)
   )`);
+  // Completed pilots per day (removed from loop board, done flying)
+  await db.execute(`CREATE TABLE IF NOT EXISTS loop_board_completed (
+    id TEXT PRIMARY KEY,
+    date TEXT NOT NULL,
+    pilot_id TEXT,
+    pilot_name TEXT NOT NULL,
+    completed_at TEXT NOT NULL
+  )`);
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_lbc_date ON loop_board_completed(date)');
   // Migrate existing loop_board rows into loop_board_v2 for today's date
   const todayForMigration = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
   const legacyRows = await queryAll('SELECT * FROM loop_board');
@@ -1998,8 +2007,9 @@ app.get('/api/office/loop-board', verifyOffice, async (req, res) => {
   try {
     const date = req.query.date || nzToday();
     await ensureLoopBoardDate(date);
-    const rows = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
-    res.json(rows);
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    const completed = await queryAll('SELECT pilot_id, pilot_name, completed_at FROM loop_board_completed WHERE date = ? ORDER BY completed_at ASC', [date]);
+    res.json({ board, completed });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -2054,6 +2064,45 @@ app.post('/api/office/loop-board/tally', verifyOffice, async (req, res) => {
     await run('UPDATE loop_board_v2 SET tallies = ? WHERE date = ? AND slot = ?', [JSON.stringify(tallies), date, slot]);
     const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
     broadcast({ type: 'LOOP_BOARD_UPDATE', board, date });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/office/loop-board/complete', verifyOffice, async (req, res) => {
+  try {
+    const { slot, date: reqDate } = req.body;
+    const date = reqDate || nzToday();
+    if (!slot || slot < 1 || slot > 20) return res.status(400).json({ error: 'Invalid slot' });
+
+    const targetRow = await queryOne('SELECT pilot_id, pilot_name FROM loop_board_v2 WHERE date = ? AND slot = ?', [date, slot]);
+    if (!targetRow || !targetRow.pilot_name) return res.status(404).json({ error: 'No pilot in this slot' });
+
+    // Record as completed
+    await run(
+      'INSERT INTO loop_board_completed (id, date, pilot_id, pilot_name, completed_at) VALUES (?, ?, ?, ?, ?)',
+      [uuidv4(), date, targetRow.pilot_id, targetRow.pilot_name, new Date().toISOString()]
+    );
+
+    // Shift pilots in slots above the completed one upward by one
+    const allRows = await queryAll(
+      'SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]
+    );
+    const maxSlot = allRows.length > 0 ? allRows[allRows.length - 1].slot : 20;
+    for (let i = slot; i < maxSlot; i++) {
+      const next = allRows.find(r => r.slot === i + 1);
+      await run(
+        'UPDATE loop_board_v2 SET pilot_id = ?, pilot_name = ?, tallies = ? WHERE date = ? AND slot = ?',
+        [next?.pilot_id || null, next?.pilot_name || null, next?.tallies || null, date, i]
+      );
+    }
+    // Clear the now-vacated last slot
+    await run('UPDATE loop_board_v2 SET pilot_id = NULL, pilot_name = NULL, tallies = NULL WHERE date = ? AND slot = ?', [date, maxSlot]);
+
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    const completed = await queryAll('SELECT pilot_id, pilot_name, completed_at FROM loop_board_completed WHERE date = ? ORDER BY completed_at ASC', [date]);
+    broadcast({ type: 'LOOP_BOARD_UPDATE', board, completed, rowCountDelta: -1, date });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });

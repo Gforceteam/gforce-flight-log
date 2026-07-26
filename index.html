@@ -2983,7 +2983,6 @@ function renderDashboard() {
     el.innerHTML = `
       <div class="ff-status-card ff-status-flying">
         <div class="ff-status-pill flying">Flying #${_curFlightNum}</div>
-        ${myStatus.group_name ? `<div class="ff-group-name">📋 ${esc(myStatus.group_name)}</div>` : ''}
         ${myStatus.group_pilots && myStatus.group_pilots.length ? `<div class="ff-group-pilots">${myStatus.group_pilots.map(esc).join(' · ')}</div>` : ''}
         <div class="dashboard-timer" id="dashboard-timer">--:--</div>
         <div style="display:flex;gap:10px;margin-top:4px;">
@@ -2991,7 +2990,6 @@ function renderDashboard() {
           <button class="btn-log-flight" style="flex:1;background:transparent;color:var(--accent);border:2px solid var(--accent);box-shadow:none;" onclick="goToLogFlight()">Log Flight</button>
         </div>
         <div class="ff-secondary-actions">
-          <button class="btn-extend" id="btn-extend" onclick="requestExtension()">Request More Time</button>
           <button class="btn-extend" id="btn-dnf" onclick="didNotFly()" style="border-color:var(--muted);color:var(--muted);">✕ Did Not Fly</button>
         </div>
       </div>

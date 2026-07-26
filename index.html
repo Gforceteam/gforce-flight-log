@@ -1087,7 +1087,8 @@
     .loop-pilot-cell { display: flex; align-items: center; gap: 5px; }
     .loop-completed-section { padding: 10px 12px 14px; border-top: 1px solid var(--border); }
     .loop-completed-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 8px; }
-    .loop-completed-pill { display: inline-flex; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px; font-size: 13px; font-weight: 600; color: var(--muted); margin: 3px 4px 3px 0; text-decoration: line-through; }
+    .loop-completed-pill { display: inline-flex; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px; font-size: 13px; font-weight: 600; color: var(--muted); margin: 3px 4px 3px 0; text-decoration: line-through; cursor: pointer; touch-action: manipulation; transition: background 0.15s, color 0.15s, border-color 0.15s; }
+    .loop-completed-pill:hover { background: var(--accent); color: #fff; border-color: var(--accent); text-decoration: none; }
 
     /* ── STATS EXTRAS ──────────────────────────────────────────────────── */
     .stat-section { margin-bottom: 14px; }
@@ -5539,8 +5540,8 @@ function renderLoopBoard() {
   </div>`;
   if (loopBoardCompleted.length > 0) {
     html += `<div class="loop-completed-section">
-      <div class="loop-completed-title">Completed Pilots</div>
-      <div>${loopBoardCompleted.map(p => `<span class="loop-completed-pill">${esc(p.pilot_name)}</span>`).join('')}</div>
+      <div class="loop-completed-title">Completed Pilots <span style="font-size:10px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);opacity:0.7;">tap to re-add</span></div>
+      <div>${loopBoardCompleted.map(p => `<span class="loop-completed-pill" onclick="uncompleteLoopPilot('${esc(p.id)}')" title="Re-add ${esc(p.pilot_name)} to loop board">${esc(p.pilot_name)}</span>`).join('')}</div>
     </div>`;
   }
   el.innerHTML = html;
@@ -5587,6 +5588,30 @@ async function completeLoopPilot(slot) {
     }
   } catch (_) {
     loopBoardRows++;
+    localStorage.setItem('loopBoardRows', loopBoardRows);
+    toast('Cannot reach server', 'err');
+  } finally {
+    _loopApiEnd();
+  }
+}
+
+async function uncompleteLoopPilot(completedId) {
+  _loopApiStart();
+  loopBoardRows++;
+  localStorage.setItem('loopBoardRows', loopBoardRows);
+  try {
+    const res = await officeFetch('/api/office/loop-board/uncomplete', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: completedId, date: loopBoardDate })
+    });
+    if (!res.ok) {
+      loopBoardRows = Math.max(1, loopBoardRows - 1);
+      localStorage.setItem('loopBoardRows', loopBoardRows);
+      const d = await res.json();
+      toast(d.error || 'Failed to re-add pilot', 'err');
+    }
+  } catch (_) {
+    loopBoardRows = Math.max(1, loopBoardRows - 1);
     localStorage.setItem('loopBoardRows', loopBoardRows);
     toast('Cannot reach server', 'err');
   } finally {

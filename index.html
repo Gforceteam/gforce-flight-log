@@ -4685,6 +4685,12 @@ function renderAwayTab() {
   const el = document.getElementById('away-list');
   if (!el) return;
 
+  const today = todayStr();
+  const flightNumFor = pid => {
+    const count = allFlights.filter(f => f.pilot_id === pid && f.date === today).length;
+    return count + 1;
+  };
+
   const flying = officePilots.filter(p => p.status === 'airborne');
   if (flying.length === 0) {
     el.innerHTML = '<div class="empty-state">No pilots currently away</div>';
@@ -4739,7 +4745,7 @@ function renderAwayTab() {
             ${p.client_name ? `<span style="font-size:12px;color:var(--accent);font-weight:600;flex-shrink:0;">${esc(p.client_name)}</span>` : ''}
           </div>
           <div style="border-top:1px solid var(--border);padding-top:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
-            <span class="tdf-pilot">${esc(p.name)}</span>
+            <span class="tdf-pilot">${esc(p.name)}<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">(#${flightNumFor(p.id)})</span></span>
             <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
               <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="margin:0;">--:--</div>
               ${actionBtns(p)}
@@ -4751,7 +4757,7 @@ function renderAwayTab() {
       const gname = esc(entry.groupName || 'Group');
       const pilotRows = entry.pilots.map(p => `
         <div id="pilot-card-${p.id}" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--border);gap:8px;">
-          <span style="font-size:14px;font-weight:700;color:var(--text);flex:1;min-width:0;">${esc(p.name)}</span>
+          <span style="font-size:14px;font-weight:700;color:var(--text);flex:1;min-width:0;">${esc(p.name)}<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">(#${flightNumFor(p.id)})</span></span>
           <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="margin:0;flex-shrink:0;">--:--</div>
           ${actionBtns(p)}
         </div>`).join('');

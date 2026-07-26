@@ -4654,69 +4654,59 @@ function renderAwayTab() {
   // Sort entries by least time remaining first
   entries.sort((a, b) => a.minExpiry - b.minExpiry);
 
+  const actionBtns = p => `
+    <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
+      <button onclick="adjustPilotTimer('${p.id}',-5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 8px;touch-action:manipulation;">−5</button>
+      <button onclick="adjustPilotTimer('${p.id}',5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 8px;touch-action:manipulation;">+5</button>
+      <button onclick="doLandPilot('${p.id}','${p.name.replace(/'/g,"\\'")}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:12px;padding:5px 12px;font-weight:700;touch-action:manipulation;">Land</button>
+      <button class="btn-danger" onclick="confirmLandedEarly('${p.id}','${p.name.replace(/'/g,"\\'")}')">✕</button>
+    </div>`;
+
   let html = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
       <div class="section-title" style="margin:0;">Away (${flying.length})</div>
       <button onclick="loadOfficeData()" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">↻ Refresh</button>
     </div>
-    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
-    <table class="away-table">
-      <thead>
-        <tr>
-          <th>Pilot</th>
-          <th style="text-align:center;width:40px;">#</th>
-          <th>Time Left</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>`;
-
-  const actionBtns = p => `
-    <div style="display:flex;gap:4px;justify-content:flex-end;align-items:center;">
-      <button onclick="adjustPilotTimer('${p.id}',-5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 9px;">−5</button>
-      <button onclick="adjustPilotTimer('${p.id}',5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 9px;">+5</button>
-      <button onclick="doLandPilot('${p.id}','${p.name.replace(/'/g,"\\'")}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:12px;padding:5px 12px;font-weight:700;">Land</button>
-      <button class="btn-danger" onclick="confirmLandedEarly('${p.id}','${p.name.replace(/'/g,"\\'")}')">✕</button>
-    </div>`;
+    <div style="display:flex;flex-direction:column;gap:8px;">`;
 
   entries.forEach(entry => {
     if (entry.type === 'solo') {
       const p = entry.pilot;
       html += `
-        <tr id="pilot-card-${p.id}">
-          <td class="col-pilot">${esc(p.name)}</td>
-          <td style="text-align:center;font-weight:700;color:var(--accent);font-size:14px;">${p.client_name ? esc(p.client_name) : '—'}</td>
-          <td class="col-timer">
+        <div class="tdf-card" id="pilot-card-${p.id}" style="padding:12px 14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+            <span class="tdf-pilot">${esc(p.name)}</span>
+            ${p.client_name ? `<span style="font-size:13px;color:var(--accent);font-weight:600;flex-shrink:0;">${esc(p.client_name)}</span>` : ''}
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
             <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="margin:0;">--:--</div>
-          </td>
-          <td class="col-actions">${actionBtns(p)}</td>
-        </tr>`;
+            ${actionBtns(p)}
+          </div>
+        </div>`;
     } else {
       const gid = entry.pilots[0].group_id;
       const gname = esc(entry.groupName || 'Group');
+      const pilotRows = entry.pilots.map(p => `
+        <div id="pilot-card-${p.id}" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--border);gap:8px;">
+          <span style="font-size:14px;font-weight:700;color:var(--text);flex:1;min-width:0;">${esc(p.name)}</span>
+          <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="margin:0;flex-shrink:0;">--:--</div>
+          ${actionBtns(p)}
+        </div>`).join('');
       html += `
-        <tr class="group-header">
-          <td colspan="3">${entry.pilots.length} Pilots — ${gname}</td>
-          <td style="text-align:right;">
-            <button onclick="showAddToGroupModal('${gid}','${gname}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:16px;font-weight:700;padding:4px 12px;cursor:pointer;line-height:1;" title="Add pilot to group">+</button>
-          </td>
-        </tr>`;
-      entry.pilots.forEach(p => {
-        html += `
-          <tr id="pilot-card-${p.id}" class="group-row">
-            <td class="col-pilot">${esc(p.name)}</td>
-            <td style="text-align:center;font-weight:700;color:var(--accent);font-size:14px;">${p.client_name ? esc(p.client_name) : '—'}</td>
-            <td class="col-timer">
-              <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="margin:0;">--:--</div>
-            </td>
-            <td class="col-actions">${actionBtns(p)}</td>
-          </tr>`;
-      });
-      html += `<tr class="group-spacer"><td colspan="4"></td></tr>`;
+        <div class="tdf-card tdf-card-group" style="padding:12px 14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px;">
+            <span class="tdf-group-label">${entry.pilots.length}-pilot group</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+              ${entry.groupName ? `<span style="font-size:12px;color:var(--accent);font-weight:600;">${gname}</span>` : ''}
+              <button onclick="showAddToGroupModal('${gid}','${gname}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:16px;font-weight:700;padding:2px 10px;cursor:pointer;line-height:1.4;touch-action:manipulation;" title="Add pilot to group">+</button>
+            </div>
+          </div>
+          ${pilotRows}
+        </div>`;
     }
   });
 
-  html += `</tbody></table></div>`;
+  html += `</div>`;
   el.innerHTML = html;
   updateTimers();
 }

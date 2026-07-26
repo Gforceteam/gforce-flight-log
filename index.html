@@ -3083,10 +3083,7 @@ function renderAllTodayFlights() {
 
   const completedCount = todayF.filter(f => f.landed_at).length;
   let html = `<div class="tdf-wrap" style="margin-top:16px;">
-    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;">
-      <div class="section-title" style="margin:0;">Today's Flights</div>
-      <div style="font-size:13px;font-weight:700;color:var(--accent);">${completedCount} Completed Flight${completedCount !== 1 ? 's' : ''} Today</div>
-    </div>
+    <div class="section-title" style="margin-bottom:10px;">Today's Flights</div>
     <div style="display:flex;flex-direction:column;gap:8px;">`;
 
   for (const grp of groups) {

@@ -2985,15 +2985,13 @@ function renderDashboard() {
         <div class="ff-status-pill flying">Flying #${_curFlightNum}</div>
         ${myStatus.group_pilots && myStatus.group_pilots.length ? `<div class="ff-group-pilots">${myStatus.group_pilots.map(esc).join(' · ')}</div>` : ''}
         <div class="dashboard-timer" id="dashboard-timer">--:--</div>
-        <div style="display:flex;gap:10px;margin-top:4px;">
-          <button class="btn-log-flight btn-land-pilot" style="flex:1;" onclick="pilotLand()">Land</button>
-          <button class="btn-log-flight" style="flex:1;background:transparent;color:var(--accent);border:2px solid var(--accent);box-shadow:none;" onclick="goToLogFlight()">Log Flight</button>
+        <div style="margin-top:4px;">
+          <button class="btn-log-flight btn-land-pilot" style="width:100%;" onclick="pilotLand()">Land</button>
         </div>
         <div class="ff-secondary-actions">
           <button class="btn-extend" id="btn-dnf" onclick="didNotFly()" style="border-color:var(--muted);color:var(--muted);">✕ Did Not Fly</button>
         </div>
       </div>
-      ${renderTodayFlightsList()}
       ${renderFlyingList(true)}
       <div id="pilot-all-today-flights">${renderAllTodayFlights()}</div>
     `;
@@ -3004,10 +3002,8 @@ function renderDashboard() {
     clearInterval(window._dashboardTimer);
     el.innerHTML = `
       <div class="ff-status-card" style="background:rgba(16,185,129,0.06);border-color:rgba(16,185,129,0.3);text-align:center;padding:24px 20px;">
-        <div class="ff-status-pill" style="background:rgba(16,185,129,0.15);color:#10b981;margin-bottom:16px;">Just Landed #${_curFlightNum}</div>
-        <button class="btn-log-flight" onclick="goToLogFlight()">Log Flight</button>
+        <div class="ff-status-pill" style="background:rgba(16,185,129,0.15);color:#10b981;">Just Landed #${_curFlightNum}</div>
       </div>
-      ${renderTodayFlightsList()}
       ${renderFlyingList(false)}
       <div id="pilot-all-today-flights">${renderAllTodayFlights()}</div>
     `;
@@ -3018,7 +3014,6 @@ function renderDashboard() {
     const hasFlewToday = todayFlights.length > 0;
     el.innerHTML = `
       ${hasFlewToday ? `<div class="ff-status-card ff-status-landed"><div class="ff-status-pill landed">Landed</div></div>` : ''}
-      ${renderTodayFlightsList()}
       ${renderFlyingList(false)}
       <div id="pilot-all-today-flights">${renderAllTodayFlights()}</div>
     `;

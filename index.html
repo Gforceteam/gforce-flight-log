@@ -5526,9 +5526,12 @@ function speak(text) {
     u.pitch = 1;
     u.volume = 1;
     const voices = window.speechSynthesis.getVoices();
-    const femaleKeywords = ['female', 'samantha', 'victoria', 'karen', 'moira', 'tessa', 'zira', 'susan', 'hazel', 'fiona', 'kate', 'serena', 'google uk english female', 'google us english female'];
-    const femaleVoice = voices.find(v => femaleKeywords.some(k => v.name.toLowerCase().includes(k)));
-    if (femaleVoice) u.voice = femaleVoice;
+    const irishVoice = voices.find(v => /irish|moira|ireland/i.test(v.name) && /female|f\b/i.test(v.name))
+      || voices.find(v => /irish|moira|ireland/i.test(v.name))
+      || voices.find(v => /moira/i.test(v.name));
+    const fallbackFemale = voices.find(v => /female|samantha|victoria|karen|tessa|zira|hazel|serena/i.test(v.name));
+    const chosen = irishVoice || fallbackFemale;
+    if (chosen) u.voice = chosen;
     window.speechSynthesis.speak(u);
   } catch (e) {}
 }

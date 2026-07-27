@@ -100,21 +100,7 @@ async function checkTimerNotifications() {
       const remainingMs = new Date(timer.expires_at).getTime() - now;
       const remainingMins = Math.floor(remainingMs / 60000);
 
-      // 10-minute warning — send once when remaining is between 5 and 11 minutes
-      if (remainingMins > 5 && remainingMins <= 11 && !Number(timer.notif_10min)) {
-        const r = await db.execute({
-          sql: 'UPDATE active_timers SET notif_10min = 1 WHERE pilot_id = ? AND notif_10min = 0',
-          args: [timer.pilot_id]
-        });
-        if (r.rowsAffected > 0) {
-          await sendPushToPilot(timer.pilot_id, {
-            title: '⏱ 10 minutes left',
-            body: `Start heading back — ${Math.ceil(remainingMins)} min remaining on your timer.`,
-            tag: 'timer-10min'
-          });
-          console.log(`⏱ 10-min push → ${timer.pilot_name}`);
-        }
-      }
+      // 10-minute push notification disabled
 
       // 5-minute warning — send once when remaining is between 0 and 5.5 minutes
       if (remainingMins > 0 && remainingMins <= 5.5 && !Number(timer.notif_5min)) {

@@ -1186,6 +1186,8 @@
       if (hasPilot || hasOffice) document.documentElement.classList.add('authed');
     })();
   </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
 
@@ -4450,36 +4452,33 @@ function csvCell(v) {
   return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
 }
 function exportToPDF(title, rows) {
-  const headerRow = rows[1] || [];
-  const dataRows = rows.slice(2);
-  const ths = headerRow.map(h => `<th>${esc(String(h))}</th>`).join('');
-  const trs = dataRows.map(r =>
-    `<tr>${r.map(c => `<td>${esc(String(c ?? ''))}</td>`).join('')}</tr>`
-  ).join('');
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-  <title>${esc(title)}</title>
-  <style>
-    body { font-family: Arial, sans-serif; font-size: 11px; padding: 20px; color: #111; }
-    h2 { font-size: 15px; margin: 0 0 12px; }
-    table { border-collapse: collapse; width: 100%; }
-    th { background: #f0f0f0; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; padding: 5px 6px; border: 1px solid #ccc; text-align: center; }
-    td { padding: 5px 6px; border: 1px solid #ddd; text-align: center; }
-    td:first-child { text-align: left; font-weight: 600; }
-    @media print { body { padding: 0; } button { display: none; } }
-  </style></head><body>
-  <h2>${esc(title)}</h2>
-  <table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>
-  <br>
-  <button onclick="window.print()" style="padding:10px 24px;background:#f37327;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Print / Save as PDF</button>
-  <script>window.onload=()=>window.print();<\/script>
-  </body></html>`;
-  const w = window.open('', '_blank');
-  if (w) { w.document.write(html); w.document.close(); }
-  else toast('Allow pop-ups to export PDF');
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text(title, 14, 14);
+
+  const headerRow = (rows[1] || []).map(h => String(h ?? ''));
+  const dataRows = rows.slice(2).map(r => r.map(c => String(c ?? '')));
+
+  doc.autoTable({
+    head: [headerRow],
+    body: dataRows,
+    startY: 20,
+    styles: { fontSize: 8, cellPadding: 2 },
+    headStyles: { fillColor: [243, 115, 41], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [250, 250, 250] },
+    margin: { left: 14, right: 14 }
+  });
+
+  doc.save(title + '.pdf');
+  toast('PDF downloaded');
 }
 
 async function downloadCSV(filename, rows) {
-  exportToPDF(filename.replace('.csv',''), rows);
+  if (!window.jspdf) { toast('PDF library not loaded yet — try again'); return; }
+  exportToPDF(filename.replace('.csv', ''), rows);
 }
 
 function exportLoopBoardCSV() {

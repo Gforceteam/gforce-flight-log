@@ -4584,7 +4584,7 @@ function renderGroupsTab() {
         </div>
         <div style="display:flex;gap:10px;">
           <button onclick="addSendAwayRow()" style="padding:11px 20px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:22px;font-weight:400;cursor:pointer;line-height:1;">+</button>
-          <button onclick="submitSendAway()" style="flex:1;padding:12px 20px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;">Send Away</button>
+          <button id="send-away-btn" onclick="submitSendAway()" style="flex:1;padding:12px 20px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;">Send Away</button>
         </div>
       </div>
     </div>`;
@@ -4699,6 +4699,7 @@ function addSendAwayRow() {
 }
 
 async function submitSendAway() {
+  if (!mouIsOn()) { toast('MOU must be active before sending pilots away', 'err'); return; }
   const rows = [...document.querySelectorAll('#send-away-rows .send-away-row')];
   const pilots = [];
   rows.forEach(row => {
@@ -5936,18 +5937,28 @@ function showOfficeTab(name) {
 let _officePushEnabled = false;
 
 // ─── MOU Toggle ──────────────────────────────────────────────────────────────
+function mouIsOn() { return localStorage.getItem('gforce_mou') === '1'; }
+
 function updateMOUToggleUI() {
   const btn = document.getElementById('mou-toggle-btn');
   const knob = document.getElementById('mou-toggle-knob');
-  if (!btn || !knob) return;
-  const on = localStorage.getItem('gforce_mou') === '1';
-  btn.style.background = on ? '#22c55e' : '#ef4444';
-  knob.style.transform = on ? 'translateX(20px)' : 'translateX(0)';
+  if (btn && knob) {
+    const on = mouIsOn();
+    btn.style.background = on ? '#22c55e' : '#ef4444';
+    knob.style.transform = on ? 'translateX(20px)' : 'translateX(0)';
+  }
+  const sendBtn = document.getElementById('send-away-btn');
+  if (sendBtn) {
+    const on = mouIsOn();
+    sendBtn.disabled = !on;
+    sendBtn.style.background = on ? 'var(--accent)' : '#9ca3af';
+    sendBtn.style.cursor = on ? 'pointer' : 'not-allowed';
+    sendBtn.title = on ? '' : 'MOU must be active before sending pilots away';
+  }
 }
 
 function toggleMOU() {
-  const on = localStorage.getItem('gforce_mou') === '1';
-  localStorage.setItem('gforce_mou', on ? '0' : '1');
+  localStorage.setItem('gforce_mou', mouIsOn() ? '0' : '1');
   updateMOUToggleUI();
 }
 

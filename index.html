@@ -1132,6 +1132,9 @@
     #office-tab-ff .ff-table th { font-size: 10px; letter-spacing: 0; line-height: 1.2; }
     #office-tab-ff .ff-pilot-name { width: 95px; min-width: unset; }
     #office-tab-ff .ff-total { min-width: unset; width: 46px; }
+    #office-tab-ff .ff-cell-override { background: rgba(59,130,246,0.12); }
+    #office-tab-ff .ff-day-override { color: #3b82f6; font-weight: 800; }
+    #office-tab-ff .ff-edit-input { width: 32px; text-align: center; border: 1px solid #3b82f6; border-radius: 4px; background: rgba(59,130,246,0.08); font-size: 11px; padding: 2px 1px; color: var(--text); }
     .ff-ok        { background: #166534; color: #bbf7d0; }
     .ff-warn      { background: #78350f; color: #fde68a; }
     .ff-warn-hard { background: #7c2d12; color: #fed7aa; }
@@ -1554,6 +1557,7 @@
 
     <div class="office-tab-content" id="office-tab-ff">
       <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:10px 16px 4px;">
+        <button id="ff-edit-btn" onclick="toggleFFEditMode()" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">✏ Edit</button>
         <button onclick="exportDutySheetCSV()" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">⬇ Export</button>
       </div>
       <div class="ff-wrap" id="office-ff-content"><div class="empty-state">Loading…</div></div>
@@ -1870,6 +1874,8 @@ let _officeClockInterval = null;
 const _bellFired = new Set(); // tracks which pilots have already triggered each bell threshold
 let allFlights = [];
 let filteredFlights = [];
+let dutySheetOverrides = [];
+let ffEditMode = false;
 let alertDismissed = new Set();
 // Pending landing acknowledgments — { pilot_name, flight_id }
 let pendingAcks = [];
@@ -4425,7 +4431,16 @@ async function renderPilotFF() {
   }
 }
 
-function renderOfficeFF() {
+async function loadDutySheetOverrides() {
+  try {
+    const res = await officeFetch('/api/office/duty-sheet/overrides');
+    if (res.ok) dutySheetOverrides = await res.json();
+  } catch (_) {}
+}
+
+async function renderOfficeFF() {
+  if (!dutySheetOverrides.length) await loadDutySheetOverrides();
+  const today = todayStr();
   const dates = [];
   for (let i = 13; i >= 0; i--) {
     const d = new Date();
@@ -4434,14 +4449,103 @@ function renderOfficeFF() {
   }
   const ffPilots = [...officePilots].sort(pilotSort).map(p => {
     const dayCounts = {};
-    let daysWorked = 0;
     dates.forEach(d => {
-      const cnt = allFlights.filter(f => f.pilot_id === p.id && f.date === d).length;
-      if (cnt > 0) { dayCounts[d] = cnt; daysWorked++; }
+      const autoCnt = allFlights.filter(f => String(f.pilot_id) === String(p.id) && f.date === d).length;
+      const ov = dutySheetOverrides.find(o => String(o.pilot_id) === String(p.id) && o.date === d);
+      const cnt = ov !== undefined ? ov.count : autoCnt;
+      if (cnt > 0) dayCounts[d] = cnt;
+      else if (ov !== undefined && ov.count === 0) dayCounts[d] = 0; // explicit zero override
     });
-    return { id: p.id, name: p.name, dayCounts, daysWorked };
+    return { id: p.id, name: p.name, dayCounts };
   });
-  document.getElementById('office-ff-content').innerHTML = buildFFTable(dates, ffPilots);
+
+  let html = `<table class="ff-table"><thead><tr>
+    <th class="ff-pilot-name">Pilot</th>
+    ${dates.map(d => `<th class="${d === today ? 'ff-today-col' : ''}">${ffFmtDate(d)}</th>`).join('')}
+    <th>Days Left</th>
+  </tr></thead><tbody>`;
+
+  ffPilots.forEach(p => {
+    let daysWorked = 0;
+    dates.forEach(d => { if (p.dayCounts[d] > 0) daysWorked++; });
+    const daysLeft = 14 - daysWorked;
+    const cls = daysLeft <= 2 ? 'ff-limit' : daysLeft <= 3 ? 'ff-warn-hard' : daysLeft <= 5 ? 'ff-warn' : 'ff-ok';
+
+    const cells = dates.map(d => {
+      const autoCnt = allFlights.filter(f => String(f.pilot_id) === String(p.id) && f.date === d).length;
+      const ov = dutySheetOverrides.find(o => String(o.pilot_id) === String(p.id) && o.date === d);
+      const cnt = ov !== undefined ? ov.count : autoCnt;
+      const isOv = ov !== undefined;
+      const todayCls = d === today ? 'ff-today-col' : '';
+      const ovCls = isOv ? ' ff-cell-override' : '';
+      if (ffEditMode) {
+        return `<td class="${todayCls}${ovCls}"><input type="number" min="0" max="99" value="${cnt > 0 ? cnt : ''}" class="ff-edit-input" onchange="saveDutySheetOverride('${p.id}','${d}',this.value)" title="${isOv ? 'Override (right-click to reset)' : 'Auto'}" oncontextmenu="resetDutySheetOverride('${p.id}','${d}',this);return false;"></td>`;
+      }
+      return `<td class="${todayCls}${ovCls}">${cnt > 0 ? `<span class="ff-day-val${isOv ? ' ff-day-override' : ''}">${cnt}</span>` : ''}</td>`;
+    }).join('');
+
+    html += `<tr><td class="ff-pilot-name">${esc(p.name)}</td>${cells}<td class="ff-total ${cls}" id="ff-daysleft-${p.id}">${daysLeft}</td></tr>`;
+  });
+  html += `</tbody></table>`;
+  document.getElementById('office-ff-content').innerHTML = html;
+}
+
+async function toggleFFEditMode() {
+  ffEditMode = !ffEditMode;
+  const btn = document.getElementById('ff-edit-btn');
+  if (btn) {
+    btn.textContent = ffEditMode ? '✓ Done' : '✏ Edit';
+    btn.style.background = ffEditMode ? 'var(--accent)' : 'var(--surface)';
+    btn.style.color = ffEditMode ? '#fff' : 'var(--text)';
+  }
+  await renderOfficeFF();
+}
+
+async function saveDutySheetOverride(pilotId, date, value) {
+  const count = value === '' ? null : parseInt(value, 10);
+  try {
+    await officeFetch('/api/office/duty-sheet/override', {
+      method: 'POST',
+      body: JSON.stringify({ pilot_id: pilotId, date, count })
+    });
+    const idx = dutySheetOverrides.findIndex(o => String(o.pilot_id) === String(pilotId) && o.date === date);
+    if (count === null || count === undefined) {
+      if (idx >= 0) dutySheetOverrides.splice(idx, 1);
+    } else {
+      if (idx >= 0) dutySheetOverrides[idx].count = count;
+      else dutySheetOverrides.push({ pilot_id: pilotId, date, count });
+    }
+    // Update Days Left cell without full re-render (avoids losing input focus)
+    _updateDaysLeftCell(pilotId);
+  } catch (e) { toast('Failed to save: ' + e.message, 'err'); }
+}
+
+async function resetDutySheetOverride(pilotId, date, inputEl) {
+  const autoCnt = allFlights.filter(f => String(f.pilot_id) === String(pilotId) && f.date === date).length;
+  inputEl.value = autoCnt > 0 ? autoCnt : '';
+  inputEl.closest('td').classList.remove('ff-cell-override');
+  await saveDutySheetOverride(pilotId, date, inputEl.value);
+}
+
+function _updateDaysLeftCell(pilotId) {
+  const dates = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    dates.push(d.toLocaleDateString('en-CA', { timeZone: NZ_TZ }));
+  }
+  let daysWorked = 0;
+  dates.forEach(d => {
+    const autoCnt = allFlights.filter(f => String(f.pilot_id) === String(pilotId) && f.date === d).length;
+    const ov = dutySheetOverrides.find(o => String(o.pilot_id) === String(pilotId) && o.date === d);
+    const cnt = ov !== undefined ? ov.count : autoCnt;
+    if (cnt > 0) daysWorked++;
+  });
+  const daysLeft = 14 - daysWorked;
+  const cell = document.getElementById(`ff-daysleft-${pilotId}`);
+  if (cell) {
+    cell.textContent = daysLeft;
+    cell.className = `ff-total ${daysLeft <= 2 ? 'ff-limit' : daysLeft <= 3 ? 'ff-warn-hard' : daysLeft <= 5 ? 'ff-warn' : 'ff-ok'}`;
+  }
 }
 
 // ─── CSV Export Helpers ───────────────────────────────────────────────────────
@@ -4496,21 +4600,7 @@ function exportDutySheetCSV() {
     d.setDate(d.getDate() - i);
     dates.push(d.toLocaleDateString('en-CA', { timeZone: NZ_TZ }));
   }
-  const ffPilots = [...officePilots].sort(pilotSort).map(p => {
-    const dayCounts = {};
-    let daysWorked = 0;
-    dates.forEach(d => {
-      const cnt = allFlights.filter(f => String(f.pilot_id) === String(p.id) && f.date === d).length;
-      if (cnt > 0) { dayCounts[d] = cnt; daysWorked++; }
-    });
-    return { name: p.name, dayCounts, daysWorked };
-  });
-  const header = ['Pilot', ...dates.map(d => new Date(d + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })), 'Days Worked', 'Days Left'];
-  const rows = [['Duty Sheet', 'Exported ' + todayStr()], header];
-  ffPilots.forEach(p => {
-    rows.push([p.name, ...dates.map(d => p.dayCounts[d] || ''), p.daysWorked, 14 - p.daysWorked]);
-  });
-  downloadCSV(`duty-sheet-${todayStr()}.csv`, rows);
+  downloadCSV(`duty-sheet-${todayStr()}.csv`, []);
 }
 
 // ─── Office API ───────────────────────────────────────────────────────────────

@@ -254,6 +254,13 @@ async function createTables() {
   await db.execute('CREATE INDEX IF NOT EXISTS idx_lbc_date ON loop_board_completed(date)');
   try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN slot INTEGER'); } catch (_) {}
   try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN tallies TEXT'); } catch (_) {}
+  await db.execute(`CREATE TABLE IF NOT EXISTS duty_sheet_overrides (
+    pilot_id TEXT NOT NULL,
+    date TEXT NOT NULL,
+    count INTEGER NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (pilot_id, date)
+  )`);
   // Migrate existing loop_board rows into loop_board_v2 for today's date
   const todayForMigration = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
   const legacyRows = await queryAll('SELECT * FROM loop_board');
@@ -1757,6 +1764,29 @@ app.get('/api/office/export/loop-board', verifyOfficeQuery, async (req, res) => 
   } catch (e) { res.status(500).send('Export failed: ' + e.message); }
 });
 
+app.get('/api/office/duty-sheet/overrides', verifyOffice, async (req, res) => {
+  try {
+    const overrides = await queryAll('SELECT pilot_id, date, count FROM duty_sheet_overrides');
+    res.json(overrides);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/office/duty-sheet/override', verifyOffice, async (req, res) => {
+  try {
+    const { pilot_id, date, count } = req.body;
+    if (!pilot_id || !date) return res.status(400).json({ error: 'pilot_id and date required' });
+    if (count === null || count === undefined) {
+      await run('DELETE FROM duty_sheet_overrides WHERE pilot_id = ? AND date = ?', [String(pilot_id), date]);
+    } else {
+      await run(
+        'INSERT OR REPLACE INTO duty_sheet_overrides (pilot_id, date, count, updated_at) VALUES (?, ?, ?, ?)',
+        [String(pilot_id), date, Number(count), new Date().toISOString()]
+      );
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/office/export/duty-sheet', verifyOfficeQuery, async (req, res) => {
   try {
     const today = nzToday();
@@ -1768,6 +1798,7 @@ app.get('/api/office/export/duty-sheet', verifyOfficeQuery, async (req, res) => 
     }
     const pilots = await queryAll('SELECT id, name FROM pilots ORDER BY name');
     const flights = await queryAll(`SELECT pilot_id, date FROM flights WHERE date >= ? AND date <= ?`, [dates[0], dates[dates.length - 1]]);
+    const overrides = await queryAll(`SELECT pilot_id, date, count FROM duty_sheet_overrides WHERE date >= ? AND date <= ?`, [dates[0], dates[dates.length - 1]]);
     const dateLabels = dates.map(d => {
       const dt = new Date(d + 'T12:00:00');
       return dt.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
@@ -1775,7 +1806,11 @@ app.get('/api/office/export/duty-sheet', verifyOfficeQuery, async (req, res) => 
     const header = ['Pilot', ...dateLabels, 'Days Worked', 'Days Left'];
     const lines = [`Duty Sheet (${today})`, csvRow(header)];
     pilots.forEach(p => {
-      const dayCounts = dates.map(d => flights.filter(f => String(f.pilot_id) === String(p.id) && f.date === d).length || '');
+      const dayCounts = dates.map(d => {
+        const ov = overrides.find(o => String(o.pilot_id) === String(p.id) && o.date === d);
+        if (ov !== undefined) return ov.count || '';
+        return flights.filter(f => String(f.pilot_id) === String(p.id) && f.date === d).length || '';
+      });
       const worked = dayCounts.filter(c => c !== '').length;
       lines.push(csvRow([p.name, ...dayCounts, worked, 14 - worked]));
     });

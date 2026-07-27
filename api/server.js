@@ -102,22 +102,7 @@ async function checkTimerNotifications() {
 
       // 10-minute push notification disabled
 
-      // 5-minute warning — send once when remaining is between 0 and 5.5 minutes
-      if (remainingMins > 0 && remainingMins <= 5.5 && !Number(timer.notif_5min)) {
-        const r = await db.execute({
-          sql: 'UPDATE active_timers SET notif_5min = 1 WHERE pilot_id = ? AND notif_5min = 0',
-          args: [timer.pilot_id]
-        });
-        if (r.rowsAffected > 0) {
-          await sendPushToPilot(timer.pilot_id, {
-            title: '🚨 5 minutes left!',
-            body: 'Land now — timer almost up.',
-            tag: 'timer-5min',
-            requireInteraction: true
-          });
-          console.log(`🚨 5-min push → ${timer.pilot_name}`);
-        }
-      }
+      // 5-minute push notification disabled
 
       // Expiry — send once when remaining hits 0 or below
       if (remainingMins <= 0 && !Number(timer.notif_expired)) {

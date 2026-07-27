@@ -4449,52 +4449,37 @@ function csvCell(v) {
   const s = String(v ?? '');
   return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
 }
-async function downloadCSV(filename, rows) {
-  // Try native Save dialog first (desktop Chrome/Edge outside PWA)
-  if (window.showSaveFilePicker) {
-    try {
-      const csv = '﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
-      const handle = await window.showSaveFilePicker({
-        suggestedName: filename,
-        types: [{ description: 'CSV File', accept: { 'text/csv': ['.csv'] } }]
-      });
-      const writable = await handle.createWritable();
-      await writable.write(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-      await writable.close();
-      toast('File saved');
-      return;
-    } catch (e) {
-      if (e.name === 'AbortError') return;
-    }
-  }
+function exportToPDF(title, rows) {
+  const headerRow = rows[1] || [];
+  const dataRows = rows.slice(2);
+  const ths = headerRow.map(h => `<th>${esc(String(h))}</th>`).join('');
+  const trs = dataRows.map(r =>
+    `<tr>${r.map(c => `<td>${esc(String(c ?? ''))}</td>`).join('')}</tr>`
+  ).join('');
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>${esc(title)}</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 11px; padding: 20px; color: #111; }
+    h2 { font-size: 15px; margin: 0 0 12px; }
+    table { border-collapse: collapse; width: 100%; }
+    th { background: #f0f0f0; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; padding: 5px 6px; border: 1px solid #ccc; text-align: center; }
+    td { padding: 5px 6px; border: 1px solid #ddd; text-align: center; }
+    td:first-child { text-align: left; font-weight: 600; }
+    @media print { body { padding: 0; } button { display: none; } }
+  </style></head><body>
+  <h2>${esc(title)}</h2>
+  <table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>
+  <br>
+  <button onclick="window.print()" style="padding:10px 24px;background:#f37327;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Print / Save as PDF</button>
+  <script>window.onload=()=>window.print();<\/script>
+  </body></html>`;
+  const w = window.open('', '_blank');
+  if (w) { w.document.write(html); w.document.close(); }
+  else toast('Allow pop-ups to export PDF');
+}
 
-  // Fallback: copy-to-clipboard modal (tab-separated pastes natively into Excel)
-  const tsv = rows.map(r => r.join('\t')).join('\n');
-  const existing = document.getElementById('export-modal');
-  if (existing) existing.remove();
-  const modal = document.createElement('div');
-  modal.id = 'export-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
-  modal.innerHTML = `
-    <div style="background:var(--card);border-radius:16px;padding:24px;width:100%;max-width:620px;display:flex;flex-direction:column;gap:14px;">
-      <div style="font-size:16px;font-weight:800;color:var(--text);">${esc(filename)}</div>
-      <div style="font-size:13px;color:var(--muted);">Click <b>Copy</b> then open Excel or Google Sheets and press <b>Ctrl+V</b> to paste the data directly.</div>
-      <textarea id="export-tsv" rows="9" style="width:100%;font-family:monospace;font-size:11px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);resize:vertical;box-sizing:border-box;" readonly></textarea>
-      <div style="display:flex;gap:8px;justify-content:flex-end;">
-        <button id="export-copy-btn" onclick="
-          navigator.clipboard.writeText(document.getElementById('export-tsv').value)
-            .then(()=>{toast('Copied — paste into Excel with Ctrl+V');document.getElementById('export-copy-btn').textContent='Copied ✓';})
-            .catch(()=>{document.getElementById('export-tsv').select();document.execCommand('copy');toast('Copied!');});
-        " style="padding:11px 24px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Copy to Clipboard</button>
-        <button onclick="document.getElementById('export-modal').remove()" style="padding:11px 22px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Close</button>
-      </div>
-    </div>`;
-  document.body.appendChild(modal);
-  document.getElementById('export-tsv').value = tsv;
-  navigator.clipboard.writeText(tsv).then(() => {
-    toast('Data copied — open Excel and press Ctrl+V');
-    document.getElementById('export-copy-btn').textContent = 'Copied ✓';
-  }).catch(() => {});
+async function downloadCSV(filename, rows) {
+  exportToPDF(filename.replace('.csv',''), rows);
 }
 
 function exportLoopBoardCSV() {

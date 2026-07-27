@@ -4450,11 +4450,10 @@ function csvCell(v) {
   return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
 }
 async function downloadCSV(filename, rows) {
-  const csv = '﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
-
-  // Desktop Chrome/Edge: native Save dialog (most reliable)
+  // Try native Save dialog first (desktop Chrome/Edge outside PWA)
   if (window.showSaveFilePicker) {
     try {
+      const csv = '﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
       const handle = await window.showSaveFilePicker({
         suggestedName: filename,
         types: [{ description: 'CSV File', accept: { 'text/csv': ['.csv'] } }]
@@ -4465,21 +4464,37 @@ async function downloadCSV(filename, rows) {
       toast('File saved');
       return;
     } catch (e) {
-      if (e.name === 'AbortError') return; // user cancelled
+      if (e.name === 'AbortError') return;
     }
   }
 
-  // Fallback: Blob URL
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.setAttribute('href', url);
-  a.setAttribute('download', filename);
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 30000);
-  toast(`Downloading ${filename}`);
+  // Fallback: copy-to-clipboard modal (tab-separated pastes natively into Excel)
+  const tsv = rows.map(r => r.join('\t')).join('\n');
+  const existing = document.getElementById('export-modal');
+  if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'export-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;padding:24px;width:100%;max-width:620px;display:flex;flex-direction:column;gap:14px;">
+      <div style="font-size:16px;font-weight:800;color:var(--text);">${esc(filename)}</div>
+      <div style="font-size:13px;color:var(--muted);">Click <b>Copy</b> then open Excel or Google Sheets and press <b>Ctrl+V</b> to paste the data directly.</div>
+      <textarea id="export-tsv" rows="9" style="width:100%;font-family:monospace;font-size:11px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);resize:vertical;box-sizing:border-box;" readonly></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button id="export-copy-btn" onclick="
+          navigator.clipboard.writeText(document.getElementById('export-tsv').value)
+            .then(()=>{toast('Copied — paste into Excel with Ctrl+V');document.getElementById('export-copy-btn').textContent='Copied ✓';})
+            .catch(()=>{document.getElementById('export-tsv').select();document.execCommand('copy');toast('Copied!');});
+        " style="padding:11px 24px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Copy to Clipboard</button>
+        <button onclick="document.getElementById('export-modal').remove()" style="padding:11px 22px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Close</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.getElementById('export-tsv').value = tsv;
+  navigator.clipboard.writeText(tsv).then(() => {
+    toast('Data copied — open Excel and press Ctrl+V');
+    document.getElementById('export-copy-btn').textContent = 'Copied ✓';
+  }).catch(() => {});
 }
 
 function exportLoopBoardCSV() {

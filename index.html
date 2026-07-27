@@ -1165,7 +1165,18 @@
       border-color: var(--accent) !important;
       box-shadow: 0 0 0 3px var(--accent-dim) !important;
     }
+
+    /* Hide login page immediately for authenticated users — prevents flash on load */
+    html.authed #login-page { display: none !important; }
   </style>
+  <!-- Run before body renders: hide login page if tokens already exist to prevent flash -->
+  <script>
+    (function() {
+      var hasPilot = localStorage.getItem('gforce_pilot_token') && localStorage.getItem('gforce_pilot_id');
+      var hasOffice = localStorage.getItem('gforce_office_token');
+      if (hasPilot || hasOffice) document.documentElement.classList.add('authed');
+    })();
+  </script>
 </head>
 <body>
 
@@ -1533,6 +1544,13 @@
 
 
     <div class="office-tab-content" id="office-tab-ff">
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:10px 16px 0;">
+        <span style="font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--muted);font-family:'Montserrat',sans-serif;">MOU</span>
+        <button id="mou-toggle-btn" onclick="toggleMOU()" style="position:relative;width:44px;height:24px;border-radius:9999px;border:none;cursor:pointer;padding:0;transition:background 0.2s;flex-shrink:0;" title="MOU Status">
+          <span id="mou-toggle-knob" style="position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform 0.2s;display:block;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></span>
+        </button>
+        <button onclick="renderOfficeFF()" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">↻ Refresh</button>
+      </div>
       <div class="ff-wrap" id="office-ff-content"><div class="empty-state">Loading…</div></div>
     </div>
 
@@ -2169,6 +2187,7 @@ document.addEventListener('DOMContentLoaded', () => {
   } else if (officeToken) {
     showOfficeDashboard();
   } else {
+    document.getElementById('login-page').style.display = 'flex';
     loadPilotList();
   }
 
@@ -4447,6 +4466,7 @@ async function officeApiRefresh(path, opts = {}) {
 
 // Wrapped fetch that auto-retries with refresh on 401
 async function officeFetch(path, opts = {}) {
+  if (!officeToken) return null; // not an office session — pilots must never hit this path
   let res = await officeApi(path, opts);
   if (res && res.status === 401) {
     const retry = await officeApiRefresh(path, opts);
@@ -5905,7 +5925,7 @@ function showOfficeTab(name) {
   if (tabEl) tabEl.classList.add('active');
   const btnEl = document.getElementById(`office-tab-${name}-btn`);
   if (btnEl) btnEl.classList.add('active');
-  if (name === 'ff') renderOfficeFF();
+  if (name === 'ff') { renderOfficeFF(); updateMOUToggleUI(); }
   if (name === 'pilots') { renderAwayTab(); renderGroupsTab(); renderTodayFlights(); renderOfficeTab(); }
   if (name === 'loop') loadLoopBoard();
   if (name === 'today') renderTodayTab();
@@ -5914,6 +5934,22 @@ function showOfficeTab(name) {
 }
 
 let _officePushEnabled = false;
+
+// ─── MOU Toggle ──────────────────────────────────────────────────────────────
+function updateMOUToggleUI() {
+  const btn = document.getElementById('mou-toggle-btn');
+  const knob = document.getElementById('mou-toggle-knob');
+  if (!btn || !knob) return;
+  const on = localStorage.getItem('gforce_mou') === '1';
+  btn.style.background = on ? '#22c55e' : '#ef4444';
+  knob.style.transform = on ? 'translateX(20px)' : 'translateX(0)';
+}
+
+function toggleMOU() {
+  const on = localStorage.getItem('gforce_mou') === '1';
+  localStorage.setItem('gforce_mou', on ? '0' : '1');
+  updateMOUToggleUI();
+}
 
 async function loadOfficeSettings() {
   try {
@@ -6079,7 +6115,7 @@ function connectWS() {
       // Refresh token before reconnecting to avoid reconnecting with an expired JWT
       setTimeout(async () => {
         try {
-          const r = await fetch(`${API_URL}/api/auth/refresh-office`, {
+          const r = await fetch(`${API_BASE}/api/auth/refresh-office`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ refresh_token: localStorage.getItem('gforce_office_refresh') })
@@ -6095,7 +6131,7 @@ function connectWS() {
     } else if (pilotToken) {
       setTimeout(async () => {
         try {
-          const r = await fetch(`${API_URL}/api/auth/refresh`, {
+          const r = await fetch(`${API_BASE}/api/auth/refresh-pilot`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ refresh_token: localStorage.getItem('gforce_pilot_refresh') })
@@ -6180,6 +6216,11 @@ function connectWS() {
         pendingExtensions = pendingExtensions.filter(r => r.id !== data.request_id);
         renderExtensionPanel();
         loadOfficeData();
+        if (pilotId && data.pilot_id === pilotId) {
+          myStatus.timer_expires_at = data.expires_at;
+          startDashboardCountdown(data.expires_at);
+          toast('✅ Extra time approved — 30 min added!');
+        }
         break;
       case 'EXTENSION_DENIED':
         pendingExtensions = pendingExtensions.filter(r => r.id !== data.request_id);
@@ -6253,16 +6294,6 @@ function connectWS() {
         toast(`${data.pilot_name} removed`);
         loadOfficeData();
         break;
-      case 'EXTENSION_APPROVED': {
-        if (pilotId && data.pilot_id === pilotId) {
-          myStatus.timer_expires_at = data.expires_at;
-          startDashboardCountdown(data.expires_at);
-          const btn = document.getElementById('btn-extend');
-          if (btn) { btn.disabled = false; btn.textContent = 'Request More Time'; }
-          toast('✅ Extra time approved — 30 min added!');
-        }
-        break;
-      }
       case 'EXTENSION_DENIED': {
         if (pilotId && data.pilot_id === pilotId) {
           const btn = document.getElementById('btn-extend');
@@ -6458,7 +6489,6 @@ function notifyPilotSentAway() {
 // ─── Settings page ────────────────────────────────────────────────────────────
 /** Fast path: theme + export name only. Heavy DOM/network runs next task so taps/focus are not stuck behind layout (iOS keyboard). */
 function renderSettingsPage() {
-  updateThemeButtons();
   refreshExportNameDisplay();
   setTimeout(renderSettingsPageDeferred, 0);
 }

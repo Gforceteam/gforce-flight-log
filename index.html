@@ -16,8 +16,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   <title>Gforce Flight Log</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     :root {
       --bg: #0b0d12;
@@ -1542,7 +1540,6 @@
   <div class="office-tab-bar">
     <button class="office-tab-btn active" onclick="showOfficeTab('pilots')" id="office-tab-pilots-btn">Flight Following</button>
     <button class="office-tab-btn" onclick="showOfficeTab('loop')" id="office-tab-loop-btn">Loop Board</button>
-    <button class="office-tab-btn" onclick="showOfficeTab('map')" id="office-tab-map-btn">Map</button>
   </div>
 
   <div class="office-content">
@@ -1557,11 +1554,7 @@
     </div>
 
 
-    <div class="office-tab-content" id="office-tab-map">
-      <div id="office-map" style="width:100%;height:calc(100vh - 140px);"></div>
-    </div>
-
-    <div class="office-tab-content" id="office-tab-ff">
+<div class="office-tab-content" id="office-tab-ff">
       <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:10px 16px 4px;">
         <button id="ff-edit-btn" onclick="toggleFFEditMode()" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">✏ Edit</button>
         <button onclick="exportDutySheetCSV()" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">⬇ Export</button>
@@ -2337,7 +2330,6 @@ function doLogout() {
   unsubscribeFromPush();
   pilotToken = pilotId = pilotName = null;
   if (ws && !officeToken) { ws.close(); ws = null; }
-  stopLocationSharing();
   clearInterval(window._statusPoll);
   clearInterval(window._dashboardTimer);
   if (window._statusPollAbort) { window._statusPollAbort.abort(); window._statusPollAbort = null; }
@@ -2396,7 +2388,6 @@ function showApp(name) {
   startStatusPoll();
   startPilotClock();
   connectWS();
-  startLocationSharing();
 }
 
 function startStatusPoll() {
@@ -4704,8 +4695,7 @@ function refreshOfficeUiAfterLoad() {
     case 'today': renderTodayTab(); break;
     case 'flights': renderFlightsTab(); break;
     case 'ff': renderOfficeFF(); break;
-    case 'map': initOfficeMap(); break;
-    case 'settings': break;
+case 'settings': break;
     default: renderGroupsTab(); renderTodayFlights(); renderOfficeTab();
   }
 }
@@ -6153,8 +6143,7 @@ function showOfficeTab(name) {
   const btnEl = document.getElementById(`office-tab-${name}-btn`);
   if (btnEl) btnEl.classList.add('active');
   if (name === 'ff') renderOfficeFF();
-  if (name === 'map') initOfficeMap();
-  if (name === 'pilots') { renderAwayTab(); renderGroupsTab(); renderTodayFlights(); renderOfficeTab(); }
+if (name === 'pilots') { renderAwayTab(); renderGroupsTab(); renderTodayFlights(); renderOfficeTab(); }
   if (name === 'loop') loadLoopBoard();
   if (name === 'today') renderTodayTab();
   if (name === 'flights') renderFlightsTab();
@@ -6343,85 +6332,6 @@ async function officeCreatePilot() {
 }
 
 // ─── WebSocket ────────────────────────────────────────────────────────────────
-// ─── Office Map ───────────────────────────────────────────────────────────────
-let _officeMap = null;
-const _pilotMarkers = {}; // pilot_id → L.marker
-
-async function initOfficeMap() {
-  if (!window.L) return;
-  const el = document.getElementById('office-map');
-  if (!el) return;
-  if (!_officeMap) {
-    _officeMap = L.map('office-map').setView([-45.03, 168.66], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors',
-      maxZoom: 19
-    }).addTo(_officeMap);
-  } else {
-    _officeMap.invalidateSize();
-  }
-  try {
-    const res = await officeFetch('/api/office/pilot-locations');
-    if (res.ok) {
-      const locs = await res.json();
-      locs.forEach(l => updatePilotMarker(l));
-      if (locs.length) {
-        const pts = locs.map(l => [l.lat, l.lng]);
-        _officeMap.fitBounds(pts.length === 1 ? [[pts[0][0]-0.005,pts[0][1]-0.005],[pts[0][0]+0.005,pts[0][1]+0.005]] : pts, { padding: [40, 40] });
-      }
-    }
-  } catch (_) {}
-}
-
-function updatePilotMarker(data) {
-  if (!_officeMap || !window.L) return;
-  const { pilot_id, name, lat, lng, updated_at } = data;
-  const age = updated_at ? Math.round((Date.now() - new Date(updated_at)) / 1000) : null;
-  const ageStr = age != null ? (age < 60 ? `${age}s ago` : `${Math.round(age/60)}m ago`) : '';
-  const popup = `<b>${name}</b><br><span style="font-size:11px;color:#666;">${ageStr}</span>`;
-  if (_pilotMarkers[pilot_id]) {
-    _pilotMarkers[pilot_id].setLatLng([lat, lng]).setPopupContent(popup);
-  } else {
-    const icon = L.divIcon({
-      className: '',
-      html: `<div style="background:#f37329;color:#fff;font-size:11px;font-weight:700;padding:3px 7px;border-radius:12px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.3);">${name}</div>`,
-      iconAnchor: [0, 10]
-    });
-    _pilotMarkers[pilot_id] = L.marker([lat, lng], { icon })
-      .addTo(_officeMap)
-      .bindPopup(popup);
-  }
-}
-
-// ─── Pilot Location Sharing ───────────────────────────────────────────────────
-let _locationWatcher = null;
-let _lastLocationSent = 0;
-
-function startLocationSharing() {
-  if (!navigator.geolocation || !pilotToken) return;
-  if (_locationWatcher !== null) return;
-  _locationWatcher = navigator.geolocation.watchPosition(
-    pos => {
-      if (!myStatus || myStatus.status !== 'airborne') return;
-      const now = Date.now();
-      if (now - _lastLocationSent < 10000) return;
-      _lastLocationSent = now;
-      apiFetch('/api/pilot/location', {
-        method: 'POST',
-        body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy })
-      }).catch(() => {});
-    },
-    () => {},
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
-  );
-}
-
-function stopLocationSharing() {
-  if (_locationWatcher !== null) {
-    navigator.geolocation.clearWatch(_locationWatcher);
-    _locationWatcher = null;
-  }
-}
 
 function connectWS() {
   const token = officeToken || pilotToken;
@@ -6623,15 +6533,6 @@ function connectWS() {
         }
         break;
       }
-      case 'PILOT_LOCATION_UPDATE':
-        updatePilotMarker(data);
-        break;
-      case 'PILOT_LOCATION_CLEARED':
-        if (_officeMap && _pilotMarkers[data.pilot_id]) {
-          _officeMap.removeLayer(_pilotMarkers[data.pilot_id]);
-          delete _pilotMarkers[data.pilot_id];
-        }
-        break;
       case 'PILOT_DELETED':
         toast(`${data.pilot_name} removed`);
         loadOfficeData();

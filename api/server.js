@@ -120,7 +120,6 @@ async function checkTimerNotifications() {
           });
           // Broadcast to office (shows alert banner + toast)
           broadcast({ type: 'TIMER_EXPIRED', pilot_id: timer.pilot_id, pilot_name: timer.pilot_name });
-          scheduleLocationClear(timer.pilot_id);
           // Audit log
           await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)',
             [uuidv4(), timer.pilot_id, 'timer_expired', new Date().toISOString()]);
@@ -424,18 +423,6 @@ function validateAvatarBody(body) {
   return compact;
 }
 
-// In-memory pilot location store (resets on server restart — acceptable for live tracking)
-const pilotLocations = {};
-const _locationClearTimers = {}; // pilot_id → setTimeout handle
-
-function scheduleLocationClear(pilotId) {
-  if (_locationClearTimers[pilotId]) clearTimeout(_locationClearTimers[pilotId]);
-  _locationClearTimers[pilotId] = setTimeout(() => {
-    delete pilotLocations[pilotId];
-    delete _locationClearTimers[pilotId];
-    broadcast({ type: 'PILOT_LOCATION_CLEARED', pilot_id: pilotId });
-  }, 30 * 60 * 1000);
-}
 
 function broadcast(data) {
   const msg = JSON.stringify(data);
@@ -877,7 +864,6 @@ app.post('/api/flights', verifyToken, async (req, res) => {
     }
     // Always notify office when a flight is logged, regardless of whether a timer was active
     broadcast({ type: 'LANDED', pilot_id: pilotId, pilot_name: req.pilot.name, landed_at: now, flight_id: id });
-    scheduleLocationClear(pilotId);
 
     res.status(201).json({ id, message: 'Flight logged, office notified' });
   } catch (e) {
@@ -1235,20 +1221,6 @@ app.delete('/api/office/pilots/:id', verifyOffice, async (req, res) => {
   }
 });
 
-// ─── Pilot GPS location ───────────────────────────────────────────────────────
-app.post('/api/pilot/location', verifyToken, async (req, res) => {
-  const { lat, lng, accuracy } = req.body;
-  if (lat == null || lng == null) return res.status(400).json({ error: 'lat/lng required' });
-  const p = req.pilot;
-  const updated_at = new Date().toISOString();
-  pilotLocations[p.id] = { pilot_id: p.id, name: p.name, lat, lng, accuracy, updated_at };
-  broadcast({ type: 'PILOT_LOCATION_UPDATE', pilot_id: p.id, name: p.name, lat, lng, accuracy, updated_at });
-  res.json({ ok: true });
-});
-
-app.get('/api/office/pilot-locations', verifyOffice, async (req, res) => {
-  res.json(Object.values(pilotLocations));
-});
 
 
 // ─── Did Not Fly — pilot cancels their own timer without logging a flight ─────
@@ -1297,7 +1269,6 @@ app.post('/api/pilot/land', verifyToken, async (req, res) => {
       [uuidv4(), req.pilot.id, 'pilot_landed', now]);
 
     broadcast({ type: 'LANDED_EARLY', pilot_id: req.pilot.id, pilot_name: req.pilot.name, landed_at: now, flight_id: flightId });
-    scheduleLocationClear(req.pilot.id);
 
     res.json({ flight_id: flightId });
   } catch (e) {
@@ -1356,7 +1327,6 @@ app.post('/api/drives', verifyToken, async (req, res) => {
       await run('DELETE FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
       await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), req.pilot.id, 'drive_logged', new Date().toISOString()]);
       broadcast({ type: 'LANDED', pilot_id: req.pilot.id, pilot_name: req.pilot.name, landed_at: now });
-      scheduleLocationClear(req.pilot.id);
     }
     res.status(201).json({ id, message: 'Drive logged' });
   } catch (e) {

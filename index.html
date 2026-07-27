@@ -1241,8 +1241,7 @@
     <div class="pilot-menu-item" onclick="closePilotMenu(); showSubPage('flights')"><span class="pilot-menu-icon">📋</span>My Flights</div>
     <div class="pilot-menu-item" onclick="closePilotMenu(); showSubPage('stats')"><span class="pilot-menu-icon">📊</span>Stats</div>
     <div class="pilot-menu-item" onclick="closePilotMenu(); showSubPage('ff')"><span class="pilot-menu-icon">📅</span>Duty Sheet</div>
-    <div class="pilot-menu-item" onclick="closePilotMenu(); showPilotTab('map')"><span class="pilot-menu-icon">🗺️</span>Map</div>
-    <div class="pilot-menu-item" onclick="closePilotMenu(); showPilotTab('settings')"><span class="pilot-menu-icon">⚙️</span>Settings</div>
+<div class="pilot-menu-item" onclick="closePilotMenu(); showPilotTab('settings')"><span class="pilot-menu-icon">⚙️</span>Settings</div>
   </div>
 
   <!-- Main pilot tab bar -->
@@ -1264,14 +1263,6 @@
   <div class="pilot-tab-content" id="pilot-tab-loop">
     <div class="pilot-tab-date" id="pilot-date-loop"></div>
     <div id="pilot-loop-board-wrap"><p style="color:var(--muted);padding:20px;text-align:center;">Loading…</p></div>
-  </div>
-
-  <!-- Tab: Map (opened via menu) -->
-  <div class="pilot-tab-content" id="pilot-tab-map">
-    <div style="padding:4px 0 0;">
-      <button class="pilot-back-btn" onclick="showPilotTab('ff')">← Back</button>
-    </div>
-    <div id="pilot-map" style="width:100%;height:calc(100vh - 100px);"></div>
   </div>
 
   <!-- Tab: Settings (opened via menu) -->
@@ -4282,7 +4273,6 @@ function showPilotTab(name) {
   if (btn) btn.classList.add('active');
   window.scrollTo({ top: 0, behavior: 'instant' });
   if (name === 'loop') loadPilotLoopBoard();
-  if (name === 'map') initPilotMap();
   if (name === 'settings') {
     // Move settings HTML into the settings tab on first open
     const src = document.getElementById('page-settings-source');
@@ -6402,56 +6392,6 @@ function updatePilotMarker(data) {
   }
 }
 
-// ─── Pilot Map ────────────────────────────────────────────────────────────────
-let _pilotMapObj = null;
-const _pilotMapMarkers = {};
-
-async function initPilotMap() {
-  if (!window.L) return;
-  if (!_pilotMapObj) {
-    _pilotMapObj = L.map('pilot-map').setView([-45.03, 168.66], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors',
-      maxZoom: 19
-    }).addTo(_pilotMapObj);
-  } else {
-    _pilotMapObj.invalidateSize();
-  }
-  try {
-    const res = await apiFetch('/api/pilot/locations');
-    if (res.ok) {
-      const locs = await res.json();
-      locs.forEach(l => updatePilotMapMarker(l));
-      if (locs.length) {
-        const pts = locs.map(l => [l.lat, l.lng]);
-        _pilotMapObj.fitBounds(pts.length === 1 ? [[pts[0][0]-0.005,pts[0][1]-0.005],[pts[0][0]+0.005,pts[0][1]+0.005]] : pts, { padding: [40, 40] });
-      }
-    }
-  } catch (_) {}
-}
-
-function updatePilotMapMarker(data) {
-  if (!_pilotMapObj || !window.L) return;
-  const { pilot_id, name, lat, lng, updated_at } = data;
-  const age = updated_at ? Math.round((Date.now() - new Date(updated_at)) / 1000) : null;
-  const ageStr = age != null ? (age < 60 ? `${age}s ago` : `${Math.round(age/60)}m ago`) : '';
-  const isMe = String(pilot_id) === String(pilotId);
-  const color = isMe ? '#22c55e' : '#f37329';
-  const popup = `<b>${name}${isMe ? ' (you)' : ''}</b><br><span style="font-size:11px;color:#666;">${ageStr}</span>`;
-  if (_pilotMapMarkers[pilot_id]) {
-    _pilotMapMarkers[pilot_id].setLatLng([lat, lng]).setPopupContent(popup);
-  } else {
-    const icon = L.divIcon({
-      className: '',
-      html: `<div style="background:${color};color:#fff;font-size:11px;font-weight:700;padding:3px 7px;border-radius:12px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.3);">${name}</div>`,
-      iconAnchor: [0, 10]
-    });
-    _pilotMapMarkers[pilot_id] = L.marker([lat, lng], { icon })
-      .addTo(_pilotMapObj)
-      .bindPopup(popup);
-  }
-}
-
 // ─── Pilot Location Sharing ───────────────────────────────────────────────────
 let _locationWatcher = null;
 let _lastLocationSent = 0;
@@ -6683,7 +6623,6 @@ function connectWS() {
       }
       case 'PILOT_LOCATION_UPDATE':
         updatePilotMarker(data);
-        updatePilotMapMarker(data);
         break;
       case 'PILOT_DELETED':
         toast(`${data.pilot_name} removed`);

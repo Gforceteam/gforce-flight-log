@@ -5507,7 +5507,7 @@ function speak(text) {
     if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    u.rate = 0.95;
+    u.rate = 0.75;
     u.pitch = 1;
     u.volume = 1;
     window.speechSynthesis.speak(u);

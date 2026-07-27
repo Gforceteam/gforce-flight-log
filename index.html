@@ -1123,6 +1123,15 @@
     .ff-pilot-name { text-align: left !important; font-weight: 700; min-width: 70px; color: var(--text); }
     .ff-day-val { font-weight: 600; color: var(--text-2); }
     .ff-total { font-weight: 800; color: #fff; min-width: 52px; }
+
+    /* Office duty sheet — compact fixed layout so all 16 cols fit on desktop */
+    #office-tab-ff .ff-wrap { overflow-x: visible; }
+    #office-tab-ff .ff-table { table-layout: fixed; width: 100%; min-width: unset; font-size: 11px; }
+    #office-tab-ff .ff-table th,
+    #office-tab-ff .ff-table td { padding: 5px 4px; white-space: normal; word-break: break-word; }
+    #office-tab-ff .ff-table th { font-size: 10px; letter-spacing: 0; line-height: 1.2; }
+    #office-tab-ff .ff-pilot-name { width: 95px; min-width: unset; }
+    #office-tab-ff .ff-total { min-width: unset; width: 46px; }
     .ff-ok        { background: #166534; color: #bbf7d0; }
     .ff-warn      { background: #78350f; color: #fde68a; }
     .ff-warn-hard { background: #7c2d12; color: #fed7aa; }

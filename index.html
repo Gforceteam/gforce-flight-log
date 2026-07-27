@@ -1544,13 +1544,6 @@
 
 
     <div class="office-tab-content" id="office-tab-ff">
-      <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:10px 16px 0;">
-        <span style="font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--muted);font-family:'Montserrat',sans-serif;">MOU</span>
-        <button id="mou-toggle-btn" onclick="toggleMOU()" style="position:relative;width:44px;height:24px;border-radius:9999px;border:none;cursor:pointer;padding:0;transition:background 0.2s;flex-shrink:0;" title="MOU Status">
-          <span id="mou-toggle-knob" style="position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform 0.2s;display:block;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></span>
-        </button>
-        <button onclick="renderOfficeFF()" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">↻ Refresh</button>
-      </div>
       <div class="ff-wrap" id="office-ff-content"><div class="empty-state">Loading…</div></div>
     </div>
 
@@ -4577,7 +4570,13 @@ function renderGroupsTab() {
     <div style="padding:16px 0 8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <div class="section-title" style="margin-top:0;margin-bottom:0;">Send Away</div>
-        <button onclick="loadOfficeData()" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">↻ Refresh</button>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--muted);font-family:'Montserrat',sans-serif;">MOU</span>
+          <button id="mou-toggle-btn" onclick="toggleMOU()" style="position:relative;width:44px;height:24px;border-radius:9999px;border:none;cursor:pointer;padding:0;transition:background 0.2s;flex-shrink:0;" title="MOU Status">
+            <span id="mou-toggle-knob" style="position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform 0.2s;display:block;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></span>
+          </button>
+          <button onclick="loadOfficeData()" style="background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">↻ Refresh</button>
+        </div>
       </div>
       <div class="card" style="margin-bottom:16px;">
         <div id="send-away-rows" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
@@ -4589,6 +4588,7 @@ function renderGroupsTab() {
         </div>
       </div>
     </div>`;
+  updateMOUToggleUI();
 }
 
 function renderTodayFlights() {
@@ -5925,7 +5925,7 @@ function showOfficeTab(name) {
   if (tabEl) tabEl.classList.add('active');
   const btnEl = document.getElementById(`office-tab-${name}-btn`);
   if (btnEl) btnEl.classList.add('active');
-  if (name === 'ff') { renderOfficeFF(); updateMOUToggleUI(); }
+  if (name === 'ff') renderOfficeFF();
   if (name === 'pilots') { renderAwayTab(); renderGroupsTab(); renderTodayFlights(); renderOfficeTab(); }
   if (name === 'loop') loadLoopBoard();
   if (name === 'today') renderTodayTab();

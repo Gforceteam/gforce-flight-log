@@ -1238,6 +1238,10 @@ app.get('/api/office/pilot-locations', verifyOffice, async (req, res) => {
   res.json(Object.values(pilotLocations));
 });
 
+app.get('/api/pilot/locations', verifyToken, async (req, res) => {
+  res.json(Object.values(pilotLocations));
+});
+
 // ─── Did Not Fly — pilot cancels their own timer without logging a flight ─────
 app.post('/api/pilot/cancel-timer', verifyToken, async (req, res) => {
   try {

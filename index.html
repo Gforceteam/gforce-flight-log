@@ -5937,7 +5937,15 @@ function showOfficeTab(name) {
 let _officePushEnabled = false;
 
 // ─── MOU Toggle ──────────────────────────────────────────────────────────────
-function mouIsOn() { return localStorage.getItem('gforce_mou') === '1'; }
+function mouIsOn() {
+  if (localStorage.getItem('gforce_mou') !== '1') return false;
+  if (localStorage.getItem('gforce_mou_date') !== todayStr()) {
+    localStorage.removeItem('gforce_mou');
+    localStorage.removeItem('gforce_mou_date');
+    return false;
+  }
+  return true;
+}
 
 function updateMOUToggleUI() {
   const btn = document.getElementById('mou-toggle-btn');
@@ -5958,7 +5966,14 @@ function updateMOUToggleUI() {
 }
 
 function toggleMOU() {
-  localStorage.setItem('gforce_mou', mouIsOn() ? '0' : '1');
+  const turningOn = !mouIsOn();
+  if (turningOn) {
+    localStorage.setItem('gforce_mou', '1');
+    localStorage.setItem('gforce_mou_date', todayStr());
+  } else {
+    localStorage.removeItem('gforce_mou');
+    localStorage.removeItem('gforce_mou_date');
+  }
   updateMOUToggleUI();
 }
 

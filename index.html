@@ -1544,6 +1544,9 @@
 
 
     <div class="office-tab-content" id="office-tab-ff">
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:10px 16px 4px;">
+        <button onclick="exportDutySheetCSV()" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">⬇ Export</button>
+      </div>
       <div class="ff-wrap" id="office-ff-content"><div class="empty-state">Loading…</div></div>
     </div>
 
@@ -4432,6 +4435,68 @@ function renderOfficeFF() {
   document.getElementById('office-ff-content').innerHTML = buildFFTable(dates, ffPilots);
 }
 
+// ─── CSV Export Helpers ───────────────────────────────────────────────────────
+function csvCell(v) {
+  const s = String(v ?? '');
+  return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+}
+function downloadCSV(filename, rows) {
+  const csv = rows.map(r => r.map(csvCell).join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function exportLoopBoardCSV() {
+  const rows = [['Loop Board — ' + loopBoardDate]];
+  rows.push(['Slot', 'Pilot', '1','2','3','4','5','6','7','8','9','10','11','12']);
+  for (let i = 1; i <= loopBoardRows; i++) {
+    const slot = loopBoard.find(s => s.slot === i) || {};
+    let tallies = Array(12).fill('');
+    try { const t = JSON.parse(slot.tallies || '[]'); if (Array.isArray(t)) tallies = t; } catch (_) {}
+    while (tallies.length < 12) tallies.push('');
+    rows.push([i, slot.pilot_name || '', ...tallies.slice(0, 12)]);
+  }
+  if (loopBoardCompleted.length) {
+    rows.push([]);
+    rows.push(['Completed Pilots']);
+    rows.push(['Slot', 'Pilot', '1','2','3','4','5','6','7','8','9','10','11','12']);
+    loopBoardCompleted.forEach(slot => {
+      let tallies = Array(12).fill('');
+      try { const t = JSON.parse(slot.tallies || '[]'); if (Array.isArray(t)) tallies = t; } catch (_) {}
+      while (tallies.length < 12) tallies.push('');
+      rows.push([slot.slot, slot.pilot_name || '', ...tallies.slice(0, 12)]);
+    });
+  }
+  downloadCSV(`loop-board-${loopBoardDate}.csv`, rows);
+}
+
+function exportDutySheetCSV() {
+  const dates = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    dates.push(d.toLocaleDateString('en-CA', { timeZone: NZ_TZ }));
+  }
+  const ffPilots = [...officePilots].sort(pilotSort).map(p => {
+    const dayCounts = {};
+    let daysWorked = 0;
+    dates.forEach(d => {
+      const cnt = allFlights.filter(f => f.pilot_id === p.id && f.date === d).length;
+      if (cnt > 0) { dayCounts[d] = cnt; daysWorked++; }
+    });
+    return { name: p.name, dayCounts, daysWorked };
+  });
+  const header = ['Pilot', ...dates.map(d => new Date(d + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })), 'Days Worked', 'Days Left'];
+  const rows = [['Duty Sheet — exported ' + todayStr()], header];
+  ffPilots.forEach(p => {
+    rows.push([p.name, ...dates.map(d => p.dayCounts[d] || ''), p.daysWorked, 14 - p.daysWorked]);
+  });
+  downloadCSV(`duty-sheet-${todayStr()}.csv`, rows);
+}
+
 // ─── Office API ───────────────────────────────────────────────────────────────
 function officeApi(path, opts = {}) {
   return fetch(`${API_BASE}${path}`, {
@@ -5748,6 +5813,7 @@ function renderLoopBoard() {
     <button onclick="addLoopRow()" style="padding:8px 22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:22px;line-height:1;cursor:pointer;" ${loopBoardRows >= 20 ? 'disabled' : ''}>+</button>
     <button onclick="removeLoopRow()" style="padding:8px 22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:22px;line-height:1;cursor:pointer;" ${loopBoardRows <= 1 ? 'disabled' : ''}>−</button>
     <button onclick="loadLoopBoard()" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">↻ Refresh</button>
+    <button onclick="exportLoopBoardCSV()" style="padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;">⬇ Export</button>
     <button onclick="undoLoopChange()" ${!_lastLoopChange ? 'disabled' : ''} style="padding:8px 20px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;margin-left:auto;opacity:${_lastLoopChange ? '1' : '0.4'};">↩ Reverse</button>
     <button onclick="resetLoopBoard()" style="padding:8px 20px;background:rgba(239,68,68,0.08);border:1px solid var(--danger);border-radius:8px;color:var(--danger);font-size:13px;font-weight:700;cursor:pointer;">Reset</button>
   </div>`;

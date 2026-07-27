@@ -4441,17 +4441,14 @@ function csvCell(v) {
   return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
 }
 function downloadCSV(filename, rows) {
-  // UTF-8 BOM ensures Excel/Google Sheets reads encoding correctly
   const csv = '﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  toast(`Downloading ${filename}`);
 }
 
 function exportLoopBoardCSV() {

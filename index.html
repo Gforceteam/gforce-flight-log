@@ -5525,6 +5525,10 @@ function speak(text) {
     u.rate = 0.75;
     u.pitch = 1;
     u.volume = 1;
+    const voices = window.speechSynthesis.getVoices();
+    const femaleKeywords = ['female', 'samantha', 'victoria', 'karen', 'moira', 'tessa', 'zira', 'susan', 'hazel', 'fiona', 'kate', 'serena', 'google uk english female', 'google us english female'];
+    const femaleVoice = voices.find(v => femaleKeywords.some(k => v.name.toLowerCase().includes(k)));
+    if (femaleVoice) u.voice = femaleVoice;
     window.speechSynthesis.speak(u);
   } catch (e) {}
 }

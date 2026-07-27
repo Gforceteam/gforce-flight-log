@@ -6402,6 +6402,7 @@ function startLocationSharing() {
   if (_locationWatcher !== null) return;
   _locationWatcher = navigator.geolocation.watchPosition(
     pos => {
+      if (!myStatus || myStatus.status !== 'airborne') return;
       const now = Date.now();
       if (now - _lastLocationSent < 10000) return;
       _lastLocationSent = now;
@@ -6624,6 +6625,12 @@ function connectWS() {
       }
       case 'PILOT_LOCATION_UPDATE':
         updatePilotMarker(data);
+        break;
+      case 'PILOT_LOCATION_CLEARED':
+        if (_officeMap && _pilotMarkers[data.pilot_id]) {
+          _officeMap.removeLayer(_pilotMarkers[data.pilot_id]);
+          delete _pilotMarkers[data.pilot_id];
+        }
         break;
       case 'PILOT_DELETED':
         toast(`${data.pilot_name} removed`);

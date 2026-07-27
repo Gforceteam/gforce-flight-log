@@ -4441,19 +4441,24 @@ function csvCell(v) {
   return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
 }
 function downloadCSV(filename, rows) {
-  const csv = rows.map(r => r.map(csvCell).join(',')).join('\r\n');
+  // UTF-8 BOM ensures Excel/Google Sheets reads encoding correctly
+  const csv = '﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.href = url;
   a.download = filename;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(a.href);
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
 function exportLoopBoardCSV() {
-  const rows = [['Loop Board — ' + loopBoardDate]];
+  const rows = [['Loop Board', loopBoardDate]];
   rows.push(['Slot', 'Pilot', '1','2','3','4','5','6','7','8','9','10','11','12']);
   for (let i = 1; i <= loopBoardRows; i++) {
-    const slot = loopBoard.find(s => s.slot === i) || {};
+    const slot = loopBoard.find(s => Number(s.slot) === i) || {};
     let tallies = Array(12).fill('');
     try { const t = JSON.parse(slot.tallies || '[]'); if (Array.isArray(t)) tallies = t; } catch (_) {}
     while (tallies.length < 12) tallies.push('');
@@ -4467,7 +4472,7 @@ function exportLoopBoardCSV() {
       let tallies = Array(12).fill('');
       try { const t = JSON.parse(slot.tallies || '[]'); if (Array.isArray(t)) tallies = t; } catch (_) {}
       while (tallies.length < 12) tallies.push('');
-      rows.push([slot.slot, slot.pilot_name || '', ...tallies.slice(0, 12)]);
+      rows.push([Number(slot.slot), slot.pilot_name || '', ...tallies.slice(0, 12)]);
     });
   }
   downloadCSV(`loop-board-${loopBoardDate}.csv`, rows);
@@ -4484,13 +4489,13 @@ function exportDutySheetCSV() {
     const dayCounts = {};
     let daysWorked = 0;
     dates.forEach(d => {
-      const cnt = allFlights.filter(f => f.pilot_id === p.id && f.date === d).length;
+      const cnt = allFlights.filter(f => String(f.pilot_id) === String(p.id) && f.date === d).length;
       if (cnt > 0) { dayCounts[d] = cnt; daysWorked++; }
     });
     return { name: p.name, dayCounts, daysWorked };
   });
   const header = ['Pilot', ...dates.map(d => new Date(d + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })), 'Days Worked', 'Days Left'];
-  const rows = [['Duty Sheet — exported ' + todayStr()], header];
+  const rows = [['Duty Sheet', 'Exported ' + todayStr()], header];
   ffPilots.forEach(p => {
     rows.push([p.name, ...dates.map(d => p.dayCounts[d] || ''), p.daysWorked, 14 - p.daysWorked]);
   });

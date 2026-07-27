@@ -5502,6 +5502,18 @@ function playBell(count) {
   } catch (e) { /* audio not supported */ }
 }
 
+function speak(text) {
+  try {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 0.95;
+    u.pitch = 1;
+    u.volume = 1;
+    window.speechSynthesis.speak(u);
+  } catch (e) {}
+}
+
 function updateTimers() {
   clearInterval(timerInterval);
   function tick() {
@@ -5542,7 +5554,7 @@ function updateTimers() {
           if (card) card.classList.add('alert');
           if (!_bellFired.has(`${p.id}:10`)) {
             _bellFired.add(`${p.id}:10`);
-            if (officeVisible) { toast(`⚠️ ${p.name} — 10 min to landing`); playBell(5); }
+            if (officeVisible) { toast(`⚠️ ${p.name} — 10 min to landing`); speak(`10 minute warning for ${p.name}, 10 minute warning for ${p.name}`); }
           }
         }
         if (remaining < 300000 && !_bellFired.has(`${p.id}:5`)) {

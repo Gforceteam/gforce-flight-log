@@ -5561,15 +5561,26 @@ function updateTimers() {
         el.classList.toggle('urgent',     remaining < 600000);
 
         // If time was extended back above a threshold, reset that bell so it fires again on next crossing
-        if (remaining >= 600000) { _bellFired.delete(`${p.id}:10`); _bellFired.delete(`${p.id}:5`); _bellFired.delete(`${p.id}:exp`); }
-        else if (remaining >= 300000) { _bellFired.delete(`${p.id}:5`); _bellFired.delete(`${p.id}:exp`); }
+        const bellKey10 = p.group_id ? `group:${p.group_id}:10` : `${p.id}:10`;
+        const bellKey5  = p.group_id ? `group:${p.group_id}:5`  : `${p.id}:5`;
+        if (remaining >= 600000) { _bellFired.delete(bellKey10); _bellFired.delete(bellKey5); _bellFired.delete(`${p.id}:exp`); }
+        else if (remaining >= 300000) { _bellFired.delete(bellKey5); _bellFired.delete(`${p.id}:exp`); }
 
         if (remaining < 600000) {
           const card = document.getElementById(`pilot-card-${p.id}`);
           if (card) card.classList.add('alert');
-          if (!_bellFired.has(`${p.id}:10`)) {
-            _bellFired.add(`${p.id}:10`);
-            if (officeVisible) { toast(`⚠️ ${p.name} — 10 min to landing`); speak(`10 minute warning for ${p.name}, 10 minute warning for ${p.name}, 10 minute warning for ${p.name}`); }
+          if (!_bellFired.has(bellKey10)) {
+            _bellFired.add(bellKey10);
+            if (officeVisible) {
+              const groupMembers = p.group_id
+                ? officePilots.filter(q => q.group_id === p.group_id && q.status === 'airborne').map(q => q.name)
+                : [p.name];
+              const nameStr = groupMembers.length > 1
+                ? groupMembers.slice(0, -1).join(', ') + ' and ' + groupMembers[groupMembers.length - 1]
+                : groupMembers[0];
+              toast(`⚠️ ${nameStr} — 10 min to landing`);
+              speak(`10 minute warning for ${nameStr}, 10 minute warning for ${nameStr}, 10 minute warning for ${nameStr}`);
+            }
           }
         }
         if (remaining < 300000 && !_bellFired.has(`${p.id}:5`)) {

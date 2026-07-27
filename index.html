@@ -4564,7 +4564,10 @@ function renderGroupsTab() {
   // Skip re-render if user is actively filling in the send-away form
   const rows = document.getElementById('send-away-rows');
   if (rows && rows.contains(document.activeElement)) return;
-  const notAirborne = officePilots.filter(p => p.status !== 'airborne').sort(pilotSort);
+  const loopPilotIds = new Set(loopBoard.filter(s => s.pilot_id).map(s => String(s.pilot_id)));
+  const notAirborne = officePilots
+    .filter(p => p.status !== 'airborne' && (loopPilotIds.size === 0 || loopPilotIds.has(String(p.id))))
+    .sort(pilotSort);
   _sendAwayPilotOpts = notAirborne.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
   el.innerHTML = `
     <div style="padding:16px 0 8px;">

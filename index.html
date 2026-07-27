@@ -4451,12 +4451,20 @@ function csvCell(v) {
 }
 function downloadCSV(filename, rows) {
   const csv = '﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  if (window.navigator && window.navigator.msSaveBlob) {
+    window.navigator.msSaveBlob(blob, filename);
+    toast(`Downloading ${filename}`);
+    return;
+  }
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-  a.download = filename;
+  a.setAttribute('href', url);
+  a.setAttribute('download', filename);
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
   toast(`Downloading ${filename}`);
 }
 

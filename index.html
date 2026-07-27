@@ -5554,7 +5554,7 @@ function updateTimers() {
           if (card) card.classList.add('alert');
           if (!_bellFired.has(`${p.id}:10`)) {
             _bellFired.add(`${p.id}:10`);
-            if (officeVisible) { toast(`⚠️ ${p.name} — 10 min to landing`); speak(`10 minute warning for ${p.name}, 10 minute warning for ${p.name}`); }
+            if (officeVisible) { toast(`⚠️ ${p.name} — 10 min to landing`); speak(`10 minute warning for ${p.name}, 10 minute warning for ${p.name}, 10 minute warning for ${p.name}`); }
           }
         }
         if (remaining < 300000 && !_bellFired.has(`${p.id}:5`)) {

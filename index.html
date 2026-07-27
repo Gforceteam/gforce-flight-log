@@ -1186,8 +1186,6 @@
       if (hasPilot || hasOffice) document.documentElement.classList.add('authed');
     })();
   </script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
 
@@ -4451,34 +4449,20 @@ function csvCell(v) {
   const s = String(v ?? '');
   return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
 }
-function exportToPDF(title, rows) {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-
-  doc.setFontSize(13);
-  doc.setFont('helvetica', 'bold');
-  doc.text(title, 14, 14);
-
-  const headerRow = (rows[1] || []).map(h => String(h ?? ''));
-  const dataRows = rows.slice(2).map(r => r.map(c => String(c ?? '')));
-
-  doc.autoTable({
-    head: [headerRow],
-    body: dataRows,
-    startY: 20,
-    styles: { fontSize: 8, cellPadding: 2 },
-    headStyles: { fillColor: [243, 115, 41], textColor: 255, fontStyle: 'bold' },
-    alternateRowStyles: { fillColor: [250, 250, 250] },
-    margin: { left: 14, right: 14 }
-  });
-
-  doc.save(title + '.pdf');
-  toast('PDF downloaded');
+function exportLoopBoardServer() {
+  const url = `${API_BASE}/api/office/export/loop-board?token=${encodeURIComponent(officeToken)}&date=${encodeURIComponent(loopBoardDate)}`;
+  window.location.href = url;
 }
 
-async function downloadCSV(filename, rows) {
-  if (!window.jspdf) { toast('PDF library not loaded yet — try again'); return; }
-  exportToPDF(filename.replace('.csv', ''), rows);
+function exportDutySheetServer() {
+  const url = `${API_BASE}/api/office/export/duty-sheet?token=${encodeURIComponent(officeToken)}`;
+  window.location.href = url;
+}
+
+// Legacy shim — keeps existing callers working
+function downloadCSV(filename, rows) {
+  if (filename.includes('loop-board') || filename.includes('Loop Board')) exportLoopBoardServer();
+  else exportDutySheetServer();
 }
 
 function exportLoopBoardCSV() {

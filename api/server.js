@@ -1700,6 +1700,92 @@ app.get('/api/office/flights', verifyOffice, async (req, res) => {
   }
 });
 
+// ─── Download exports (token accepted via query param for browser navigation) ──
+function verifyOfficeQuery(req, res, next) {
+  const token = req.query.token || (req.headers.authorization || '').replace('Bearer ', '');
+  if (!token) return res.status(401).send('No token');
+  try {
+    const office = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
+    if (office.type !== 'office') return res.status(403).send('Not office');
+    if (office.tv !== _officeTv) return res.status(401).send('Session invalidated');
+    req.office = office;
+    next();
+  } catch { return res.status(401).send('Invalid token'); }
+}
+
+function csvRow(cells) {
+  return cells.map(c => {
+    const s = String(c ?? '');
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g,'""')}"` : s;
+  }).join(',');
+}
+
+app.get('/api/office/export/loop-board', verifyOfficeQuery, async (req, res) => {
+  try {
+    const date = req.query.date || nzToday();
+    const board = await queryAll('SELECT slot, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    const completed = await queryAll('SELECT slot, pilot_name, tallies FROM loop_board_completed WHERE date = ? ORDER BY completed_at ASC', [date]);
+    const colNums = ['1','2','3','4','5','6','7','8','9','10','11','12'];
+    const header = ['Slot','Pilot',...colNums];
+    const lines = [
+      `Loop Board (${date})`,
+      csvRow(header),
+    ];
+    const maxSlot = board.reduce((m, s) => Math.max(m, Number(s.slot)), board.length);
+    for (let i = 1; i <= maxSlot; i++) {
+      const slot = board.find(s => Number(s.slot) === i) || {};
+      let tallies = [];
+      try { tallies = JSON.parse(slot.tallies || '[]'); } catch (_) {}
+      while (tallies.length < 12) tallies.push('');
+      lines.push(csvRow([i, slot.pilot_name || '', ...tallies.slice(0, 12)]));
+    }
+    if (completed.length) {
+      lines.push('');
+      lines.push('Completed');
+      lines.push(csvRow(header));
+      completed.forEach(s => {
+        let tallies = [];
+        try { tallies = JSON.parse(s.tallies || '[]'); } catch (_) {}
+        while (tallies.length < 12) tallies.push('');
+        lines.push(csvRow([Number(s.slot), s.pilot_name || '', ...tallies.slice(0, 12)]));
+      });
+    }
+    const csv = '﻿' + lines.join('\r\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="Loop Board (${date}).csv"`);
+    res.send(csv);
+  } catch (e) { res.status(500).send('Export failed: ' + e.message); }
+});
+
+app.get('/api/office/export/duty-sheet', verifyOfficeQuery, async (req, res) => {
+  try {
+    const today = nzToday();
+    const dates = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(today + 'T12:00:00+12:00');
+      d.setDate(d.getDate() - i);
+      dates.push(d.toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' }));
+    }
+    const pilots = await queryAll('SELECT id, name FROM pilots ORDER BY name');
+    const flights = await queryAll(`SELECT pilot_id, date FROM flights WHERE date >= ? AND date <= ?`, [dates[0], dates[dates.length - 1]]);
+    const dateLabels = dates.map(d => {
+      const dt = new Date(d + 'T12:00:00');
+      return dt.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
+    });
+    const header = ['Pilot', ...dateLabels, 'Days Worked', 'Days Left'];
+    const lines = [`Duty Sheet (${today})`, csvRow(header)];
+    pilots.forEach(p => {
+      const dayCounts = dates.map(d => flights.filter(f => String(f.pilot_id) === String(p.id) && f.date === d).length || '');
+      const worked = dayCounts.filter(c => c !== '').length;
+      lines.push(csvRow([p.name, ...dayCounts, worked, 14 - worked]));
+    });
+    const csv = '﻿' + lines.join('\r\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="Duty Sheet (${today}).csv"`);
+    res.send(csv);
+  } catch (e) { res.status(500).send('Export failed: ' + e.message); }
+});
+
 app.get('/api/export/flights', verifyOffice, async (req, res) => {
   try {
     const { pilot_id } = req.query;

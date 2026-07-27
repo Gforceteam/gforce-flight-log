@@ -4483,7 +4483,7 @@ async function downloadCSV(filename, rows) {
 }
 
 function exportLoopBoardCSV() {
-  const rows = [[`Loop Board (${loopBoardDate})`]];
+  const rows = [['Loop Board', loopBoardDate]];
   rows.push(['Slot', 'Pilot', '1','2','3','4','5','6','7','8','9','10','11','12']);
   for (let i = 1; i <= loopBoardRows; i++) {
     const slot = loopBoard.find(s => Number(s.slot) === i) || {};
@@ -4503,7 +4503,7 @@ function exportLoopBoardCSV() {
       rows.push([Number(slot.slot), slot.pilot_name || '', ...tallies.slice(0, 12)]);
     });
   }
-  downloadCSV(`loop-board-${loopBoardDate}.csv`, rows);
+  downloadCSV(`Loop Board (${loopBoardDate}).csv`, rows);
 }
 
 function exportDutySheetCSV() {

@@ -423,6 +423,9 @@ function validateAvatarBody(body) {
   return compact;
 }
 
+// In-memory pilot location store (resets on server restart — acceptable for live tracking)
+const pilotLocations = {};
+
 function broadcast(data) {
   const msg = JSON.stringify(data);
   wss.clients.forEach(client => {
@@ -1218,6 +1221,21 @@ app.delete('/api/office/pilots/:id', verifyOffice, async (req, res) => {
     console.error(e);
     res.status(500).json({ error: e.message });
   }
+});
+
+// ─── Pilot GPS location ───────────────────────────────────────────────────────
+app.post('/api/pilot/location', verifyToken, async (req, res) => {
+  const { lat, lng, accuracy } = req.body;
+  if (lat == null || lng == null) return res.status(400).json({ error: 'lat/lng required' });
+  const p = req.pilot;
+  const updated_at = new Date().toISOString();
+  pilotLocations[p.id] = { pilot_id: p.id, name: p.name, lat, lng, accuracy, updated_at };
+  broadcast({ type: 'PILOT_LOCATION_UPDATE', pilot_id: p.id, name: p.name, lat, lng, accuracy, updated_at });
+  res.json({ ok: true });
+});
+
+app.get('/api/office/pilot-locations', verifyOffice, async (req, res) => {
+  res.json(Object.values(pilotLocations));
 });
 
 // ─── Did Not Fly — pilot cancels their own timer without logging a flight ─────

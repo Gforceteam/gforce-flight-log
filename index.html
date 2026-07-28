@@ -4636,14 +4636,17 @@ function exportLoopBoardCSV() {
   URL.revokeObjectURL(a.href);
 }
 
-function exportDutySheetCSV() {
-  const dates = [];
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    dates.push(d.toLocaleDateString('en-CA', { timeZone: NZ_TZ }));
-  }
-  downloadCSV(`duty-sheet-${todayStr()}.csv`, []);
+async function exportDutySheetCSV() {
+  try {
+    const res = await officeFetch('/api/office/export/duty-sheet');
+    if (!res || !res.ok) { toast('Export failed', 'err'); return; }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `Duty Sheet ${todayStr()}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (e) { toast('Export failed', 'err'); }
 }
 
 // ─── Office API ───────────────────────────────────────────────────────────────

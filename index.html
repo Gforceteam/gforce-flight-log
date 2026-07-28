@@ -4917,7 +4917,7 @@ function renderTodayFlights() {
 function makeSendAwayRow(isFirst) {
   const numOpts = Array.from({length: 12}, (_, i) => `<option value="${i+1}">${i+1}</option>`).join('');
   return `<div class="send-away-row" style="display:flex;gap:8px;align-items:center;">
-    <select class="send-away-sel" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:11px 12px;font-size:15px;cursor:pointer;">
+    <select class="send-away-sel" onchange="autoFillFlightNum(this)" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:11px 12px;font-size:15px;cursor:pointer;">
       <option value="">Select pilot…</option>
       ${_sendAwayPilotOpts}
     </select>
@@ -4935,6 +4935,17 @@ function addSendAwayRow() {
   const div = document.createElement('div');
   div.innerHTML = makeSendAwayRow(false);
   container.appendChild(div.firstElementChild);
+}
+
+function autoFillFlightNum(selEl) {
+  const pilotId = selEl.value;
+  const numSel = selEl.closest('.send-away-row')?.querySelector('.send-away-num');
+  if (!numSel) return;
+  if (!pilotId) { numSel.value = ''; return; }
+  const today = todayStr();
+  const count = (allFlights || []).filter(f => f.pilot_id === pilotId && f.date === today).length;
+  const next = Math.min(count + 1, 12);
+  numSel.value = String(next);
 }
 
 async function submitSendAway() {

@@ -5755,7 +5755,7 @@ function toggleMute() {
   }
 }
 
-function speak(text) {
+function speak(text, pilotNames) {
   try {
     if (officeMuted || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
@@ -5764,12 +5764,19 @@ function speak(text) {
     u.pitch = 1;
     u.volume = 1;
     const voices = window.speechSynthesis.getVoices();
-    // Known female voice names across macOS, Windows, Chrome, iOS
-    const femaleNames = /samantha|victoria|karen|moira|tessa|serena|hazel|zira|susan|linda|fiona|allison|ava|kate|nicky|siri|google\s+uk\s+english\s+female|google\s+us\s+english|female/i;
-    const femaleVoice = voices.find(v => femaleNames.test(v.name) && /en[-_]/i.test(v.lang))
-      || voices.find(v => femaleNames.test(v.name))
-      || voices.find(v => /female/i.test(v.name));
-    if (femaleVoice) u.voice = femaleVoice;
+    const isCathal = pilotNames && /cathal/i.test(pilotNames);
+    if (isCathal) {
+      // Irish English voice for Cathal
+      const irishVoice = voices.find(v => /en[-_]IE/i.test(v.lang))
+        || voices.find(v => /irish/i.test(v.name));
+      if (irishVoice) u.voice = irishVoice;
+    } else {
+      const femaleNames = /samantha|victoria|karen|moira|tessa|serena|hazel|zira|susan|linda|fiona|allison|ava|kate|nicky|siri|google\s+uk\s+english\s+female|google\s+us\s+english|female/i;
+      const femaleVoice = voices.find(v => femaleNames.test(v.name) && /en[-_]/i.test(v.lang))
+        || voices.find(v => femaleNames.test(v.name))
+        || voices.find(v => /female/i.test(v.name));
+      if (femaleVoice) u.voice = femaleVoice;
+    }
     window.speechSynthesis.speak(u);
   } catch (e) {}
 }
@@ -5824,7 +5831,7 @@ function updateTimers() {
                 ? groupMembers.slice(0, -1).join(', ') + ' and ' + groupMembers[groupMembers.length - 1]
                 : groupMembers[0];
               toast(`⚠️ ${nameStr} — 10 min to landing`);
-              speak(`10 minute warning for ${nameStr}, 10 minute warning for ${nameStr}, 10 minute warning for ${nameStr}`);
+              speak(`10 minute warning for ${nameStr}, 10 minute warning for ${nameStr}, 10 minute warning for ${nameStr}`, nameStr);
             }
           }
         }

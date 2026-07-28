@@ -3024,7 +3024,11 @@ function renderDashboard() {
     el.innerHTML = `
       <div class="ff-status-card ff-status-flying">
         <div class="ff-status-pill flying">Flying #${_curFlightNum}</div>
-        ${myStatus.group_pilots && myStatus.group_pilots.length ? `<div class="ff-group-pilots">${myStatus.group_pilots.map(esc).join(' · ')}</div>` : ''}
+        ${myStatus.group_pilots && myStatus.group_pilots.length ? `
+          <div class="ff-group-pilots" style="margin-top:6px;">
+            <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:2px;">Group of ${myStatus.group_pilots.length + 1} Pax</div>
+            <div style="font-size:12px;color:var(--muted);">Flying with ${myStatus.group_pilots.map(esc).join(', ')}</div>
+          </div>` : ''}
         <div class="dashboard-timer" id="dashboard-timer">--:--</div>
         <div style="margin-top:4px;">
           <button class="btn-log-flight btn-land-pilot" style="width:100%;" onclick="pilotLand()">Land</button>

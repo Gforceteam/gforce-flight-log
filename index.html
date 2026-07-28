@@ -4810,6 +4810,7 @@ function renderGroupsTab() {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <div class="section-title" style="margin-top:0;margin-bottom:0;">Send Away</div>
         <div style="display:flex;align-items:center;gap:8px;">
+          <span id="lob-display" style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--muted);font-family:'Montserrat',sans-serif;white-space:nowrap;">${calcLOBTime()}</span>
           <span style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--muted);font-family:'Montserrat',sans-serif;">MOU</span>
           <button id="mou-toggle-btn" onclick="toggleMOU()" style="position:relative;width:44px;height:24px;border-radius:9999px;border:none;cursor:pointer;padding:0;transition:background 0.2s;flex-shrink:0;" title="MOU Status">
             <span id="mou-toggle-knob" style="position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform 0.2s;display:block;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></span>
@@ -6305,6 +6306,62 @@ if (name === 'pilots') { renderAwayTab(); renderGroupsTab(); renderTodayFlights(
 }
 
 let _officePushEnabled = false;
+
+// ─── LOB Time (Last Outbound = 1 hr before civil twilight end, Queenstown NZ) ─
+function calcLOBTime() {
+  try {
+    const LAT = -45.0312, LNG = 168.6626;
+    const rad = Math.PI / 180, deg = 180 / Math.PI;
+
+    // Today's date in NZ local time
+    const nzStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' });
+    const [y, m, d] = nzStr.split('-').map(Number);
+
+    // Julian day number (noon UTC) using standard Gregorian formula
+    let Y = y, M = m;
+    if (M <= 2) { Y--; M += 12; }
+    const A = Math.floor(Y / 100);
+    const B = 2 - A + Math.floor(A / 4);
+    const jd = Math.floor(365.25 * (Y + 4716)) + Math.floor(30.6001 * (M + 1)) + d + B - 1524.5;
+    const n = jd - 2451545.0; // days since J2000.0
+
+    // Sun's mean longitude and anomaly
+    const L = ((280.46646 + 0.9856474 * n) % 360 + 360) % 360;
+    const Mv = ((357.52911 + 0.98560028 * n) % 360 + 360) % 360;
+    const Mrad = Mv * rad;
+
+    // Equation of center → true longitude
+    const C2 = 1.914602 * Math.sin(Mrad) + 0.019993 * Math.sin(2 * Mrad) + 0.000289 * Math.sin(3 * Mrad);
+    const sunLon = ((L + C2) % 360 + 360) % 360;
+
+    // Obliquity and solar declination
+    const eps = 23.439291 * rad;
+    const dec = Math.asin(Math.sin(eps) * Math.sin(sunLon * rad));
+
+    // Equation of time (hours)
+    const Lrad = L * rad;
+    const y2 = Math.tan(eps / 2) ** 2;
+    const eot = 4 * deg * (
+      y2 * Math.sin(2 * Lrad)
+      - 2 * 0.016709 * Math.sin(Mrad)
+      + 4 * 0.016709 * y2 * Math.sin(Mrad) * Math.cos(2 * Lrad)
+      - 0.5 * y2 * y2 * Math.sin(4 * Lrad)
+      - 1.25 * 0.016709 ** 2 * Math.sin(2 * Mrad)
+    ) / 60;
+
+    // Solar noon (UTC hours) and civil twilight hour angle (altitude = −6°)
+    const solarNoon = 12 - LNG / 15 - eot;
+    const latRad = LAT * rad;
+    const cosHA = (Math.sin(-6 * rad) - Math.sin(latRad) * Math.sin(dec)) / (Math.cos(latRad) * Math.cos(dec));
+    if (Math.abs(cosHA) > 1) return 'LOB —';
+
+    // Civil twilight end UTC → subtract 1 hr for LOB → format in NZ time
+    const lobUTC = solarNoon + Math.acos(cosHA) * deg / 15 - 1;
+    const lobDate = new Date(Date.UTC(y, m - 1, d) + lobUTC * 3600000);
+    const t = lobDate.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Pacific/Auckland', hour12: false });
+    return 'LOB ' + t;
+  } catch (_) { return 'LOB —'; }
+}
 
 // ─── MOU Toggle ──────────────────────────────────────────────────────────────
 function mouIsOn() {

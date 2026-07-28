@@ -4603,27 +4603,37 @@ function downloadCSV(filename, rows) {
 }
 
 function exportLoopBoardCSV() {
-  const rows = [['Loop Board', loopBoardDate]];
-  rows.push(['Slot', 'Pilot', '1','2','3','4','5','6','7','8','9','10','11','12']);
+  const csvEsc = v => { const s = String(v ?? ''); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g,'""')}"` : s; };
+  const row = cells => cells.map(csvEsc).join(',');
+  const lines = [
+    row(['Loop Board', loopBoardDate]),
+    row(['Slot','Pilot','1','2','3','4','5','6','7','8','9','10','11','12']),
+  ];
   for (let i = 1; i <= loopBoardRows; i++) {
-    const slot = loopBoard.find(s => Number(s.slot) === i) || {};
+    const slot = loopBoard.find(s => Number(s.slot) === i);
+    if (!slot || !slot.pilot_name) continue;
     let tallies = Array(12).fill('');
     try { const t = JSON.parse(slot.tallies || '[]'); if (Array.isArray(t)) tallies = t; } catch (_) {}
     while (tallies.length < 12) tallies.push('');
-    rows.push([i, slot.pilot_name || '', ...tallies.slice(0, 12)]);
+    lines.push(row([i, slot.pilot_name, ...tallies.slice(0, 12)]));
   }
   if (loopBoardCompleted.length) {
-    rows.push([]);
-    rows.push(['Completed Pilots']);
-    rows.push(['Slot', 'Pilot', '1','2','3','4','5','6','7','8','9','10','11','12']);
+    lines.push('');
+    lines.push('Completed Pilots');
+    lines.push(row(['Slot','Pilot','1','2','3','4','5','6','7','8','9','10','11','12']));
     loopBoardCompleted.forEach(slot => {
       let tallies = Array(12).fill('');
       try { const t = JSON.parse(slot.tallies || '[]'); if (Array.isArray(t)) tallies = t; } catch (_) {}
       while (tallies.length < 12) tallies.push('');
-      rows.push([Number(slot.slot), slot.pilot_name || '', ...tallies.slice(0, 12)]);
+      lines.push(row([slot.pilot_name || '', ...tallies.slice(0, 12)]));
     });
   }
-  downloadCSV(`Loop Board (${loopBoardDate}).csv`, rows);
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `Loop Board ${loopBoardDate}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 function exportDutySheetCSV() {

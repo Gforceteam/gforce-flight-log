@@ -676,7 +676,7 @@ app.get('/api/my-status', verifyToken, async (req, res) => {
         'SELECT at.pilot_id, p.name FROM active_timers at JOIN pilots p ON at.pilot_id = p.id WHERE at.group_id = ? AND at.pilot_id != ?',
         [timer.group_id, req.pilot.id]
       );
-      groupPilots = otherTimers.map(t => t.name);
+      groupPilots = otherTimers.map(t => ({ id: t.pilot_id, name: t.name }));
     }
     const pr = pilot ? Number(pilot.presence) : 0;
     const presence = Number.isFinite(pr) ? pr : (pilot && Number(pilot.available) === 1 ? 1 : 0);
@@ -1222,6 +1222,37 @@ app.delete('/api/office/pilots/:id', verifyOffice, async (req, res) => {
 });
 
 
+
+// ─── Pilot lands another pilot in the same group ──────────────────────────────
+app.post('/api/pilot/land-group-member', verifyToken, async (req, res) => {
+  try {
+    const { pilot_id } = req.body;
+    if (!pilot_id) return res.status(400).json({ error: 'pilot_id required' });
+    const myTimer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
+    if (!myTimer || !myTimer.group_id) return res.status(403).json({ error: 'Not in an active group' });
+    const targetTimer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ? AND group_id = ?', [pilot_id, myTimer.group_id]);
+    if (!targetTimer) return res.status(404).json({ error: 'Pilot not found in your group' });
+    const pilot = await queryOne('SELECT * FROM pilots WHERE id = ?', [pilot_id]);
+    if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
+    const now = new Date().toISOString();
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+    const flightId = uuidv4();
+    const todayCount = await queryOne('SELECT COUNT(*) as c FROM flights WHERE pilot_id = ? AND date = ?', [pilot_id, today]);
+    const flightNum = (Number(todayCount?.c) || 0) + 1;
+    const pilotRec = await queryOne('SELECT current_wing FROM pilots WHERE id = ?', [pilot_id]);
+    await run(
+      `INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, sent_away_at, wing_reg)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [flightId, pilot_id, targetTimer.client_name || '', today, flightNum,
+       0, '', '', 0, 0, 'PENDING_PILOT_FILL', now, targetTimer.started_at || null, pilotRec?.current_wing || null]
+    );
+    await run('DELETE FROM active_timers WHERE pilot_id = ?', [pilot_id]);
+    await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)',
+      [uuidv4(), pilot_id, 'landed_by_group_member', now]);
+    broadcast({ type: 'LANDED_EARLY', pilot_id, pilot_name: pilot.name, landed_at: now, flight_id: flightId });
+    res.json({ flight_id: flightId });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Internal server error' }); }
+});
 
 // ─── Did Not Fly — pilot cancels their own timer without logging a flight ─────
 app.post('/api/pilot/cancel-timer', verifyToken, async (req, res) => {

@@ -2414,7 +2414,7 @@ function startStatusPoll() {
       if (!statusRes.ok) return;
       const newStatus = await statusRes.json();
       const prevStatus = myStatus.status;
-      const prevGroupPilots = (myStatus.group_pilots || []).join(',');
+      const prevGroupPilots = (myStatus.group_pilots || []).map(p => p.id || p).join(',');
       myStatus = { status: newStatus.status, client_name: newStatus.client_name, timer_expires_at: newStatus.timer_expires_at, group_name: newStatus.group_name || null, group_pilots: newStatus.group_pilots || [], group_id: newStatus.group_id || null, is_peak_trip: newStatus.is_peak_trip || false };
       pilotPresence = Number(newStatus.presence);
       if (!Number.isFinite(pilotPresence)) pilotPresence = newStatus.available === true ? 1 : 0;
@@ -2438,7 +2438,7 @@ function startStatusPoll() {
         }
       }
 
-      const groupPilotsChanged = (newStatus.group_pilots || []).join(',') !== prevGroupPilots;
+      const groupPilotsChanged = (newStatus.group_pilots || []).map(p => p.id || p).join(',') !== prevGroupPilots;
       if (newStatus.status !== prevStatus || groupPilotsChanged) {
         updateStatusBadge();
         if (newStatus.status === 'airborne' && prevStatus === 'in_office') {
@@ -2933,6 +2933,23 @@ let _lastDashboardKey = '';
 let _pilotLandedAt = null;    // timestamp when "Land" was clicked (drives "Just Landed" UI)
 let _pendingFlightId = null;  // flight id of the PENDING_PILOT_FILL record created on landing
 
+async function pilotLandGroupMember(targetId, targetName) {
+  try {
+    const res = await apiFetch('/api/pilot/land-group-member', { method: 'POST', body: JSON.stringify({ pilot_id: targetId }) });
+    if (!res.ok) { const d = await res.json(); toast(d.error || 'Error', 'err'); return; }
+    toast(`${targetName} landed`);
+    await loadMyData();
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
+}
+
+async function pilotLandGroupAll() {
+  const others = myStatus.group_pilots || [];
+  try {
+    await Promise.all(others.map(p => apiFetch('/api/pilot/land-group-member', { method: 'POST', body: JSON.stringify({ pilot_id: p.id }) })));
+    await pilotLand();
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
+}
+
 async function pilotLand() {
   const btn = document.querySelector('.btn-land-pilot');
   if (btn) { btn.disabled = true; btn.textContent = 'Landing…'; }
@@ -3025,9 +3042,16 @@ function renderDashboard() {
       <div class="ff-status-card ff-status-flying">
         <div class="ff-status-pill flying">Flying #${_curFlightNum}</div>
         ${myStatus.group_pilots && myStatus.group_pilots.length ? `
-          <div class="ff-group-pilots" style="margin-top:6px;">
-            <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:2px;">Group of ${myStatus.group_pilots.length + 1} Pax</div>
-            <div style="font-size:12px;color:var(--muted);">Flying with ${myStatus.group_pilots.map(esc).join(', ')}</div>
+          <div class="ff-group-pilots" style="margin-top:8px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <div style="font-size:13px;font-weight:700;color:var(--accent);">Group of ${myStatus.group_pilots.length + 1} Pax</div>
+              <button onclick="pilotLandGroupAll()" style="padding:5px 14px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">Land All</button>
+            </div>
+            ${myStatus.group_pilots.map(p => `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid var(--border);">
+                <span style="font-size:13px;color:var(--text);">${esc(p.name)}</span>
+                <button onclick="pilotLandGroupMember('${p.id}','${esc(p.name)}')" style="padding:4px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;">Land</button>
+              </div>`).join('')}
           </div>` : ''}
         <div class="dashboard-timer" id="dashboard-timer">--:--</div>
         <div style="margin-top:4px;">
@@ -3099,16 +3123,19 @@ function renderAllTodayFlights() {
   for (const grp of groups) {
     const isGroup = grp.length > 1;
     const sentTime = fmtTime(grp[0].sent_away_at);
+    const isMyFlight = grp.some(f => String(f.pilot_id) === String(pilotId));
+    const cardBg = isMyFlight ? 'background:rgba(16,185,129,0.09);border-color:rgba(16,185,129,0.3);' : '';
     if (isGroup) {
       const pilotRows = grp.map(f => {
         const landedTime = fmtTime(f.landed_at);
         const stillUp = !f.landed_at;
-        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);gap:8px;">
-          <span style="font-size:14px;font-weight:600;flex:1;min-width:0;">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
+        const isMe = String(f.pilot_id) === String(pilotId);
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);gap:8px;${isMe ? 'font-weight:700;' : ''}">
+          <span style="font-size:14px;font-weight:${isMe ? '700' : '600'};flex:1;min-width:0;">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
           <span style="font-size:13px;color:${stillUp ? 'var(--accent)' : 'var(--muted)'};">${stillUp ? 'Airborne' : `Landed ${esc(landedTime)}`}</span>
         </div>`;
       }).join('');
-      html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;">
+      html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;${cardBg}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
           <span class="tdf-group-label">${grp.length}-Pax Group</span>
           <span style="font-size:12px;color:var(--muted);">Away ${esc(sentTime)}</span>
@@ -3119,7 +3146,7 @@ function renderAllTodayFlights() {
       const f = grp[0];
       const landedTime = fmtTime(f.landed_at);
       const stillUp = !f.landed_at;
-      html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;">
+      html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;${cardBg}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
           <span class="tdf-group-label">Single Pax</span>
           <span style="font-size:12px;color:var(--muted);">Away ${esc(sentTime)}</span>
@@ -6430,7 +6457,9 @@ function connectWS() {
           myStatus.status = 'airborne';
           myStatus.timer_expires_at = data.expires_at;
           myStatus.group_name = data.group_name;
-          myStatus.group_pilots = data.pilot_names.filter(n => n !== pilotName);
+          myStatus.group_pilots = data.pilot_ids
+            .map((id, i) => ({ id, name: data.pilot_names[i] }))
+            .filter(p => p.id !== String(pilotId));
           renderDashboard();
           updateStatusBadge();
           notifyPilotSentAway();
@@ -6694,7 +6723,7 @@ function notifyPilotSentAway() {
   // Build group info
   const groupInfo = myStatus.group_name ? `📋 ${esc(myStatus.group_name)}` : '';
   const groupPilotsList = (myStatus.group_pilots && myStatus.group_pilots.length)
-    ? myStatus.group_pilots.map(esc).join(', ')
+    ? myStatus.group_pilots.map(p => esc(p.name || p)).join(', ')
     : '';
   const groupSection = (groupInfo || groupPilotsList) ? `
     <div style="margin:16px 0;padding:12px 16px;background:var(--surface);border-radius:10px;border:1px solid var(--border);">

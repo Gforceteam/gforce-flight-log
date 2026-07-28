@@ -1526,6 +1526,7 @@
         <div class="ws-indicator" id="ws-indicator" title="Connection status"></div>
         <span class="ws-badge-label" id="ws-badge-label">LIVE</span>
       </div>
+      <button id="mute-btn" onclick="toggleMute()" class="office-icon-btn" title="Mute alerts" style="font-size:18px;">🔔</button>
       <button onclick="location.reload()" class="office-icon-btn" title="Refresh app" style="font-size:18px;">↻</button>
       <button onclick="showOfficeTab('settings')" class="office-icon-btn" title="Settings" style="font-size:18px;">⚙</button>
     </div>
@@ -1875,6 +1876,7 @@ let allFlights = [];
 let filteredFlights = [];
 let dutySheetOverrides = [];
 let ffEditMode = false;
+let officeMuted = false;
 let alertDismissed = new Set();
 // Pending landing acknowledgments — { pilot_name, flight_id }
 let pendingAcks = [];
@@ -5688,9 +5690,20 @@ function playBell(count) {
   } catch (e) { /* audio not supported */ }
 }
 
+function toggleMute() {
+  officeMuted = !officeMuted;
+  if (officeMuted) window.speechSynthesis && window.speechSynthesis.cancel();
+  const btn = document.getElementById('mute-btn');
+  if (btn) {
+    btn.textContent = officeMuted ? '🔇' : '🔔';
+    btn.title = officeMuted ? 'Unmute alerts' : 'Mute alerts';
+    btn.style.opacity = officeMuted ? '0.5' : '1';
+  }
+}
+
 function speak(text) {
   try {
-    if (!window.speechSynthesis) return;
+    if (officeMuted || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.rate = 0.75;

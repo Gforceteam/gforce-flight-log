@@ -1842,15 +1842,18 @@ app.get('/api/office/export/duty-sheet', verifyOfficeQuery, async (req, res) => 
     });
     const header = ['Pilot', ...dateLabels, 'Days Worked', 'Days Left'];
     const lines = [`Duty Sheet (${today})`, csvRow(header)];
+    const dailyTotals = new Array(dates.length).fill(0);
     pilots.forEach(p => {
-      const dayCounts = dates.map(d => {
+      const dayCounts = dates.map((d, i) => {
         const ov = overrides.find(o => String(o.pilot_id) === String(p.id) && o.date === d);
-        if (ov !== undefined) return ov.count || '';
-        return flights.filter(f => String(f.pilot_id) === String(p.id) && f.date === d).length || '';
+        const cnt = ov !== undefined ? (ov.count || 0) : flights.filter(f => String(f.pilot_id) === String(p.id) && f.date === d).length;
+        if (cnt > 0) dailyTotals[i] += cnt;
+        return cnt || '';
       });
       const worked = dayCounts.filter(c => c !== '').length;
       lines.push(csvRow([p.name, ...dayCounts, worked, 14 - worked]));
     });
+    lines.push(csvRow(['Total', ...dailyTotals.map(t => t || ''), '', '']]);
     const csv = '﻿' + lines.join('\r\n');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="Duty Sheet (${today}).csv"`);

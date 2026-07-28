@@ -4498,6 +4498,9 @@ async function renderOfficeFF() {
     <th>Days Left</th>
   </tr></thead><tbody>`;
 
+  const dailyTotals = {};
+  dates.forEach(d => { dailyTotals[d] = 0; });
+
   ffPilots.forEach(p => {
     let daysWorked = 0;
     dates.forEach(d => { if (p.dayCounts[d] > 0) daysWorked++; });
@@ -4511,6 +4514,7 @@ async function renderOfficeFF() {
       const isOv = ov !== undefined;
       const todayCls = d === today ? 'ff-today-col' : '';
       const ovCls = isOv ? ' ff-cell-override' : '';
+      if (cnt > 0) dailyTotals[d] += cnt;
       if (ffEditMode) {
         return `<td class="${todayCls}${ovCls}"><input type="number" min="0" max="99" value="${cnt > 0 ? cnt : ''}" class="ff-edit-input" onchange="saveDutySheetOverride('${p.id}','${d}',this.value)" title="${isOv ? 'Override (right-click to reset)' : 'Auto'}" oncontextmenu="resetDutySheetOverride('${p.id}','${d}',this);return false;"></td>`;
       }
@@ -4519,7 +4523,11 @@ async function renderOfficeFF() {
 
     html += `<tr><td class="ff-pilot-name">${esc(p.name)}</td>${cells}<td class="ff-total ${cls}" id="ff-daysleft-${p.id}">${daysLeft}</td></tr>`;
   });
-  html += `</tbody></table>`;
+  html += `</tbody><tfoot><tr style="border-top:2px solid var(--border);">
+    <td class="ff-pilot-name" style="font-weight:700;">Total</td>
+    ${dates.map(d => `<td class="${d === today ? 'ff-today-col' : ''}" style="font-weight:700;text-align:center;">${dailyTotals[d] || ''}</td>`).join('')}
+    <td></td>
+  </tr></tfoot></table>`;
   document.getElementById('office-ff-content').innerHTML = html;
 }
 

@@ -1721,8 +1721,8 @@
         <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Time (min)</div>
         <div style="display:flex;gap:6px;align-items:center;">
           <input type="number" id="oe-time" min="1" style="flex:1;background:var(--surface);border:1px solid var(--border-hi);border-radius:10px;color:var(--text);padding:10px 12px;font-size:15px;outline:none;" />
-          <button onclick="adjustTime(-5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;color:var(--text);padding:8px 10px;cursor:pointer;font-size:13px;white-space:nowrap;">−5</button>
-          <button onclick="adjustTime(5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;color:var(--text);padding:8px 10px;cursor:pointer;font-size:13px;white-space:nowrap;">+5</button>
+          <button onclick="adjustTime(-10)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;color:var(--text);padding:8px 10px;cursor:pointer;font-size:13px;white-space:nowrap;">−10</button>
+          <button onclick="adjustTime(10)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:8px;color:var(--text);padding:8px 10px;cursor:pointer;font-size:13px;white-space:nowrap;">+10</button>
         </div>
       </div>
       <div>
@@ -3026,7 +3026,7 @@ function renderDashboard() {
   const el = document.getElementById('dashboard-content');
   if (!el) return;
 
-  const key = JSON.stringify({ s: myStatus.status, la: !!_pilotLandedAt, mf: myFlights.length });
+  const key = JSON.stringify({ s: myStatus.status, la: !!_pilotLandedAt, mf: myFlights.length, gp: (myStatus.group_pilots||[]).map(p=>p.id||p).join(',') });
   if (key === _lastDashboardKey) return;
   _lastDashboardKey = key;
 
@@ -3040,7 +3040,8 @@ function renderDashboard() {
     // ── Flying ──────────────────────────────────────────────────────────────
     el.innerHTML = `
       <div class="ff-status-card ff-status-flying">
-        <div class="ff-status-pill flying">Flying #${_curFlightNum}</div>
+        <div class="ff-status-pill flying">Flying</div>
+        <div style="font-size:15px;font-weight:700;color:var(--text);margin-top:-10px;margin-bottom:8px;">Flight #${(() => { const n = parseInt(myStatus.client_name); return (!isNaN(n) && n >= 1) ? n : _curFlightNum; })()}</div>
         ${myStatus.group_pilots && myStatus.group_pilots.length ? `
           <div class="ff-group-pilots" style="margin-top:8px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -4756,6 +4757,7 @@ async function loadOfficeData() {
       renderExtensionPanel();
     }
     refreshOfficeUiAfterLoad();
+    reconcileLoopBoardTallies();
   } catch (e) {
     toast('Cannot connect to server');
   }
@@ -4987,8 +4989,8 @@ function renderAwayTab() {
 
   const actionBtns = p => `
     <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
-      <button onclick="adjustPilotTimer('${p.id}',-5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 8px;touch-action:manipulation;">−5</button>
-      <button onclick="adjustPilotTimer('${p.id}',5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 8px;touch-action:manipulation;">+5</button>
+      <button onclick="adjustPilotTimer('${p.id}',-10)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 8px;touch-action:manipulation;">−10</button>
+      <button onclick="adjustPilotTimer('${p.id}',10)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 8px;touch-action:manipulation;">+10</button>
       <button onclick="doLandPilot('${p.id}','${p.name.replace(/'/g,"\\'")}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:12px;padding:5px 12px;font-weight:700;touch-action:manipulation;">Land</button>
       <button class="btn-danger" onclick="confirmLandedEarly('${p.id}','${p.name.replace(/'/g,"\\'")}')">✕</button>
     </div>`;
@@ -5033,8 +5035,8 @@ function renderAwayTab() {
             <span class="tdf-group-label">${entry.pilots.length}-Pax Group</span>
             <div style="display:flex;align-items:center;gap:6px;">
               ${entry.groupName ? `<span style="font-size:12px;color:var(--accent);font-weight:600;">${gname}</span>` : ''}
-              <button data-pilots="${pilotsData}" onclick="adjustGroupTimer(JSON.parse(this.dataset.pilots),-5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 8px;touch-action:manipulation;">−5</button>
-              <button data-pilots="${pilotsData}" onclick="adjustGroupTimer(JSON.parse(this.dataset.pilots),5)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 8px;touch-action:manipulation;">+5</button>
+              <button data-pilots="${pilotsData}" onclick="adjustGroupTimer(JSON.parse(this.dataset.pilots),-10)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 8px;touch-action:manipulation;">−10</button>
+              <button data-pilots="${pilotsData}" onclick="adjustGroupTimer(JSON.parse(this.dataset.pilots),10)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 8px;touch-action:manipulation;">+10</button>
               <button data-pilots="${pilotsData}" onclick="landAllGroup(JSON.parse(this.dataset.pilots))" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:700;padding:5px 10px;cursor:pointer;touch-action:manipulation;">Land All</button>
               <button onclick="showAddToGroupModal('${gid}','${gname}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:16px;font-weight:700;padding:2px 10px;cursor:pointer;line-height:1.4;touch-action:manipulation;" title="Add pilot to group">+</button>
             </div>
@@ -5884,6 +5886,7 @@ async function loadLoopBoard() {
       localStorage.setItem('loopBoardRows', loopBoardRows);
     }
     if (officeActiveTab === 'loop') renderLoopBoard();
+    reconcileLoopBoardTallies();
   } catch (_) {}
 }
 
@@ -5921,6 +5924,43 @@ function _loopSafeRender() {
   const el = document.getElementById('loop-board-list');
   if (el && el.contains(document.activeElement)) return;
   renderLoopBoard();
+}
+
+async function reconcileLoopBoardTallies() {
+  if (!officeToken || loopBoardDate !== todayStr()) return;
+  if (!loopBoard.length) { await loadLoopBoard(); return; } // loadLoopBoard calls reconcile when done
+  const changes = [];
+  for (const slot of loopBoard) {
+    if (!slot.pilot_id) continue;
+    const pilot = (officePilots || []).find(p => String(p.id) === String(slot.pilot_id));
+    if (!pilot) continue;
+    let tallies = [];
+    try { tallies = JSON.parse(slot.tallies || '[]'); } catch (_) {}
+    while (tallies.length < 12) tallies.push('');
+    const col = parseInt(pilot.client_name);
+    if (pilot.status === 'airborne' && !isNaN(col) && col >= 1 && col <= 12) {
+      if (tallies[col - 1] !== 'IF') {
+        tallies[col - 1] = 'IF';
+        slot.tallies = JSON.stringify(tallies);
+        changes.push({ slot: slot.slot, col, value: 'IF' });
+      }
+    } else if (pilot.status !== 'airborne') {
+      const ifIdx = tallies.findIndex(t => t === 'IF');
+      if (ifIdx !== -1) {
+        tallies[ifIdx] = 'I';
+        slot.tallies = JSON.stringify(tallies);
+        changes.push({ slot: slot.slot, col: ifIdx + 1, value: 'I' });
+      }
+    }
+  }
+  if (!changes.length) return;
+  await Promise.all(changes.map(c =>
+    officeFetch('/api/office/loop-board/tally', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slot: c.slot, col: c.col, value: c.value, date: loopBoardDate })
+    }).catch(() => {})
+  ));
+  if (officeActiveTab === 'loop') renderLoopBoard();
 }
 
 function renderLoopBoard() {

@@ -1504,10 +1504,12 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
 
     const pilotNames = [];
     const pilotMap = []; // { id, name } for push after all names known
+    const cleanedPilotNums = {};
     for (const pid of pilot_ids) {
       const pilot = await queryOne('SELECT * FROM pilots WHERE id = ?', [pid]);
       if (!pilot) continue;
       const clientName = pilot_nums ? (sanitize(pilot_nums[pid], 20) || null) : (group_name || null);
+      cleanedPilotNums[pid] = clientName;
       await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, group_id) VALUES (?, ?, ?, ?, ?)',
         [pid, clientName, now.toISOString(), expires.toISOString(), groupId]);
       await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pid, 'group_left_office', new Date().toISOString()]);
@@ -1533,6 +1535,7 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
       group_name,
       pilot_ids,
       pilot_names: pilotNames,
+      pilot_nums: cleanedPilotNums,
       started_at: now.toISOString(),
       expires_at: expires.toISOString(),
       is_peak_trip: !!is_peak_trip

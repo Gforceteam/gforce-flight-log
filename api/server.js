@@ -1853,7 +1853,7 @@ app.get('/api/office/export/duty-sheet', verifyOfficeQuery, async (req, res) => 
       const worked = dayCounts.filter(c => c !== '').length;
       lines.push(csvRow([p.name, ...dayCounts, worked, 14 - worked]));
     });
-    lines.push(csvRow(['Total', ...dailyTotals.map(t => t || ''), '', '']]);
+    lines.push(csvRow(['Total', ...dailyTotals.map(t => t || ''), '', '']));
     const csv = '﻿' + lines.join('\r\n');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="Duty Sheet (${today}).csv"`);

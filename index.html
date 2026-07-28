@@ -1717,7 +1717,7 @@
       </div>
     </div>
 
-    <div style="margin-bottom:12px;">
+    <div id="oe-section-time" style="margin-bottom:12px;">
       <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Time (min)</div>
       <div style="display:flex;gap:6px;align-items:center;">
         <input type="number" id="oe-time" min="1" style="flex:1;background:var(--surface);border:1px solid var(--border-hi);border-radius:10px;color:var(--text);padding:10px 12px;font-size:15px;outline:none;" />
@@ -4882,7 +4882,7 @@ function renderTodayFlights() {
         return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);gap:8px;">
           <span style="font-size:14px;font-weight:600;flex:1;min-width:0;">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
           <span style="font-size:13px;color:${stillUp ? 'var(--accent)' : 'var(--muted)'};">${stillUp ? 'Airborne' : `Landed ${esc(landedTime)}`}</span>
-          ${!stillUp ? `<button onclick="officeEditFlight('${esc(f.id)}',true)" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid var(--border-hi);background:var(--surface);color:var(--text-2);cursor:pointer;flex-shrink:0;touch-action:manipulation;">Edit</button>` : ''}
+          <button onclick="officeEditFlight('${esc(f.id)}',true)" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid var(--border-hi);background:var(--surface);color:var(--text-2);cursor:pointer;flex-shrink:0;touch-action:manipulation;">Edit</button>
         </div>`;
       }).join('');
       html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;">
@@ -4904,7 +4904,7 @@ function renderTodayFlights() {
         <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);gap:8px;">
           <span class="tdf-pilot" style="flex:1;min-width:0;">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
           <span style="font-size:13px;color:${stillUp ? 'var(--accent)' : 'var(--muted)'};">${stillUp ? 'Airborne' : `Landed ${esc(landedTime)}`}</span>
-          ${!stillUp ? `<button onclick="officeEditFlight('${esc(f.id)}',true)" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid var(--border-hi);background:var(--surface);color:var(--text-2);cursor:pointer;flex-shrink:0;touch-action:manipulation;">Edit</button>` : ''}
+          <button onclick="officeEditFlight('${esc(f.id)}',true)" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid var(--border-hi);background:var(--surface);color:var(--text-2);cursor:pointer;flex-shrink:0;touch-action:manipulation;">Edit</button>
         </div>
       </div>`;
     }
@@ -5330,7 +5330,7 @@ function officeEditFlight(flightId, ffMode) {
   document.getElementById('oe-notes').value = f.notes || '';
   document.getElementById('oe-error').textContent = '';
 
-  // FF mode: only flight # and time are editable
+  // FF mode: only flight # is editable
   const hide = s => { const el = document.getElementById(s); if (el) el.style.display = 'none'; };
   const show = (s, disp) => { const el = document.getElementById(s); if (el) el.style.display = disp || ''; };
   if (ff) {
@@ -5338,17 +5338,17 @@ function officeEditFlight(flightId, ffMode) {
     document.getElementById('oe-section-date-num').style.gridTemplateColumns = '1fr';
     hide('oe-section-client');
     hide('oe-section-weight');
+    hide('oe-section-time');
     hide('oe-section-wing');
     hide('oe-section-notes');
-    document.querySelector('#office-edit-modal .oe-title').textContent = 'Edit Flight';
   } else {
     show('oe-col-date');
     document.getElementById('oe-section-date-num').style.gridTemplateColumns = '1fr 1fr';
     show('oe-section-client', 'block');
     show('oe-section-weight', 'grid');
+    show('oe-section-time', 'block');
     show('oe-section-wing', 'block');
     show('oe-section-notes', 'block');
-    document.querySelector('#office-edit-modal .oe-title').textContent = 'Edit Flight';
   }
 
   document.getElementById('office-edit-modal').style.display = 'block';
@@ -5371,11 +5371,7 @@ async function officeUpdateFlight() {
   const errEl = document.getElementById('oe-error');
 
   const flight_num = parseInt(document.getElementById('oe-flight-num').value);
-  const time = parseInt(document.getElementById('oe-time').value);
-  if (!flight_num || !time) {
-    errEl.textContent = 'Flight # and time are required.';
-    return;
-  }
+  if (!flight_num) { errEl.textContent = 'Flight # is required.'; return; }
 
   // In FF mode use the original flight's values for fields not shown
   const orig = allFlights.find(f => f.id === id) || {};
@@ -5384,6 +5380,7 @@ async function officeUpdateFlight() {
   const weight = ffMode ? orig.weight : parseInt(document.getElementById('oe-weight').value);
   const takeoff = ffMode ? (orig.takeoff || '') : document.getElementById('oe-takeoff').value.trim().toUpperCase();
   const landing = ffMode ? (orig.landing || '') : document.getElementById('oe-landing').value.trim().toUpperCase();
+  const time = ffMode ? orig.time : parseInt(document.getElementById('oe-time').value);
   const wing_reg = ffMode ? (orig.wing_reg || null) : (document.getElementById('oe-wing').value.trim().toUpperCase() || null);
   const notes = ffMode ? (orig.notes || '') : document.getElementById('oe-notes').value.trim();
 

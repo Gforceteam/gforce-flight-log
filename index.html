@@ -5697,12 +5697,12 @@ function speak(text) {
     u.pitch = 1;
     u.volume = 1;
     const voices = window.speechSynthesis.getVoices();
-    const irishVoice = voices.find(v => /irish|moira|ireland/i.test(v.name) && /female|f\b/i.test(v.name))
-      || voices.find(v => /irish|moira|ireland/i.test(v.name))
-      || voices.find(v => /moira/i.test(v.name));
-    const fallbackFemale = voices.find(v => /female|samantha|victoria|karen|tessa|zira|hazel|serena/i.test(v.name));
-    const chosen = irishVoice || fallbackFemale;
-    if (chosen) u.voice = chosen;
+    // Known female voice names across macOS, Windows, Chrome, iOS
+    const femaleNames = /samantha|victoria|karen|moira|tessa|serena|hazel|zira|susan|linda|fiona|allison|ava|kate|nicky|siri|google\s+uk\s+english\s+female|google\s+us\s+english|female/i;
+    const femaleVoice = voices.find(v => femaleNames.test(v.name) && /en[-_]/i.test(v.lang))
+      || voices.find(v => femaleNames.test(v.name))
+      || voices.find(v => /female/i.test(v.name));
+    if (femaleVoice) u.voice = femaleVoice;
     window.speechSynthesis.speak(u);
   } catch (e) {}
 }

@@ -3020,7 +3020,7 @@ function renderTodayFlightsList() {
     return `
       <div class="ff-flight-row" onclick="editFlightFromFF('${f.id}')">
         <div class="ff-flight-row-left">
-          <div class="ff-flight-row-num">${pendingDot}Flight #${f.flight_num}</div>
+          <div class="ff-flight-row-num">${pendingDot}Flight #${f.flight_num}${awayTime && !landedTime && !isPending ? ' Today' : ''}</div>
           ${timeLine ? `<div class="ff-flight-row-detail">${timeLine}</div>` : ''}
           ${groupNames ? `<div class="ff-flight-row-detail" style="color:var(--muted);">Group with ${esc(groupNames)}</div>` : ''}
           ${logLine}

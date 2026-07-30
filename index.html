@@ -3626,23 +3626,9 @@ function renderFlights() {
     const lastFlight = dayFlights[dayFlights.length - 1];
     dayFlights.reverse();
     const hoursVal = (lastFlight && lastFlight.hours_worked != null) ? lastFlight.hours_worked : '';
-    html += `<div class="date-group-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-      <div style="display:flex;align-items:center;gap:8px;flex:1;">
-        <span>${fmtDate(date)}</span>
-        <span class="duty-badge">${dayFlights.length} flight${dayFlights.length !== 1 ? 's' : ''}</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
-        <span style="font-size:11px;color:var(--muted);">🕐</span>
-        <input type="number" min="0" max="16" step="0.5" class="duty-hrs-input"
-          data-date="${date}"
-          value="${hoursVal}"
-          placeholder="hrs"
-          title="Hours worked today"
-          style="width:52px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:3px 6px;text-align:center;"
-          onchange="saveHours('${date}', this.value)"
-          onblur="saveHours('${date}', this.value)"
-        />
-      </div>
+    html += `<div class="date-group-header" style="display:flex;align-items:center;gap:8px;">
+      <span>${fmtDate(date)}</span>
+      <span class="duty-badge">${dayFlights.length} flight${dayFlights.length !== 1 ? 's' : ''}</span>
     </div>`;
     dayFlights.forEach(f => {
       const pendingFill = f.notes && String(f.notes).includes('PENDING_PILOT_FILL');

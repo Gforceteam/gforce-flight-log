@@ -1210,6 +1210,7 @@
     <button onclick="doLogin()">Sign In</button>
     <div id="login-error" class="login-error">Incorrect password. Try again.</div>
     <div id="login-error2" class="login-error">Cannot reach server. Check your connection.</div>
+    <button onclick="clearSavedSession()" style="margin-top:16px;background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:underline;">Clear saved session</button>
   </div>
 </div>
 
@@ -4679,6 +4680,15 @@ function officeApi(path, opts = {}) {
       ...opts.headers
     }
   });
+}
+
+// ─── Clear saved session (login page button) ──────────────────────────────────
+function clearSavedSession() {
+  localStorage.removeItem('gforce_office_token');
+  localStorage.removeItem('gforce_office_refresh');
+  officeToken = null;
+  _officeSessionActive = false;
+  toast('Saved session cleared. Please sign in.');
 }
 
 // ─── Auto-refresh office token on 401 ─────────────────────────────────────────

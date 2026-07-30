@@ -360,7 +360,7 @@ function verifyToken(req, res, next) {
   }
 }
 
-function verifyOffice(req, res, next) {
+async function verifyOffice(req, res, next) {
   const auth = req.headers.authorization;
   if (!auth || !auth.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'No token provided' });
@@ -368,10 +368,27 @@ function verifyOffice(req, res, next) {
   try {
     const office = jwt.verify(auth.slice(7), JWT_SECRET, { algorithms: ['HS256'] });
     if (office.type !== 'office') return res.status(403).json({ error: 'Not office staff' });
-    if (office.tv !== _officeTv) return res.status(401).json({ error: 'Session invalidated' });
+    if (office.tv !== _officeTv) {
+      // In-memory may be stale (e.g. after a server restart or brief multi-machine window).
+      // Re-read from DB before rejecting.
+      try {
+        const tvRow = await queryOne("SELECT value FROM app_settings WHERE key = 'office_token_version'");
+        const dbTv = tvRow ? parseInt(tvRow.value || '0', 10) : 0;
+        if (office.tv === dbTv) {
+          _officeTv = dbTv; // update in-memory so future checks are fast
+        } else {
+          console.log(`[verifyOffice] tv mismatch: token=${office.tv} mem=${_officeTv} db=${dbTv}`);
+          return res.status(401).json({ error: 'Session invalidated' });
+        }
+      } catch (dbErr) {
+        console.error('[verifyOffice] DB read failed during tv fallback:', dbErr.message);
+        return res.status(401).json({ error: 'Session invalidated' });
+      }
+    }
     req.office = office;
     next();
-  } catch {
+  } catch (e) {
+    console.log(`[verifyOffice] jwt.verify failed: ${e.message}`);
     return res.status(401).json({ error: 'Invalid token' });
   }
 }
@@ -492,6 +509,17 @@ app.use('/api/', (req, res, next) => {
   const rl = checkGlobalRateLimit(ip);
   if (rl.blocked) return res.status(429).json({ error: `Too many requests. Try again in ${Math.ceil(rl.retryAfter / 60)} minutes.` });
   next();
+});
+
+// ─── Diagnostic (no auth) ─────────────────────────────────────────────────────
+app.get('/api/health', async (req, res) => {
+  try {
+    const tvRow = await queryOne("SELECT value FROM app_settings WHERE key = 'office_token_version'");
+    const dbTv = tvRow ? parseInt(tvRow.value || '0', 10) : 0;
+    res.json({ ok: true, memTv: _officeTv, dbTv });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
 });
 
 // ─── Public Routes ────────────────────────────────────────────────────────────
@@ -1745,13 +1773,19 @@ app.get('/api/office/flights', verifyOffice, async (req, res) => {
 });
 
 // ─── Download exports (token accepted via query param for browser navigation) ──
-function verifyOfficeQuery(req, res, next) {
+async function verifyOfficeQuery(req, res, next) {
   const token = req.query.token || (req.headers.authorization || '').replace('Bearer ', '');
   if (!token) return res.status(401).send('No token');
   try {
     const office = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
     if (office.type !== 'office') return res.status(403).send('Not office');
-    if (office.tv !== _officeTv) return res.status(401).send('Session invalidated');
+    if (office.tv !== _officeTv) {
+      try {
+        const tvRow = await queryOne("SELECT value FROM app_settings WHERE key = 'office_token_version'");
+        const dbTv = tvRow ? parseInt(tvRow.value || '0', 10) : 0;
+        if (office.tv === dbTv) { _officeTv = dbTv; } else { return res.status(401).send('Session invalidated'); }
+      } catch { return res.status(401).send('Session invalidated'); }
+    }
     req.office = office;
     next();
   } catch { return res.status(401).send('Invalid token'); }

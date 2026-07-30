@@ -6062,11 +6062,13 @@ async function reconcileLoopBoardTallies() {
     try { tallies = JSON.parse(slot.tallies || '[]'); } catch (_) {}
     while (tallies.length < 12) tallies.push('');
     const flightNum = parseInt(pilot.client_name);
+    console.log(`[reconcile] ${pilot.name} status=${pilot.status} client_name=${pilot.client_name} flightNum=${flightNum} tallies=${JSON.stringify(tallies)}`);
     if (pilot.status === 'airborne' && !isNaN(flightNum) && flightNum >= 1 && flightNum <= 12) {
       // L-marked columns are missed rounds — flight #N uses the Nth non-L column
       const nonLCols = [];
       for (let i = 0; i < 12; i++) { if (tallies[i] !== 'L') nonLCols.push(i + 1); }
       const effectiveCol = nonLCols[flightNum - 1];
+      console.log(`[reconcile] ${pilot.name} airborne: flightNum=${flightNum} nonLCols=${JSON.stringify(nonLCols)} effectiveCol=${effectiveCol}`);
       if (effectiveCol && tallies[effectiveCol - 1] !== 'IF') {
         tallies[effectiveCol - 1] = 'IF';
         slot.tallies = JSON.stringify(tallies);

@@ -1048,7 +1048,7 @@
     .loop-date-btn:hover { background: var(--hover); }
     .loop-date-center { display: flex; align-items: center; gap: 8px; flex: 1; }
     .loop-date-input { flex: 1; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 15px; font-weight: 600; padding: 6px 10px; cursor: pointer; }
-    .loop-date-today-badge { background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
+    .loop-date-today-badge { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
     .loop-board-controls { display: flex; gap: 8px; padding: 10px 8px; border-top: 1px solid var(--border); }
     .loop-table { border-collapse: collapse; font-size: 15px; }
     .loop-table thead th {
@@ -1073,6 +1073,10 @@
     .loop-tally-sel.has-val { background: #ffffff; border-color: var(--border); color: #111111; font-weight: 700; }
     .loop-tally-sel.has-val-L { background: #fefce8; border-color: #fde68a; color: #92400e; }
     .loop-tally-sel.has-val-IF { background: #f0fdf4; border-color: #86efac; color: #166534; }
+    .loop-tally-static { display: block; width: 60px; text-align: center; padding: 10px 4px; font-size: 15px; border-radius: 6px; color: var(--muted); }
+    .loop-tally-static.has-val { background: #ffffff; color: #111111; font-weight: 700; }
+    .loop-tally-static.has-val-L { background: #fefce8; color: #92400e; }
+    .loop-tally-static.has-val-IF { background: #f0fdf4; color: #166534; }
     .loop-complete-btn { flex-shrink: 0; width: 26px; height: 26px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--muted); font-size: 17px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; touch-action: manipulation; transition: background 0.15s, color 0.15s; }
     .loop-complete-btn:hover { background: #ef4444; color: #fff; border-color: #ef4444; }
     .loop-td-pilot { padding: 6px 8px 6px 6px; }
@@ -5976,12 +5980,9 @@ async function loadLoopBoard() {
     const data = await res.json();
     loopBoard = Array.isArray(data) ? data : (data.board || []);
     loopBoardCompleted = Array.isArray(data) ? [] : (data.completed || []);
-    // Expand row count to show all slots that have a pilot assigned
+    // Ensure row count covers all populated slots for this date
     const maxPopulated = loopBoard.reduce((max, s) => s.pilot_id ? Math.max(max, s.slot) : max, 0);
-    if (maxPopulated > loopBoardRows) {
-      loopBoardRows = maxPopulated;
-      localStorage.setItem('loopBoardRows', loopBoardRows);
-    }
+    if (maxPopulated > loopBoardRows) _setLoopRows(loopBoardDate, maxPopulated);
     if (officeActiveTab === 'loop') renderLoopBoard();
     reconcileLoopBoardTallies();
   } catch (_) {}
@@ -5989,6 +5990,7 @@ async function loadLoopBoard() {
 
 function changeLoopDate(dateStr) {
   loopBoardDate = dateStr;
+  loopBoardRows = _getLoopRows(dateStr); // restore per-date row count
   _lastLoopChange = null;
   loadLoopBoard();
 }
@@ -5997,12 +5999,24 @@ function shiftLoopDate(days) {
   const d = new Date(loopBoardDate + 'T12:00:00');
   d.setDate(d.getDate() + days);
   loopBoardDate = d.toLocaleDateString('en-CA');
+  loopBoardRows = _getLoopRows(loopBoardDate); // restore per-date row count
   _lastLoopChange = null;
   loadLoopBoard();
 }
 
-let loopBoardRows = Math.max(1, Math.min(20, parseInt(localStorage.getItem('loopBoardRows') || '1', 10)));
 let loopBoardDate = todayStr();
+// Per-date row count — falls back to legacy global key on first use so existing data is preserved
+function _loopRowsKey(d) { return 'loopBoardRows_' + d; }
+function _getLoopRows(d) {
+  const v = localStorage.getItem(_loopRowsKey(d)) ?? localStorage.getItem('loopBoardRows') ?? '1';
+  return Math.max(1, Math.min(20, parseInt(v, 10)));
+}
+function _setLoopRows(d, n) {
+  const c = Math.max(1, Math.min(20, n));
+  localStorage.setItem(_loopRowsKey(d), String(c));
+  loopBoardRows = c;
+}
+let loopBoardRows = _getLoopRows(loopBoardDate);
 let loopBoardCompleted = [];
 let _lastLoopChange = null;
 let _pendingLoopApiCalls = 0;
@@ -6065,15 +6079,27 @@ function renderLoopBoard() {
   if (!el) return;
   const available = (officePilots || []).sort(pilotSort);
   const tallyOpts = ['', 'I', 'L', 'IF', '-'];
-  const isToday = loopBoardDate === todayStr();
+  const today = todayStr();
+  const isToday = loopBoardDate === today;
+  const isPast = loopBoardDate < today;
+  const isFuture = loopBoardDate > today;
+  // Human-readable date label
+  const labelMap = { [today]: 'Today' };
+  const yest = new Date(today + 'T12:00:00'); yest.setDate(yest.getDate() - 1);
+  const tom  = new Date(today + 'T12:00:00'); tom.setDate(tom.getDate() + 1);
+  labelMap[yest.toLocaleDateString('en-CA')] = 'Yesterday';
+  labelMap[tom.toLocaleDateString('en-CA')]  = 'Tomorrow';
+  const dateLabel = labelMap[loopBoardDate] || new Date(loopBoardDate + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' });
+  const badgeStyle = isPast ? 'background:rgba(100,100,100,0.15);color:var(--muted);' : isFuture ? 'background:rgba(99,102,241,0.12);color:var(--accent);' : 'background:rgba(34,197,94,0.15);color:#16a34a;';
   let html = `<div class="loop-date-bar">
     <button class="loop-date-btn" onclick="shiftLoopDate(-1)" title="Previous day">‹</button>
     <div class="loop-date-center">
       <input type="date" class="loop-date-input" value="${loopBoardDate}" onchange="changeLoopDate(this.value)">
-      ${isToday ? '<span class="loop-date-today-badge">Today</span>' : ''}
+      <span class="loop-date-today-badge" style="${badgeStyle}">${dateLabel}</span>
     </div>
     <button class="loop-date-btn" onclick="shiftLoopDate(1)" title="Next day">›</button>
   </div>`;
+  if (isPast) html += `<div style="padding:6px 12px;background:rgba(100,100,100,0.08);border-bottom:1px solid var(--border);font-size:12px;color:var(--muted);text-align:center;letter-spacing:0.5px;">Viewing history — read only</div>`;
   html += '<table class="loop-table"><thead><tr>';
   html += '<th class="loop-th-slot">#</th><th class="loop-th-pilot">Pilot</th>';
   for (let c = 1; c <= 12; c++) html += `<th class="loop-th-tally">${c}</th>`;
@@ -6083,27 +6109,45 @@ function renderLoopBoard() {
     let tallies = Array(12).fill('');
     try { const t = JSON.parse(slot.tallies || '[]'); if (Array.isArray(t)) tallies = t; } catch (_) {}
     while (tallies.length < 12) tallies.push('');
-    const pilotOpts = available.map(p =>
-      `<option value="${p.id}" data-name="${p.name.replace(/"/g, '&quot;')}" ${slot.pilot_id === p.id ? 'selected' : ''}>${p.name}</option>`
-    ).join('');
-    html += `<tr><td class="loop-td-slot">${i}</td>`;
-    html += `<td class="loop-td-pilot"><div class="loop-pilot-cell"><select class="loop-pilot-sel" onchange="setLoopSlot(${i},this)"><option value="">— empty —</option>${pilotOpts}</select>${slot.pilot_id ? `<button class="loop-complete-btn" onclick="completeLoopPilot(${i})" title="Done for the day">×</button>` : ''}</div></td>`;
-    for (let c = 1; c <= 12; c++) {
-      const val = tallies[c - 1] || '';
-      const tOpts = tallyOpts.map(v => `<option value="${v}" ${val === v ? 'selected' : ''}>${v || '–'}</option>`).join('');
-      html += `<td class="loop-td-tally"><select class="loop-tally-sel${val ? (val === 'L' ? ' has-val has-val-L' : val === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" onchange="setLoopTally(${i},${c},this)">${tOpts}</select></td>`;
+    if (isPast) {
+      // Read-only: show pilot name as plain text, tallies as static cells
+      const pName = slot.pilot_name ? `<span style="font-size:14px;font-weight:600;padding:2px 6px;">${esc(slot.pilot_name)}</span>` : `<span style="color:var(--muted);font-size:13px;padding:2px 6px;">—</span>`;
+      html += `<tr><td class="loop-td-slot">${i}</td><td class="loop-td-pilot"><div class="loop-pilot-cell">${pName}</div></td>`;
+      for (let c = 1; c <= 12; c++) {
+        const val = tallies[c - 1] || '';
+        html += `<td class="loop-td-tally"><span class="loop-tally-static${val ? (val === 'L' ? ' has-val has-val-L' : val === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}">${val || '–'}</span></td>`;
+      }
+      html += '</tr>';
+    } else {
+      const pilotOpts = available.map(p =>
+        `<option value="${p.id}" data-name="${p.name.replace(/"/g, '&quot;')}" ${slot.pilot_id === p.id ? 'selected' : ''}>${p.name}</option>`
+      ).join('');
+      html += `<tr><td class="loop-td-slot">${i}</td>`;
+      html += `<td class="loop-td-pilot"><div class="loop-pilot-cell"><select class="loop-pilot-sel" onchange="setLoopSlot(${i},this)"><option value="">— empty —</option>${pilotOpts}</select>${slot.pilot_id ? `<button class="loop-complete-btn" onclick="completeLoopPilot(${i})" title="Done for the day">×</button>` : ''}</div></td>`;
+      for (let c = 1; c <= 12; c++) {
+        const val = tallies[c - 1] || '';
+        const tOpts = tallyOpts.map(v => `<option value="${v}" ${val === v ? 'selected' : ''}>${v || '–'}</option>`).join('');
+        html += `<td class="loop-td-tally"><select class="loop-tally-sel${val ? (val === 'L' ? ' has-val has-val-L' : val === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" onchange="setLoopTally(${i},${c},this)">${tOpts}</select></td>`;
+      }
+      html += '</tr>';
     }
-    html += '</tr>';
   }
   html += '</tbody></table>';
-  html += `<div class="loop-board-controls">
-    <button onclick="addLoopRow()" style="padding:8px 22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:22px;line-height:1;cursor:pointer;" ${loopBoardRows >= 20 ? 'disabled' : ''}>+</button>
-    <button onclick="removeLoopRow()" style="padding:8px 22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:22px;line-height:1;cursor:pointer;" ${loopBoardRows <= 1 ? 'disabled' : ''}>−</button>
-    <button onclick="loadLoopBoard()" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">↻ Refresh</button>
-    <button onclick="exportLoopBoardCSV()" style="padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;">⬇ Export</button>
-    <button onclick="undoLoopChange()" ${!_lastLoopChange ? 'disabled' : ''} style="padding:8px 20px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;margin-left:auto;opacity:${_lastLoopChange ? '1' : '0.4'};">↩ Reverse</button>
-    <button onclick="resetLoopBoard()" style="padding:8px 20px;background:rgba(239,68,68,0.08);border:1px solid var(--danger);border-radius:8px;color:var(--danger);font-size:13px;font-weight:700;cursor:pointer;">Reset</button>
-  </div>`;
+  if (isPast) {
+    html += `<div class="loop-board-controls">
+      <button onclick="loadLoopBoard()" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">↻ Refresh</button>
+      <button onclick="exportLoopBoardCSV()" style="padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;">⬇ Export</button>
+    </div>`;
+  } else {
+    html += `<div class="loop-board-controls">
+      <button onclick="addLoopRow()" style="padding:8px 22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:22px;line-height:1;cursor:pointer;" ${loopBoardRows >= 20 ? 'disabled' : ''}>+</button>
+      <button onclick="removeLoopRow()" style="padding:8px 22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:22px;line-height:1;cursor:pointer;" ${loopBoardRows <= 1 ? 'disabled' : ''}>−</button>
+      <button onclick="loadLoopBoard()" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">↻ Refresh</button>
+      <button onclick="exportLoopBoardCSV()" style="padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;">⬇ Export</button>
+      <button onclick="undoLoopChange()" ${!_lastLoopChange ? 'disabled' : ''} style="padding:8px 20px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;margin-left:auto;opacity:${_lastLoopChange ? '1' : '0.4'};">↩ Reverse</button>
+      <button onclick="resetLoopBoard()" style="padding:8px 20px;background:rgba(239,68,68,0.08);border:1px solid var(--danger);border-radius:8px;color:var(--danger);font-size:13px;font-weight:700;cursor:pointer;">Reset</button>
+    </div>`;
+  }
   if (loopBoardCompleted.length > 0) {
     const tallyOpts2 = ['', 'I', 'L', 'IF', '-'];
     let cHtml = `<div class="loop-completed-section">
@@ -6117,15 +6161,18 @@ function renderLoopBoard() {
       let ct = Array(12).fill('');
       try { const t = JSON.parse(p.tallies || '[]'); if (Array.isArray(t)) ct = t; } catch (_) {}
       while (ct.length < 12) ct.push('');
-      cHtml += `<tr>
-        <td class="loop-td-pilot"><div class="loop-pilot-cell">
+      cHtml += `<tr><td class="loop-td-pilot"><div class="loop-pilot-cell">
           <span style="font-size:15px;font-weight:600;padding:2px 4px;text-decoration:line-through;color:var(--muted);">${esc(p.pilot_name)}</span>
-          <button class="loop-complete-btn" onclick="uncompleteLoopPilot('${esc(p.id)}')" title="Re-add to loop board" style="background:var(--accent);color:#fff;border-color:var(--accent);font-size:14px;">↑</button>
+          ${!isPast ? `<button class="loop-complete-btn" onclick="uncompleteLoopPilot('${esc(p.id)}')" title="Re-add to loop board" style="background:var(--accent);color:#fff;border-color:var(--accent);font-size:14px;">↑</button>` : ''}
         </div></td>`;
       for (let c = 1; c <= 12; c++) {
         const cv = ct[c - 1] || '';
-        const cOpts = tallyOpts2.map(v => `<option value="${v}" ${cv === v ? 'selected' : ''}>${v || '–'}</option>`).join('');
-        cHtml += `<td class="loop-td-tally"><select class="loop-tally-sel${cv ? (cv === 'L' ? ' has-val has-val-L' : cv === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" onchange="setCompletedTally('${esc(p.id)}',${c},this)">${cOpts}</select></td>`;
+        if (isPast) {
+          cHtml += `<td class="loop-td-tally"><span class="loop-tally-static${cv ? (cv === 'L' ? ' has-val has-val-L' : cv === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}">${cv || '–'}</span></td>`;
+        } else {
+          const cOpts = tallyOpts2.map(v => `<option value="${v}" ${cv === v ? 'selected' : ''}>${v || '–'}</option>`).join('');
+          cHtml += `<td class="loop-td-tally"><select class="loop-tally-sel${cv ? (cv === 'L' ? ' has-val has-val-L' : cv === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" onchange="setCompletedTally('${esc(p.id)}',${c},this)">${cOpts}</select></td>`;
+        }
       }
       cHtml += `</tr>`;
     }
@@ -6162,21 +6209,18 @@ async function completeLoopPilot(slot) {
   const slotData = loopBoard.find(s => s.slot === slot);
   if (!slotData || !slotData.pilot_id) { toast('No pilot in this slot'); return; }
   _loopApiStart();
-  loopBoardRows = Math.max(1, loopBoardRows - 1);
-  localStorage.setItem('loopBoardRows', loopBoardRows);
+  _setLoopRows(loopBoardDate, loopBoardRows - 1);
   try {
     const res = await officeFetch('/api/office/loop-board/complete', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ slot, date: loopBoardDate })
     });
     if (!res.ok) {
-      loopBoardRows++;
-      localStorage.setItem('loopBoardRows', loopBoardRows);
+      _setLoopRows(loopBoardDate, loopBoardRows + 1);
       toast('Failed to complete pilot', 'err');
     }
   } catch (_) {
-    loopBoardRows++;
-    localStorage.setItem('loopBoardRows', loopBoardRows);
+    _setLoopRows(loopBoardDate, loopBoardRows + 1);
     toast('Cannot reach server', 'err');
   } finally {
     _loopApiEnd();
@@ -6200,22 +6244,19 @@ async function setCompletedTally(completedId, col, selectEl) {
 
 async function uncompleteLoopPilot(completedId) {
   _loopApiStart();
-  loopBoardRows++;
-  localStorage.setItem('loopBoardRows', loopBoardRows);
+  _setLoopRows(loopBoardDate, loopBoardRows + 1);
   try {
     const res = await officeFetch('/api/office/loop-board/uncomplete', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: completedId, date: loopBoardDate })
     });
     if (!res.ok) {
-      loopBoardRows = Math.max(1, loopBoardRows - 1);
-      localStorage.setItem('loopBoardRows', loopBoardRows);
+      _setLoopRows(loopBoardDate, loopBoardRows - 1);
       const d = await res.json();
       toast(d.error || 'Failed to re-add pilot', 'err');
     }
   } catch (_) {
-    loopBoardRows = Math.max(1, loopBoardRows - 1);
-    localStorage.setItem('loopBoardRows', loopBoardRows);
+    _setLoopRows(loopBoardDate, loopBoardRows - 1);
     toast('Cannot reach server', 'err');
   } finally {
     _loopApiEnd();
@@ -6224,15 +6265,13 @@ async function uncompleteLoopPilot(completedId) {
 
 function addLoopRow() {
   if (loopBoardRows >= 20) return;
-  loopBoardRows++;
-  localStorage.setItem('loopBoardRows', loopBoardRows);
+  _setLoopRows(loopBoardDate, loopBoardRows + 1);
   renderLoopBoard();
 }
 
 function removeLoopRow() {
   if (loopBoardRows <= 1) return;
-  loopBoardRows--;
-  localStorage.setItem('loopBoardRows', loopBoardRows);
+  _setLoopRows(loopBoardDate, loopBoardRows - 1);
   renderLoopBoard();
 }
 
@@ -6768,8 +6807,7 @@ function connectWS() {
           loopBoard = data.board;
           if (data.completed !== undefined) loopBoardCompleted = data.completed;
           if (data.rowCountDelta !== undefined) {
-            loopBoardRows = Math.max(1, loopBoardRows + data.rowCountDelta);
-            localStorage.setItem('loopBoardRows', loopBoardRows);
+            _setLoopRows(loopBoardDate, loopBoardRows + data.rowCountDelta);
           }
           if (officeActiveTab === 'loop' && _pendingLoopApiCalls === 0) _loopSafeRender();
         }

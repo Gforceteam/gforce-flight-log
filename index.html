@@ -4703,11 +4703,23 @@ async function officeApiRefresh(path, opts = {}) {
 // Wrapped fetch that auto-retries with refresh on 401
 async function officeFetch(path, opts = {}) {
   if (!officeToken) return null; // not an office session — pilots must never hit this path
+  const tokenAtStart = officeToken; // snapshot to detect concurrent new-login during awaits
   let res = await officeApi(path, opts);
   if (res && res.status === 401) {
     const retry = await officeApiRefresh(path, opts);
     if (retry) res = retry;
-    else { const _wasActive = _officeSessionActive; localStorage.removeItem('gforce_office_token'); localStorage.removeItem('gforce_office_refresh'); officeToken = null; _officeSessionActive = false; document.getElementById('office-dashboard').style.display = 'none'; document.getElementById('login-page').style.display = 'flex'; if (_wasActive) toast('Session expired. Please log in again.'); return null; }
+    else {
+      // If officeToken changed while we were awaiting (e.g. a concurrent doLogin() succeeded),
+      // a new valid session is already active — don't clear it or show a spurious toast.
+      if (officeToken !== tokenAtStart) return null;
+      const _wasActive = _officeSessionActive;
+      localStorage.removeItem('gforce_office_token'); localStorage.removeItem('gforce_office_refresh');
+      officeToken = null; _officeSessionActive = false;
+      document.getElementById('office-dashboard').style.display = 'none';
+      document.getElementById('login-page').style.display = 'flex';
+      if (_wasActive) toast('Session expired. Please log in again.');
+      return null;
+    }
   }
   return res;
 }

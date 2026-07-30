@@ -3641,7 +3641,7 @@ function renderFlights() {
       html += `<div class="flight-item">
         <div>
           <div style="font-size:14px;font-weight:600">Flight ${f.flight_num} · ${f.weight}kg · ${f.time}min</div>
-          <div class="flight-meta">${esc(f.takeoff)} → ${esc(f.landing)}${f.notes && !pendingFill ? ' · ' + esc(f.notes) : ''}</div>
+          ${f.notes && !pendingFill ? `<div class="flight-meta">${esc(f.notes)}</div>` : ''}
           ${f.client_name ? `<div class="flight-meta" style="color:#fff">${esc(f.client_name)}</div>` : ''}
           ${sentAwayAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">Away ${esc(sentAwayAt)}</div>` : ''}
           ${loggedAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">Landed ${esc(loggedAt)}</div>` : ''}

@@ -4680,13 +4680,17 @@ function officeApi(path, opts = {}) {
 // ─── Auto-refresh office token on 401 ─────────────────────────────────────────
 async function officeApiRefresh(path, opts = {}) {
   const refreshToken = localStorage.getItem('gforce_office_refresh');
-  if (!refreshToken) return null;
+  if (!refreshToken) { console.error('[officeApiRefresh] no refresh token in localStorage'); return null; }
   const res = await fetch(`${API_BASE}/api/auth/refresh-office`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh_token: refreshToken })
   });
-  if (!res.ok) { localStorage.removeItem('gforce_office_refresh'); return null; }
+  if (!res.ok) {
+    let rb = ''; try { const j = await res.clone().json(); rb = j.error || ''; } catch (_) {}
+    console.error('[officeApiRefresh] refresh failed', res.status, rb);
+    localStorage.removeItem('gforce_office_refresh'); return null;
+  }
   const data = await res.json();
   if (data.token) {
     officeToken = data.token;
@@ -4706,6 +4710,9 @@ async function officeFetch(path, opts = {}) {
   const tokenAtStart = officeToken; // snapshot to detect concurrent new-login during awaits
   let res = await officeApi(path, opts);
   if (res && res.status === 401) {
+    let errBody = '';
+    try { const j = await res.clone().json(); errBody = j.error || ''; } catch (_) {}
+    console.error('[officeFetch] 401 on', path, '— server says:', errBody, '| active:', _officeSessionActive);
     const retry = await officeApiRefresh(path, opts);
     if (retry) res = retry;
     else {
@@ -4717,7 +4724,7 @@ async function officeFetch(path, opts = {}) {
       officeToken = null; _officeSessionActive = false;
       document.getElementById('office-dashboard').style.display = 'none';
       document.getElementById('login-page').style.display = 'flex';
-      if (_wasActive) toast('Session expired. Please log in again.');
+      if (_wasActive) toast(`Session expired (${errBody || '401'}). Please log in again.`);
       return null;
     }
   }

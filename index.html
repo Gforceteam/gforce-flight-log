@@ -4349,7 +4349,7 @@ function ffFmtDate(d) {
   return new Date(d + 'T12:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
 }
 
-function buildFFTable(dates, pilots) {
+function buildFFTable(dates, pilots, highlightId) {
   const today = todayStr();
   let html = `<table class="ff-table"><thead><tr>
     <th class="ff-pilot-name">Pilot</th>
@@ -4358,10 +4358,12 @@ function buildFFTable(dates, pilots) {
   </tr></thead><tbody>`;
 
   pilots.forEach(p => {
+    const isMe = highlightId && String(p.id) === String(highlightId);
     const daysLeft = 14 - p.daysWorked;
     const cls = daysLeft <= 2 ? 'ff-limit' : daysLeft <= 3 ? 'ff-warn-hard' : daysLeft <= 5 ? 'ff-warn' : 'ff-ok';
-    html += `<tr>
-      <td class="ff-pilot-name">${esc(p.name)}</td>
+    const rowStyle = isMe ? ' style="background:rgba(99,102,241,0.13);font-weight:700;"' : '';
+    html += `<tr${rowStyle}>
+      <td class="ff-pilot-name">${esc(p.name)}${isMe ? ' <span style="font-size:10px;background:var(--accent);color:#fff;border-radius:4px;padding:1px 5px;font-weight:700;vertical-align:middle;">You</span>' : ''}</td>
       ${dates.map(d => {
         const cnt = p.dayCounts[d];
         return `<td class="${d === today ? 'ff-today-col' : ''}">${cnt ? `<span class="ff-day-val">${cnt}</span>` : ''}</td>`;
@@ -4380,7 +4382,7 @@ async function renderPilotFF() {
     const res = await apiFetch('/api/flight-following');
     if (!res.ok) throw new Error('Failed');
     const data = await res.json();
-    el.innerHTML = `<div class="ff-wrap">${buildFFTable(data.dates, data.pilots)}</div>`;
+    el.innerHTML = `<div class="ff-wrap">${buildFFTable(data.dates, data.pilots, pilotId)}</div>`;
   } catch {
     el.innerHTML = '<div class="empty-state">Could not load flight following data</div>';
   }

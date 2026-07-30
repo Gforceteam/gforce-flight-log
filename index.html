@@ -4098,28 +4098,8 @@ function renderStats() {
   const rowCards = '';
 
   // Wing card
-  const wingCard = currentWing ? `
-    <div class="card stat-section">
-      <div class="stat-section-title">Current Wing · ${currentWing}</div>
-      <div style="display:flex;justify-content:space-between;align-items:flex-end">
-        <div>
-          <span style="font-size:32px;font-weight:700;color:${wingRemaining<=50?'#c0392b':wingRemaining<=100?'#c07000':'var(--text)'}">${wingRemaining}</span>
-          <span style="font-size:14px;color:var(--muted)"> flights remaining</span>
-        </div>
-        <div style="text-align:right;font-size:13px;color:var(--muted)">${wingUsed} / 1000</div>
-      </div>
-      <div class="wing-progress-wrap"><div class="wing-progress-bar ${wingBarClass}" style="width:${wingPct}%"></div></div>
-      ${wingRemaining <= 50 ? '<div style="margin-top:8px;font-size:13px;font-weight:600;color:#c0392b">⚠️ Under 50 flights — arrange replacement wing</div>'
-        : wingRemaining <= 100 ? '<div style="margin-top:8px;font-size:13px;font-weight:600;color:#c07000">⚡ Under 100 flights remaining</div>' : ''}
-    </div>` :
-    `<div class="card stat-section" style="color:var(--muted);font-size:13px">No wing set — enter registration in Log tab to track usage.</div>`;
-
-  const wingPredictionCard = currentWing && wingRemaining > 0
-    ? `<div class="card stat-section">
-      <div class="stat-section-title">Wing replacement (estimate)</div>
-      <p style="font-size:14px;color:var(--text-2);margin:0;line-height:1.5;">${wingPredBody}</p>
-    </div>`
-    : '';
+  const wingCard = '';
+  const wingPredictionCard = '';
 
   // Compliance card
   const compCard = `

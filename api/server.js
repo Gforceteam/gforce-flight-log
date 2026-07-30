@@ -1457,6 +1457,10 @@ app.get('/api/flight-following', verifyToken, async (req, res) => {
       'SELECT pilot_id, date, COUNT(*) as cnt FROM flights WHERE date >= ? GROUP BY pilot_id, date',
       [from]
     );
+    const overrides = await queryAll(
+      'SELECT pilot_id, date, count FROM duty_sheet_overrides WHERE date >= ? AND date <= ?',
+      [from, dates[dates.length - 1]]
+    );
 
     const flightMap = {};
     flightCounts.forEach(row => {
@@ -1468,7 +1472,8 @@ app.get('/api/flight-following', verifyToken, async (req, res) => {
       const dayCounts = {};
       let daysWorked = 0;
       dates.forEach(d => {
-        const cnt = (flightMap[p.id] && flightMap[p.id][d]) || 0;
+        const ov = overrides.find(o => String(o.pilot_id) === String(p.id) && o.date === d);
+        const cnt = ov !== undefined ? (ov.count || 0) : ((flightMap[p.id] && flightMap[p.id][d]) || 0);
         if (cnt > 0) { dayCounts[d] = cnt; daysWorked++; }
       });
       return { id: p.id, name: p.name, dayCounts, daysWorked };

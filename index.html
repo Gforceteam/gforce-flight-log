@@ -3656,13 +3656,13 @@ function renderFlights() {
         <div>
           <div style="font-size:14px;font-weight:600">Flight ${f.flight_num} · ${f.weight}kg · ${f.time}min</div>
           <div class="flight-meta">${esc(f.takeoff)} → ${esc(f.landing)}${f.notes && !pendingFill ? ' · ' + esc(f.notes) : ''}</div>
-          ${f.client_name ? `<div class="flight-meta" style="color:#fff">👤 ${esc(f.client_name)}</div>` : ''}
-          ${sentAwayAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">✈️ Away ${esc(sentAwayAt)}</div>` : ''}
-          ${loggedAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">⏱ Landed ${esc(loggedAt)}</div>` : ''}
+          ${f.client_name ? `<div class="flight-meta" style="color:#fff">${esc(f.client_name)}</div>` : ''}
+          ${sentAwayAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">Away ${esc(sentAwayAt)}</div>` : ''}
+          ${loggedAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">Landed ${esc(loggedAt)}</div>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:72px;">
-          <button class="btn-edit" onclick="editFlight('${f.id}')" style="padding:8px 12px;font-size:13px;font-weight:700;text-align:center;">✏️ Edit</button>
-          <button class="btn-danger" onclick="deleteFlight('${f.id}')" style="padding:8px 12px;font-size:13px;font-weight:700;text-align:center;">🗑 Delete</button>
+          <button class="btn-edit" onclick="editFlight('${f.id}')" style="padding:8px 12px;font-size:13px;font-weight:700;text-align:center;">Edit</button>
+          <button class="btn-danger" onclick="deleteFlight('${f.id}')" style="padding:8px 12px;font-size:13px;font-weight:700;text-align:center;">Delete</button>
         </div>
       </div>`;
     });

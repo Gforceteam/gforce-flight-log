@@ -1854,7 +1854,13 @@ document.addEventListener('touchstart', () => { ensureAudioCtx(); }, { once: tru
 document.addEventListener('click', () => { ensureAudioCtx(); }, { once: true });
 
 // ─── Office State ─────────────────────────────────────────────────────────────
-let officeToken = localStorage.getItem('gforce_office_token');
+let officeToken = (() => {
+  const t = localStorage.getItem('gforce_office_token');
+  // Reject placeholder strings written by buggy code paths
+  if (!t || t === 'null' || t === 'undefined') { localStorage.removeItem('gforce_office_token'); return null; }
+  return t;
+})();
+let _officeSessionActive = false; // true once user has actively logged in this session
 let ws = null;
 /** Which office dashboard tab is visible — only this panel is re-rendered on periodic refresh */
 let officeActiveTab = 'pilots';
@@ -2207,6 +2213,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (pilotToken && pilotId) {
     showApp(pilotName);
   } else if (officeToken) {
+    _officeSessionActive = false; // restoring from storage — don't toast on expiry
     showOfficeDashboard();
   } else {
     document.getElementById('login-page').style.display = 'flex';
@@ -2287,6 +2294,7 @@ async function doLogin() {
         officeToken = data.token;
         localStorage.setItem('gforce_office_token', officeToken);
         if (data.refresh_token) localStorage.setItem('gforce_office_refresh', data.refresh_token);
+        _officeSessionActive = true;
         showOfficeDashboard();
       } else {
         document.getElementById('login-error').textContent = res.status === 429 ? data.error : 'Incorrect office password';
@@ -4699,7 +4707,7 @@ async function officeFetch(path, opts = {}) {
   if (res && res.status === 401) {
     const retry = await officeApiRefresh(path, opts);
     if (retry) res = retry;
-    else { localStorage.removeItem('gforce_office_token'); localStorage.removeItem('gforce_office_refresh'); officeToken = null; document.getElementById('office-dashboard').style.display = 'none'; document.getElementById('login-page').style.display = 'flex'; toast('Session expired. Please log in again.'); return null; }
+    else { const _wasActive = _officeSessionActive; localStorage.removeItem('gforce_office_token'); localStorage.removeItem('gforce_office_refresh'); officeToken = null; _officeSessionActive = false; document.getElementById('office-dashboard').style.display = 'none'; document.getElementById('login-page').style.display = 'flex'; if (_wasActive) toast('Session expired. Please log in again.'); return null; }
   }
   return res;
 }
@@ -6576,8 +6584,10 @@ function connectWS() {
           });
           if (r.ok) {
             const data = await r.json();
-            officeToken = data.token;
-            localStorage.setItem('gforce_office_token', officeToken);
+            if (data.token) {
+              officeToken = data.token;
+              localStorage.setItem('gforce_office_token', officeToken);
+            }
           }
         } catch (_) {}
         if (officeToken) connectWS();

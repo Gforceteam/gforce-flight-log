@@ -1589,43 +1589,47 @@
       <div style="padding:4px 0 24px;">
 
         <!-- Notifications -->
-        <div class="card stat-section" style="margin-bottom:12px;">
-          <div class="stat-section-title" style="margin-bottom:16px;">Notifications</div>
+        <div class="card stat-section" style="margin-bottom:12px;padding:0;overflow:hidden;">
+          <button onclick="toggleNotifPanel()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:16px;background:none;border:none;cursor:pointer;text-align:left;">
+            <span style="font-size:15px;font-weight:700;color:var(--text);">Notifications</span>
+            <span id="notif-chevron" style="font-size:18px;color:var(--muted);transition:transform 0.2s;">›</span>
+          </button>
+          <div id="notif-panel" style="display:none;padding:0 16px 16px;">
 
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:8px;">Office Alerts</div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:8px;">Office Alerts</div>
 
-          <div class="notif-row">
-            <div><div class="notif-label">10-min landing warning</div><div class="notif-desc">Toast when a pilot has 10 minutes left</div></div>
-            <label class="notif-switch"><input type="checkbox" id="notif-10min" onchange="setNotifPref('notif_office_10min',this.checked)"><span class="notif-slider"></span></label>
-          </div>
-          <div class="notif-row">
-            <div><div class="notif-label">5-min landing warning</div><div class="notif-desc">Toast and bell when a pilot has 5 minutes left</div></div>
-            <label class="notif-switch"><input type="checkbox" id="notif-5min" onchange="setNotifPref('notif_office_5min',this.checked)"><span class="notif-slider"></span></label>
-          </div>
-          <div class="notif-row">
-            <div><div class="notif-label">Timer expired alert</div><div class="notif-desc">Banner and bell when a pilot's timer expires</div></div>
-            <label class="notif-switch"><input type="checkbox" id="notif-expired" onchange="setNotifPref('notif_office_expired',this.checked)"><span class="notif-slider"></span></label>
-          </div>
-          <div class="notif-row">
-            <div><div class="notif-label">Voice announcements</div><div class="notif-desc">Spoken alert for 10-min warnings</div></div>
-            <label class="notif-switch"><input type="checkbox" id="notif-voice" onchange="setNotifPref('notif_office_voice',this.checked)"><span class="notif-slider"></span></label>
-          </div>
-          <div class="notif-row">
-            <div><div class="notif-label">Pilot left office</div><div class="notif-desc">Toast when a pilot is sent away</div></div>
-            <label class="notif-switch"><input type="checkbox" id="notif-left" onchange="setNotifPref('notif_office_left',this.checked)"><span class="notif-slider"></span></label>
-          </div>
-          <div class="notif-row" style="border-bottom:none;">
-            <div><div class="notif-label">Pilot landed</div><div class="notif-desc">Toast when a pilot reports landing</div></div>
-            <label class="notif-switch"><input type="checkbox" id="notif-landed" onchange="setNotifPref('notif_office_landed',this.checked)"><span class="notif-slider"></span></label>
-          </div>
+            <div class="notif-row">
+              <div><div class="notif-label">10-min landing warning</div><div class="notif-desc">Toast when a pilot has 10 minutes left</div></div>
+              <label class="notif-switch"><input type="checkbox" id="notif-10min" onchange="setNotifPref('notif_office_10min',this.checked)"><span class="notif-slider"></span></label>
+            </div>
+            <div class="notif-row">
+              <div><div class="notif-label">5-min landing warning</div><div class="notif-desc">Toast and bell when a pilot has 5 minutes left</div></div>
+              <label class="notif-switch"><input type="checkbox" id="notif-5min" onchange="setNotifPref('notif_office_5min',this.checked)"><span class="notif-slider"></span></label>
+            </div>
+            <div class="notif-row">
+              <div><div class="notif-label">Timer expired alert</div><div class="notif-desc">Banner and bell when a pilot's timer expires</div></div>
+              <label class="notif-switch"><input type="checkbox" id="notif-expired" onchange="setNotifPref('notif_office_expired',this.checked)"><span class="notif-slider"></span></label>
+            </div>
+            <div class="notif-row">
+              <div><div class="notif-label">Voice announcements</div><div class="notif-desc">Spoken alert for 10-min warnings</div></div>
+              <label class="notif-switch"><input type="checkbox" id="notif-voice" onchange="setNotifPref('notif_office_voice',this.checked)"><span class="notif-slider"></span></label>
+            </div>
+            <div class="notif-row">
+              <div><div class="notif-label">Pilot left office</div><div class="notif-desc">Toast when a pilot is sent away</div></div>
+              <label class="notif-switch"><input type="checkbox" id="notif-left" onchange="setNotifPref('notif_office_left',this.checked)"><span class="notif-slider"></span></label>
+            </div>
+            <div class="notif-row" style="border-bottom:none;">
+              <div><div class="notif-label">Pilot landed</div><div class="notif-desc">Toast when a pilot reports landing</div></div>
+              <label class="notif-switch"><input type="checkbox" id="notif-landed" onchange="setNotifPref('notif_office_landed',this.checked)"><span class="notif-slider"></span></label>
+            </div>
 
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin:18px 0 8px;">Pilot Notifications</div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin:18px 0 8px;">Pilot Notifications</div>
 
-          <div class="notif-row" style="border-bottom:none;">
-            <div><div class="notif-label">Push notifications</div><div class="notif-desc">YOU'RE AWAY alert sent to pilots' devices</div></div>
-            <label class="notif-switch"><input type="checkbox" id="notif-push" onchange="togglePushNotifications()"><span class="notif-slider"></span></label>
+            <div class="notif-row" style="border-bottom:none;">
+              <div><div class="notif-label">Push notifications</div><div class="notif-desc">YOU'RE AWAY alert sent to pilots' devices</div></div>
+              <label class="notif-switch"><input type="checkbox" id="notif-push" onchange="togglePushNotifications()"><span class="notif-slider"></span></label>
+            </div>
           </div>
-
           <div id="push-notif-status" style="display:none;"></div>
           <div id="push-notif-btn" style="display:none;"></div>
         </div>
@@ -6449,6 +6453,14 @@ function notifEnabled(key) {
 }
 function setNotifPref(key, enabled) {
   localStorage.setItem(key, enabled ? '1' : '0');
+}
+function toggleNotifPanel() {
+  const panel = document.getElementById('notif-panel');
+  const chevron = document.getElementById('notif-chevron');
+  const open = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  chevron.style.transform = open ? 'rotate(90deg)' : '';
+  if (open) renderNotifToggles();
 }
 function renderNotifToggles() {
   Object.entries(NOTIF_KEYS).forEach(([id, key]) => {

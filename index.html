@@ -2488,11 +2488,7 @@ function startStatusPoll() {
       // In-app notification when office acknowledges a landing (covers foreground case)
       if (newStatus.latest_ack) {
         const seenKey = `gforce_seen_ack_${pilotId}`;
-        const seenId = localStorage.getItem(seenKey);
-        if (seenId !== newStatus.latest_ack.flight_id) {
-          localStorage.setItem(seenKey, newStatus.latest_ack.flight_id);
-          toast(`${newStatus.latest_ack.emoji} Office confirmed your landing!`);
-        }
+        localStorage.setItem(seenKey, newStatus.latest_ack.flight_id);
       }
 
       const groupPilotsChanged = (newStatus.group_pilots || []).map(p => p.id || p).join(',') !== prevGroupPilots;
@@ -6801,7 +6797,6 @@ function connectWS() {
         if (pilotId && data.pilot_id === pilotId) {
           const btn = document.getElementById('btn-extend');
           if (btn) { btn.disabled = false; btn.textContent = 'Request More Time'; }
-          toast('❌ Extra time request denied by office');
         }
         break;
       }

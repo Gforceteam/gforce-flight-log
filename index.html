@@ -1077,6 +1077,15 @@
     .loop-tally-static.has-val { background: #ffffff; color: #111111; font-weight: 700; }
     .loop-tally-static.has-val-L { background: #fefce8; color: #92400e; }
     .loop-tally-static.has-val-IF { background: #f0fdf4; color: #166534; }
+    .notif-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 0; border-bottom:1px solid var(--border); }
+    .notif-label { font-size:14px; font-weight:600; color:var(--text); }
+    .notif-desc { font-size:12px; color:var(--muted); margin-top:2px; }
+    .notif-switch { position:relative; display:inline-block; width:46px; height:26px; flex-shrink:0; }
+    .notif-switch input { opacity:0; width:0; height:0; }
+    .notif-slider { position:absolute; cursor:pointer; inset:0; background:var(--border); border-radius:26px; transition:background 0.2s; }
+    .notif-slider:before { content:''; position:absolute; width:20px; height:20px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:transform 0.2s; }
+    .notif-switch input:checked + .notif-slider { background:var(--accent); }
+    .notif-switch input:checked + .notif-slider:before { transform:translateX(20px); }
     .loop-complete-btn { flex-shrink: 0; width: 26px; height: 26px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--muted); font-size: 17px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; touch-action: manipulation; transition: background 0.15s, color 0.15s; }
     .loop-complete-btn:hover { background: #ef4444; color: #fff; border-color: #ef4444; }
     .loop-td-pilot { padding: 6px 8px 6px 6px; }
@@ -1579,14 +1588,46 @@
     <div class="office-tab-content" id="office-tab-settings">
       <div style="padding:4px 0 24px;">
 
-        <!-- Push Notifications toggle -->
+        <!-- Notifications -->
         <div class="card stat-section" style="margin-bottom:12px;">
-          <div class="stat-section-title" style="margin-bottom:6px;">🔔 Push Notifications</div>
-          <div style="font-size:13px;color:var(--muted);margin-bottom:16px;">Enable or disable push notifications sent to pilots' devices (10 min, 5 min and expiry alerts).</div>
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-            <span id="push-notif-status" style="font-size:15px;font-weight:700;">—</span>
-            <button id="push-notif-btn" onclick="togglePushNotifications()" style="padding:11px 24px;border-radius:9999px;font-size:14px;font-weight:700;cursor:pointer;border:none;min-width:110px;">…</button>
+          <div class="stat-section-title" style="margin-bottom:16px;">Notifications</div>
+
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:8px;">Office Alerts</div>
+
+          <div class="notif-row">
+            <div><div class="notif-label">10-min landing warning</div><div class="notif-desc">Toast when a pilot has 10 minutes left</div></div>
+            <label class="notif-switch"><input type="checkbox" id="notif-10min" onchange="setNotifPref('notif_office_10min',this.checked)"><span class="notif-slider"></span></label>
           </div>
+          <div class="notif-row">
+            <div><div class="notif-label">5-min landing warning</div><div class="notif-desc">Toast and bell when a pilot has 5 minutes left</div></div>
+            <label class="notif-switch"><input type="checkbox" id="notif-5min" onchange="setNotifPref('notif_office_5min',this.checked)"><span class="notif-slider"></span></label>
+          </div>
+          <div class="notif-row">
+            <div><div class="notif-label">Timer expired alert</div><div class="notif-desc">Banner and bell when a pilot's timer expires</div></div>
+            <label class="notif-switch"><input type="checkbox" id="notif-expired" onchange="setNotifPref('notif_office_expired',this.checked)"><span class="notif-slider"></span></label>
+          </div>
+          <div class="notif-row">
+            <div><div class="notif-label">Voice announcements</div><div class="notif-desc">Spoken alert for 10-min warnings</div></div>
+            <label class="notif-switch"><input type="checkbox" id="notif-voice" onchange="setNotifPref('notif_office_voice',this.checked)"><span class="notif-slider"></span></label>
+          </div>
+          <div class="notif-row">
+            <div><div class="notif-label">Pilot left office</div><div class="notif-desc">Toast when a pilot is sent away</div></div>
+            <label class="notif-switch"><input type="checkbox" id="notif-left" onchange="setNotifPref('notif_office_left',this.checked)"><span class="notif-slider"></span></label>
+          </div>
+          <div class="notif-row" style="border-bottom:none;">
+            <div><div class="notif-label">Pilot landed</div><div class="notif-desc">Toast when a pilot reports landing</div></div>
+            <label class="notif-switch"><input type="checkbox" id="notif-landed" onchange="setNotifPref('notif_office_landed',this.checked)"><span class="notif-slider"></span></label>
+          </div>
+
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin:18px 0 8px;">Pilot Notifications</div>
+
+          <div class="notif-row" style="border-bottom:none;">
+            <div><div class="notif-label">Push notifications</div><div class="notif-desc">YOU'RE AWAY alert sent to pilots' devices</div></div>
+            <label class="notif-switch"><input type="checkbox" id="notif-push" onchange="togglePushNotifications()"><span class="notif-slider"></span></label>
+          </div>
+
+          <div id="push-notif-status" style="display:none;"></div>
+          <div id="push-notif-btn" style="display:none;"></div>
         </div>
 
         <!-- Today's Summary -->
@@ -5793,10 +5834,10 @@ function updateTimers() {
         el.classList.add('urgent');
         const card = document.getElementById(`pilot-card-${p.id}`);
         if (card) { card.classList.add('alert', 'office-timer-expired'); card.classList.remove('airborne'); }
-        showAlert(p.name);
+        if (notifEnabled(NOTIF_KEYS.expired)) showAlert(p.name);
         if (officeVisible && !_bellFired.has(`${p.id}:exp`)) {
           _bellFired.add(`${p.id}:exp`);
-          playBell(10);
+          if (notifEnabled(NOTIF_KEYS.expired)) playBell(10);
         }
       } else {
         const mins = Math.floor(remaining / 60000);
@@ -5817,7 +5858,7 @@ function updateTimers() {
           if (card) card.classList.add('alert');
           if (!_bellFired.has(bellKey10)) {
             _bellFired.add(bellKey10);
-            if (officeVisible) {
+            if (officeVisible && notifEnabled(NOTIF_KEYS['10min'])) {
               const groupMembers = p.group_id
                 ? officePilots.filter(q => q.group_id === p.group_id && q.status === 'airborne').map(q => q.name)
                 : [p.name];
@@ -5825,13 +5866,13 @@ function updateTimers() {
                 ? groupMembers.slice(0, -1).join(', ') + ' and ' + groupMembers[groupMembers.length - 1]
                 : groupMembers[0];
               toast(`⚠️ ${nameStr} — 10 min to landing`);
-              speak(`10 minute warning for ${nameStr}, 10 minute warning for ${nameStr}, 10 minute warning for ${nameStr}`, nameStr);
+              if (notifEnabled(NOTIF_KEYS.voice)) speak(`10 minute warning for ${nameStr}, 10 minute warning for ${nameStr}, 10 minute warning for ${nameStr}`, nameStr);
             }
           }
         }
         if (remaining < 300000 && !_bellFired.has(`${p.id}:5`)) {
           _bellFired.add(`${p.id}:5`);
-          if (officeVisible) { toast(`⚠️ ${p.name} — 5 min to landing`); playBell(5); }
+          if (officeVisible && notifEnabled(NOTIF_KEYS['5min'])) { toast(`⚠️ ${p.name} — 5 min to landing`); playBell(5); }
         }
       }
     });
@@ -6397,6 +6438,29 @@ function toggleMOU() {
   updateMOUToggleUI();
 }
 
+// ─── Notification preferences (localStorage, default on) ──────────────────────
+const NOTIF_KEYS = {
+  '10min':   'notif_office_10min',
+  '5min':    'notif_office_5min',
+  'expired': 'notif_office_expired',
+  'voice':   'notif_office_voice',
+  'left':    'notif_office_left',
+  'landed':  'notif_office_landed',
+};
+function notifEnabled(key) {
+  const v = localStorage.getItem(key);
+  return v === null ? true : v === '1';
+}
+function setNotifPref(key, enabled) {
+  localStorage.setItem(key, enabled ? '1' : '0');
+}
+function renderNotifToggles() {
+  Object.entries(NOTIF_KEYS).forEach(([id, key]) => {
+    const el = document.getElementById('notif-' + id);
+    if (el) el.checked = notifEnabled(key);
+  });
+}
+
 async function loadOfficeSettings() {
   try {
     const res = await officeFetch('/api/office/settings');
@@ -6404,24 +6468,13 @@ async function loadOfficeSettings() {
     const data = await res.json();
     _officePushEnabled = !!data.push_notifications_enabled;
     updatePushNotifUI();
+    renderNotifToggles();
   } catch {}
 }
 
 function updatePushNotifUI() {
-  const status = document.getElementById('push-notif-status');
-  const btn = document.getElementById('push-notif-btn');
-  if (!status || !btn) return;
-  if (_officePushEnabled) {
-    status.textContent = '🟢 Notifications ON';
-    status.style.color = 'var(--success)';
-    btn.textContent = 'Turn Off';
-    btn.style.cssText = 'padding:11px 24px;border-radius:9999px;font-size:14px;font-weight:700;cursor:pointer;border:1px solid var(--danger);background:rgba(239,68,68,0.08);color:var(--danger);min-width:110px;';
-  } else {
-    status.textContent = '🔴 Notifications OFF';
-    status.style.color = 'var(--danger)';
-    btn.textContent = 'Turn On';
-    btn.style.cssText = 'padding:11px 24px;border-radius:9999px;font-size:14px;font-weight:700;cursor:pointer;border:1px solid #4a8f1e;background:rgba(74,143,30,0.1);color:#7bc950;min-width:110px;';
-  }
+  const cb = document.getElementById('notif-push');
+  if (cb) cb.checked = _officePushEnabled;
 }
 
 async function togglePushNotifications() {
@@ -6435,7 +6488,7 @@ async function togglePushNotifications() {
     if (!res.ok) { toast('Failed to update setting', 'err'); return; }
     _officePushEnabled = enabled;
     updatePushNotifUI();
-    toast(enabled ? '🔔 Push notifications enabled' : '🔕 Push notifications disabled');
+    toast(enabled ? 'Push notifications enabled' : 'Push notifications disabled');
   } catch { toast('Cannot reach server', 'err'); }
 }
 
@@ -6600,7 +6653,7 @@ function connectWS() {
     try { data = JSON.parse(event.data); } catch (_) { return; } // ignore non-JSON frames (pings etc.)
     switch (data.type) {
       case 'LEFT_OFFICE':
-        toast(`${data.pilot_name} left office`);
+        if (notifEnabled(NOTIF_KEYS.left)) toast(`${data.pilot_name} left office`);
         loadOfficeData();
         // If this is us, trigger pilot notification too
         if (pilotId && data.pilot_id === pilotId) {
@@ -6628,7 +6681,7 @@ function connectWS() {
         break;
       case 'LANDED':
       case 'LANDED_EARLY':
-        toast(`${data.pilot_name} landed!`);
+        if (notifEnabled(NOTIF_KEYS.landed)) toast(`${data.pilot_name} landed!`);
         dismissAlert(data.pilot_name);
         loadOfficeData();
         if (pilotId) refreshPilotTodayFlights();

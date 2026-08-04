@@ -3091,7 +3091,7 @@ function renderDashboard() {
   const el = document.getElementById('dashboard-content');
   if (!el) return;
 
-  const key = JSON.stringify({ s: myStatus.status, la: !!_pilotLandedAt, mf: myFlights.length, gp: (myStatus.group_pilots||[]).map(p=>p.id||p).join(',') });
+  const key = JSON.stringify({ s: myStatus.status, la: !!_pilotLandedAt, mf: myFlights.length, gp: (myStatus.group_pilots||[]).map(p=>p.id||p).join(','), fp: flyingPilots.map(p=>p.id).join(',') });
   if (key === _lastDashboardKey) return;
   _lastDashboardKey = key;
 

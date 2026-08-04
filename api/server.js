@@ -2182,6 +2182,59 @@ app.put('/api/office/settings/push-notifications', verifyOffice, async (req, res
   }
 });
 
+// Diagnostic: list all pilots and their push subscription status (office only)
+app.get('/api/office/push-diagnostic', verifyOffice, async (req, res) => {
+  try {
+    const pilots = await queryAll('SELECT id, name FROM pilots ORDER BY name ASC');
+    const rows = await Promise.all(pilots.map(async (p) => {
+      const subs = await queryAll('SELECT created_at FROM push_subscriptions WHERE pilot_id = ?', [p.id]);
+      return { id: p.id, name: p.name, subscriptions: subs.length, last_subscribed: subs[0]?.created_at || null };
+    }));
+    res.json({
+      push_globally_enabled: _pushNotificationsEnabled,
+      vapid_configured: !!process.env.VAPID_PUBLIC_KEY,
+      pilots: rows
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Send a test push to a specific pilot (office only)
+app.post('/api/office/push-test/:pilotId', verifyOffice, async (req, res) => {
+  try {
+    const { pilotId } = req.params;
+    const pilot = await queryOne('SELECT id, name FROM pilots WHERE id = ?', [pilotId]);
+    if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
+    if (!process.env.VAPID_PUBLIC_KEY) return res.status(503).json({ error: 'VAPID not configured on server' });
+    if (!_pushNotificationsEnabled) return res.status(503).json({ error: 'Push notifications are disabled in settings' });
+    const subs = await queryAll('SELECT id, subscription FROM push_subscriptions WHERE pilot_id = ?', [pilotId]);
+    if (!subs.length) return res.status(404).json({ error: `No push subscription found for ${pilot.name}` });
+    let sent = 0, failed = 0;
+    await Promise.allSettled(subs.map(async (row) => {
+      try {
+        await webpush.sendNotification(JSON.parse(row.subscription), JSON.stringify({
+          title: '🧪 GForce test notification',
+          body: `Push notifications are working for ${pilot.name}!`,
+          tag: 'push-test'
+        }));
+        sent++;
+      } catch (e) {
+        if (e.statusCode === 410 || e.statusCode === 404) {
+          await run('DELETE FROM push_subscriptions WHERE id = ?', [row.id]);
+          failed++;
+        } else {
+          console.error('Test push failed:', e.statusCode, e.message);
+          failed++;
+        }
+      }
+    }));
+    res.json({ ok: true, pilot_name: pilot.name, sent, failed });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Loop Board ───────────────────────────────────────────────────────────────
 app.get('/api/pilot/loop-board', verifyPilotOrOffice, async (req, res) => {
   try {

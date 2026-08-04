@@ -1628,10 +1628,15 @@
 
             <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin:18px 0 8px;">Pilot Notifications</div>
 
-            <div class="notif-row" style="border-bottom:none;">
+            <div class="notif-row">
               <div><div class="notif-label">Push notifications</div><div class="notif-desc">YOU'RE AWAY alert sent to pilots' devices</div></div>
               <label class="notif-switch"><input type="checkbox" id="notif-push" onchange="togglePushNotifications()"><span class="notif-slider"></span></label>
             </div>
+
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin:18px 0 8px;">Push Diagnostic</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Check which pilots have push notifications enabled on their devices.</div>
+            <button onclick="loadPushDiagnostic()" style="padding:9px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;margin-bottom:10px;">Check Subscription Status</button>
+            <div id="push-diag-results" style="font-size:13px;"></div>
           </div>
           <div id="push-notif-status" style="display:none;"></div>
           <div id="push-notif-btn" style="display:none;"></div>
@@ -6491,6 +6496,40 @@ async function loadOfficeSettings() {
 function updatePushNotifUI() {
   const cb = document.getElementById('notif-push');
   if (cb) cb.checked = _officePushEnabled;
+}
+
+async function loadPushDiagnostic() {
+  const el = document.getElementById('push-diag-results');
+  if (!el) return;
+  el.innerHTML = '<span style="color:var(--muted)">Loading…</span>';
+  try {
+    const res = await officeFetch('/api/office/push-diagnostic');
+    if (!res.ok) { el.innerHTML = '<span style="color:var(--danger)">Error loading diagnostic</span>'; return; }
+    const data = await res.json();
+    let html = '';
+    if (!data.vapid_configured) html += '<div style="color:var(--danger);margin-bottom:8px;font-weight:600;">⚠️ VAPID keys not configured on server — push notifications cannot be sent.</div>';
+    if (!data.push_globally_enabled) html += '<div style="color:var(--warn,#f59e0b);margin-bottom:8px;font-weight:600;">⚠️ Push notifications are turned OFF in settings above.</div>';
+    data.pilots.forEach(p => {
+      const hasSub = p.subscriptions > 0;
+      const since = hasSub && p.last_subscribed ? new Date(p.last_subscribed).toLocaleDateString('en-NZ') : '';
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);">
+        <span style="flex:1;font-weight:${hasSub ? '600' : '400'};color:${hasSub ? 'var(--text)' : 'var(--muted)'};">${esc(p.name)}</span>
+        <span style="font-size:11px;color:${hasSub ? 'var(--success,#22c55e)' : 'var(--danger)'};">${hasSub ? '✓ Subscribed' : '✗ No subscription'}</span>
+        ${since ? `<span style="font-size:11px;color:var(--muted);">${since}</span>` : ''}
+        ${hasSub ? `<button onclick="sendTestPush('${p.id}','${esc(p.name)}')" style="padding:4px 10px;background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;">Test</button>` : ''}
+      </div>`;
+    });
+    el.innerHTML = html || '<span style="color:var(--muted)">No pilots found</span>';
+  } catch { el.innerHTML = '<span style="color:var(--danger)">Cannot reach server</span>'; }
+}
+
+async function sendTestPush(pilotId, pilotName) {
+  try {
+    const res = await officeFetch(`/api/office/push-test/${pilotId}`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) { toast(`Test failed: ${data.error}`, 'err'); return; }
+    toast(`✅ Test push sent to ${pilotName}`);
+  } catch { toast('Cannot reach server', 'err'); }
 }
 
 async function togglePushNotifications() {

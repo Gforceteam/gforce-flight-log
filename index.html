@@ -4254,8 +4254,10 @@ function closePilotMenu() {
 
 function showPilotTab(name) {
   pilotActiveTab = name;
-  // Hide any open sub-pages
+  // Hide any open sub-pages and restore tab bar
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const tabBar = document.getElementById('pilot-tab-bar');
+  if (tabBar) tabBar.style.display = '';
   // Switch tab content
   document.querySelectorAll('.pilot-tab-content').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.pilot-tab-btn').forEach(b => b.classList.remove('active'));
@@ -4282,6 +4284,9 @@ function showSubPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   const pg = document.getElementById('page-' + name);
   if (pg) pg.classList.add('active');
+  // Hide tab bar when a sub-page is open
+  const tabBar = document.getElementById('pilot-tab-bar');
+  if (tabBar) tabBar.style.display = 'none';
   window.scrollTo({ top: 0, behavior: 'instant' });
   if (name === 'stats') { statsMonthOffset = 0; renderStats(); }
   if (name === 'ff') renderPilotFF();

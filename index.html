@@ -1264,11 +1264,11 @@
 
   <!-- Tab: Flight Following -->
   <div class="pilot-tab-content active" id="pilot-tab-ff">
-    <div class="pilot-tab-date" id="pilot-date-ff"></div>
-    <div class="dashboard-status" id="dashboard-content"></div>
-    <div style="text-align:center;margin-top:24px;padding-bottom:8px;">
-      <button onclick="loadMyData()" style="padding:10px 28px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">↻ Refresh</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <div class="pilot-tab-date" id="pilot-date-ff" style="margin-bottom:0;"></div>
+      <button onclick="loadMyData()" style="padding:6px 16px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;">↻ Refresh</button>
     </div>
+    <div class="dashboard-status" id="dashboard-content"></div>
   </div>
 
   <!-- Tab: Loop Board -->

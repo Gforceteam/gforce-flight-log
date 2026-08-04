@@ -1287,10 +1287,10 @@
   </div>
 
   <!-- Sub-pages: full-screen overlays with a back button -->
-  <div class="page" id="page-flights">
-    <button class="pilot-back-btn" onclick="showPilotTab('ff')">← Back to Dashboard</button>
-    <div class="stats-page-header" style="margin-bottom:18px;">
-      <h2>My Flight Logs</h2>
+  <div class="page" id="page-flights" style="padding-top:0;">
+    <div style="position:sticky;top:0;z-index:10;background:var(--bg);padding:14px 16px 12px;border-bottom:1px solid var(--border);margin-bottom:16px;">
+      <button onclick="showPilotTab('ff')" style="background:none;border:none;color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;padding:0;font-family:'Montserrat',sans-serif;letter-spacing:0.3px;">← Dashboard</button>
+      <div style="font-size:22px;font-weight:800;color:var(--text);font-family:'Montserrat',sans-serif;margin-top:4px;letter-spacing:0.3px;">My Flight Logs</div>
     </div>
     <div id="flights-list"></div>
   </div>

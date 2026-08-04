@@ -1288,9 +1288,9 @@
 
   <!-- Sub-pages: full-screen overlays with a back button -->
   <div class="page" id="page-flights">
-    <div style="padding:20px 16px 8px;">
-      <h2 style="font-size:22px;font-weight:800;color:var(--text);font-family:'Montserrat',sans-serif;margin:0 0 12px;">My Flight Logs</h2>
-      <button onclick="showPilotTab('ff')" style="padding:9px 20px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">← Back to Dashboard</button>
+    <button class="pilot-back-btn" onclick="showPilotTab('ff')">← Back to Dashboard</button>
+    <div class="stats-page-header" style="margin-bottom:18px;">
+      <h2>My Flight Logs</h2>
     </div>
     <div id="flights-list"></div>
   </div>

@@ -5971,6 +5971,7 @@ async function loadLoopBoard() {
     const data = await res.json();
     loopBoard = Array.isArray(data) ? data : (data.board || []);
     loopBoardCompleted = Array.isArray(data) ? [] : (data.completed || []);
+    loopBoardLockedOrder = data.locked_order || null;
     // Ensure row count covers all populated slots for this date
     const maxPopulated = loopBoard.reduce((max, s) => s.pilot_id ? Math.max(max, s.slot) : max, 0);
     if (maxPopulated > loopBoardRows) _setLoopRows(loopBoardDate, maxPopulated);
@@ -6009,6 +6010,7 @@ function _setLoopRows(d, n) {
 }
 let loopBoardRows = _getLoopRows(loopBoardDate);
 let loopBoardCompleted = [];
+let loopBoardLockedOrder = null; // array of pilot_ids in locked order, or null if not locked
 let _lastLoopChange = null;
 let _pendingLoopApiCalls = 0;
 
@@ -6136,9 +6138,14 @@ function renderLoopBoard() {
       <button onclick="exportLoopBoardCSV()" style="padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;">⬇ Export</button>
     </div>`;
   } else {
+    const isLocked = !!loopBoardLockedOrder;
+    const lockBtn = isLocked
+      ? `<button onclick="unlockLoopBoardOrder()" style="padding:8px 14px;background:rgba(99,102,241,0.12);border:1.5px solid var(--accent);border-radius:8px;color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;">🔒 Locked</button>`
+      : `<button onclick="lockLoopBoardOrder()" style="padding:8px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;">🔒 Lock Order</button>`;
     html += `<div class="loop-board-controls">
       <button onclick="addLoopRow()" style="padding:8px 22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:22px;line-height:1;cursor:pointer;" ${loopBoardRows >= 20 ? 'disabled' : ''}>+</button>
       <button onclick="removeLoopRow()" style="padding:8px 22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:22px;line-height:1;cursor:pointer;" ${loopBoardRows <= 1 ? 'disabled' : ''}>−</button>
+      ${lockBtn}
       <button onclick="loadLoopBoard()" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">↻ Refresh</button>
       <button onclick="exportLoopBoardCSV()" style="padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;">⬇ Export</button>
       <button onclick="undoLoopChange()" ${!_lastLoopChange ? 'disabled' : ''} style="padding:8px 20px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;margin-left:auto;opacity:${_lastLoopChange ? '1' : '0.4'};">↩ Reverse</button>
@@ -6200,6 +6207,33 @@ async function resetLoopBoard() {
     if (res && res.ok) { await loadLoopBoard(); }
     else toast('Reset failed', 'err');
   } catch (e) { toast('Reset failed', 'err'); }
+}
+
+async function lockLoopBoardOrder() {
+  try {
+    const res = await officeFetch('/api/office/loop-board/lock-order', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: loopBoardDate })
+    });
+    const data = await res.json();
+    if (!res.ok) { toast(data.error || 'Failed to lock order', 'err'); return; }
+    loopBoardLockedOrder = data.locked_order;
+    renderLoopBoard();
+    toast('🔒 Loop board order locked');
+  } catch { toast('Cannot reach server', 'err'); }
+}
+
+async function unlockLoopBoardOrder() {
+  try {
+    const res = await officeFetch('/api/office/loop-board/unlock-order', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: loopBoardDate })
+    });
+    if (!res.ok) { toast('Failed to unlock order', 'err'); return; }
+    loopBoardLockedOrder = null;
+    renderLoopBoard();
+    toast('🔓 Order unlocked');
+  } catch { toast('Cannot reach server', 'err'); }
 }
 
 async function completeLoopPilot(slot) {

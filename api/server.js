@@ -2262,7 +2262,38 @@ app.get('/api/office/loop-board', verifyOffice, async (req, res) => {
     await ensureLoopBoardDate(date);
     const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
     const completed = await queryAll('SELECT id, pilot_id, pilot_name, completed_at, slot, tallies FROM loop_board_completed WHERE date = ? ORDER BY completed_at ASC', [date]);
-    res.json({ board, completed });
+    const lockRow = await queryOne("SELECT value FROM app_settings WHERE key = ?", [`loop_board_order_${date}`]);
+    const locked_order = lockRow ? JSON.parse(lockRow.value) : null;
+    res.json({ board, completed, locked_order });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Lock the current loop board order for a date
+app.post('/api/office/loop-board/lock-order', verifyOffice, async (req, res) => {
+  try {
+    const { date: reqDate } = req.body || {};
+    const date = reqDate || nzToday();
+    const board = await queryAll(
+      'SELECT pilot_id FROM loop_board_v2 WHERE date = ? AND pilot_id IS NOT NULL ORDER BY slot ASC', [date]
+    );
+    const order = board.map(r => r.pilot_id);
+    await run("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)", [`loop_board_order_${date}`, JSON.stringify(order)]);
+    console.log(`[loop-board] Order locked for ${date}: ${order.length} pilots`);
+    res.json({ ok: true, locked_order: order });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Unlock / clear the locked order for a date
+app.post('/api/office/loop-board/unlock-order', verifyOffice, async (req, res) => {
+  try {
+    const { date: reqDate } = req.body || {};
+    const date = reqDate || nzToday();
+    await run("DELETE FROM app_settings WHERE key = ?", [`loop_board_order_${date}`]);
+    res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -2397,14 +2428,39 @@ app.post('/api/office/loop-board/uncomplete', verifyOffice, async (req, res) => 
     const record = await queryOne('SELECT * FROM loop_board_completed WHERE id = ?', [id]);
     if (!record) return res.status(404).json({ error: 'Completed record not found' });
 
-    const targetSlot = record.slot || 1;
-
-    // Find the highest occupied slot so we know where to stop shifting
+    // Find the highest occupied slot
     const lastRow = await queryOne(
       'SELECT slot FROM loop_board_v2 WHERE date = ? AND pilot_id IS NOT NULL ORDER BY slot DESC LIMIT 1', [date]
     );
     const lastOccupied = lastRow ? lastRow.slot : 0;
     if (lastOccupied >= 20) return res.status(400).json({ error: 'Board is full — cannot re-add pilot' });
+
+    // Determine target slot — use locked order if available, otherwise fall back to original slot
+    let targetSlot = record.slot || 1;
+    const lockRow = await queryOne("SELECT value FROM app_settings WHERE key = ?", [`loop_board_order_${date}`]);
+    if (lockRow) {
+      const lockedOrder = JSON.parse(lockRow.value); // array of pilot_ids in locked order
+      const pilotIdx = lockedOrder.indexOf(record.pilot_id);
+      if (pilotIdx !== -1) {
+        // Find which pilots are currently on the active board
+        const activeSlots = await queryAll(
+          'SELECT slot, pilot_id FROM loop_board_v2 WHERE date = ? AND pilot_id IS NOT NULL ORDER BY slot ASC', [date]
+        );
+        // Insert after the last active pilot whose locked index is lower than this pilot's
+        let insertAfterSlot = 0;
+        for (const s of activeSlots) {
+          const sIdx = lockedOrder.indexOf(s.pilot_id);
+          if (sIdx !== -1 && sIdx < pilotIdx) insertAfterSlot = s.slot;
+        }
+        targetSlot = insertAfterSlot + 1;
+      } else {
+        // Not in locked order — append at end
+        targetSlot = lastOccupied + 1;
+      }
+    }
+
+    // Ensure targetSlot row exists
+    await ensureLoopBoardDate(date);
 
     // Shift all occupied slots from lastOccupied down to targetSlot down by one (higher slot numbers)
     const allRows = await queryAll(
@@ -2418,7 +2474,7 @@ app.post('/api/office/loop-board/uncomplete', verifyOffice, async (req, res) => 
       );
     }
 
-    // Re-insert pilot at their original slot, restoring their tallies
+    // Re-insert pilot at their correct slot, restoring their tallies
     await run(
       'UPDATE loop_board_v2 SET pilot_id = ?, pilot_name = ?, tallies = ? WHERE date = ? AND slot = ?',
       [record.pilot_id, record.pilot_name, record.tallies || null, date, targetSlot]

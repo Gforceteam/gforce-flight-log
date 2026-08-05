@@ -5100,11 +5100,19 @@ function showAddToGroupModal(groupId, groupName) {
   modal.innerHTML = `
     <div style="background:var(--card);border-radius:16px;padding:28px 24px;width:90%;max-width:340px;box-shadow:0 8px 40px rgba(0,0,0,0.3);">
       <div style="font-size:17px;font-weight:800;margin-bottom:6px;">Add Pilot to Group</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:18px;">${groupName}</div>
-      <select id="atg-pilot-sel" style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:15px;margin-bottom:16px;">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:18px;">${esc(groupName)}</div>
+      <select id="atg-pilot-sel" style="width:100%;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:15px;margin-bottom:12px;">
         <option value="">Select pilot…</option>
         ${opts}
       </select>
+      <div style="margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px;">Flight #</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button type="button" onclick="atgAdjustNum(-1)" style="width:40px;height:40px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:20px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;">−</button>
+          <div id="atg-num-display" style="flex:1;text-align:center;background:var(--surface);border:1.5px solid var(--accent);border-radius:8px;color:var(--accent);font-size:20px;font-weight:800;padding:8px;">1</div>
+          <button type="button" onclick="atgAdjustNum(1)" style="width:40px;height:40px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:20px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;">+</button>
+        </div>
+      </div>
       <div style="display:flex;gap:10px;">
         <button onclick="document.getElementById('add-to-group-modal').remove()" style="flex:1;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Cancel</button>
         <button onclick="confirmAddToGroup('${groupId}')" style="flex:1;padding:12px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Add to Group</button>
@@ -5114,15 +5122,23 @@ function showAddToGroupModal(groupId, groupName) {
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 }
 
+function atgAdjustNum(delta) {
+  const el = document.getElementById('atg-num-display');
+  if (!el) return;
+  const cur = parseInt(el.textContent) || 1;
+  el.textContent = Math.max(1, Math.min(20, cur + delta));
+}
+
 async function confirmAddToGroup(groupId) {
   const sel = document.getElementById('atg-pilot-sel');
   if (!sel || !sel.value) { toast('Select a pilot first'); return; }
   const pilotId = sel.value;
+  const flightNum = parseInt(document.getElementById('atg-num-display')?.textContent) || 1;
   document.getElementById('add-to-group-modal')?.remove();
   try {
     const res = await officeFetch('/api/office/add-to-group', {
       method: 'POST',
-      body: JSON.stringify({ pilot_id: pilotId, group_id: groupId })
+      body: JSON.stringify({ pilot_id: pilotId, group_id: groupId, client_name: String(flightNum) })
     });
     const data = await res.json();
     if (res.ok) { toast(data.message); await loadOfficeData(); }

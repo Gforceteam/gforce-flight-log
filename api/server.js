@@ -1584,7 +1584,7 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
 // ─── Office Add Pilot to Existing Group ─────────────────────────────────────
 app.post('/api/office/add-to-group', verifyOffice, async (req, res) => {
   try {
-    const { pilot_id, group_id } = req.body;
+    const { pilot_id, group_id, client_name } = req.body;
     if (!pilot_id || !group_id) return res.status(400).json({ error: 'pilot_id and group_id required' });
     // Find the group's active timer
     const groupTimer = await queryOne('SELECT * FROM active_timers WHERE group_id = ? LIMIT 1', [group_id]);
@@ -1592,11 +1592,12 @@ app.post('/api/office/add-to-group', verifyOffice, async (req, res) => {
     // Get pilot info
     const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [pilot_id]);
     if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
-    // Add pilot with their own fresh timer starting from now
+    // Add pilot with their own fresh timer starting from now, using their individual flight #
     const now = new Date();
     const newExpires = new Date(now.getTime() + 60 * 60 * 1000);
+    const pilotClientName = client_name != null ? sanitize(String(client_name), 100) : groupTimer.client_name;
     await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, group_id, office_adjustments) VALUES (?, ?, ?, ?, ?, ?)',
-      [pilot_id, groupTimer.client_name, now.toISOString(), newExpires.toISOString(), group_id, 0]);
+      [pilot_id, pilotClientName, now.toISOString(), newExpires.toISOString(), group_id, 0]);
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'added_to_group', now.toISOString()]);
     broadcast({ type: 'PILOT_ADDED_TO_GROUP', pilot_id, pilot_name: pilot.name, group_id, group_name: groupTimer.client_name, expires_at: newExpires.toISOString() });
     await sendPushToPilot(pilot_id, {

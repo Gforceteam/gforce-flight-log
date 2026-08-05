@@ -2297,7 +2297,7 @@ app.post('/api/office/loop-board/tally', verifyOffice, async (req, res) => {
     const date = reqDate || nzToday();
     if (!slot || slot < 1 || slot > 20) return res.status(400).json({ error: 'Invalid slot' });
     if (!col || col < 1 || col > 12) return res.status(400).json({ error: 'Invalid column' });
-    const allowed = ['', 'I', 'L', 'IF', '-'];
+    const allowed = ['', 'I', 'L', 'IF', 'ML'];
     if (!allowed.includes(value || '')) return res.status(400).json({ error: 'Invalid value' });
     await ensureLoopBoardDate(date);
     const row = await queryOne('SELECT tallies FROM loop_board_v2 WHERE date = ? AND slot = ?', [date, slot]);
@@ -2360,7 +2360,7 @@ app.post('/api/office/loop-board/completed-tally', verifyOffice, async (req, res
     const date = reqDate || nzToday();
     if (!id) return res.status(400).json({ error: 'id required' });
     if (!col || col < 1 || col > 12) return res.status(400).json({ error: 'Invalid column' });
-    const allowed = ['', 'I', 'L', 'IF', '-'];
+    const allowed = ['', 'I', 'L', 'IF', 'ML'];
     if (!allowed.includes(value || '')) return res.status(400).json({ error: 'Invalid value' });
 
     const row = await queryOne('SELECT tallies FROM loop_board_completed WHERE id = ?', [id]);

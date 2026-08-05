@@ -6059,7 +6059,7 @@ function renderLoopBoard() {
   const el = document.getElementById('loop-board-list');
   if (!el) return;
   const available = (officePilots || []).sort(pilotSort);
-  const tallyOpts = ['', 'I', 'L', 'IF', '-'];
+  const tallyOpts = ['', 'I', 'L', 'IF', 'ML'];
   const today = todayStr();
   const isToday = loopBoardDate === today;
   const isPast = loopBoardDate < today;
@@ -6130,7 +6130,7 @@ function renderLoopBoard() {
     </div>`;
   }
   if (loopBoardCompleted.length > 0) {
-    const tallyOpts2 = ['', 'I', 'L', 'IF', '-'];
+    const tallyOpts2 = ['', 'I', 'L', 'IF', 'ML'];
     let cHtml = `<div class="loop-completed-section">
       <div class="loop-completed-title">Completed Pilots</div>
       <table class="loop-table" style="opacity:0.75;">

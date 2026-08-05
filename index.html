@@ -6734,6 +6734,18 @@ function connectWS() {
           notifyPilotSentAway();
         }
         break;
+      case 'PILOT_ADDED_TO_GROUP':
+        toast(`${data.pilot_name} added to group`);
+        loadOfficeData();
+        // If this is the pilot who was just added, start their own timer
+        if (pilotId && String(data.pilot_id) === String(pilotId)) {
+          myStatus.status = 'airborne';
+          myStatus.timer_expires_at = data.expires_at;
+          renderDashboard();
+          updateStatusBadge();
+          notifyPilotSentAway();
+        }
+        break;
       case 'LANDED':
       case 'LANDED_EARLY':
         if (notifEnabled(NOTIF_KEYS.landed)) toast(`${data.pilot_name} landed!`);

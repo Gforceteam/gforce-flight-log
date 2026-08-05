@@ -1592,12 +1592,19 @@ app.post('/api/office/add-to-group', verifyOffice, async (req, res) => {
     // Get pilot info
     const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [pilot_id]);
     if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
-    // Add pilot to the group timer
+    // Add pilot with their own fresh timer starting from now
+    const now = new Date();
+    const newExpires = new Date(now.getTime() + 60 * 60 * 1000);
     await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, group_id, office_adjustments) VALUES (?, ?, ?, ?, ?, ?)',
-      [pilot_id, groupTimer.client_name, new Date().toISOString(), groupTimer.expires_at, group_id, 0]);
-    await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'added_to_group', new Date().toISOString()]);
-    broadcast({ type: 'PILOT_ADDED_TO_GROUP', pilot_id, pilot_name: pilot.name, group_id, group_name: groupTimer.client_name, expires_at: groupTimer.expires_at });
-    res.json({ message: `${pilot.name} added to group` });
+      [pilot_id, groupTimer.client_name, now.toISOString(), newExpires.toISOString(), group_id, 0]);
+    await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'added_to_group', now.toISOString()]);
+    broadcast({ type: 'PILOT_ADDED_TO_GROUP', pilot_id, pilot_name: pilot.name, group_id, group_name: groupTimer.client_name, expires_at: newExpires.toISOString() });
+    await sendPushToPilot(pilot_id, {
+      title: '🪂 GForce — YOU\'RE AWAY!',
+      body: groupTimer.client_name ? `Added to group: ${groupTimer.client_name}. Timer started — 60 minutes.` : 'Office has added you to a group. Timer started — 60 minutes.',
+      tag: 'pilot-sent-away'
+    });
+    res.json({ message: `${pilot.name} added to group`, expires_at: newExpires.toISOString() });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Internal server error' });

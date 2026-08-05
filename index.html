@@ -6082,6 +6082,7 @@ function renderLoopBoard() {
   const isToday = loopBoardDate === today;
   const isPast = loopBoardDate < today;
   const isFuture = loopBoardDate > today;
+  const isLocked = !isPast && !!loopBoardLockedOrder;
   // Human-readable date label
   const labelMap = { [today]: 'Today' };
   const yest = new Date(today + 'T12:00:00'); yest.setDate(yest.getDate() - 1);
@@ -6146,7 +6147,6 @@ function renderLoopBoard() {
       <button onclick="exportLoopBoardCSV()" style="padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;">⬇ Export</button>
     </div>`;
   } else {
-    const isLocked = !!loopBoardLockedOrder;
     const lockBtn = isLocked
       ? `<button onclick="unlockLoopBoardOrder()" style="padding:8px 14px;background:rgba(99,102,241,0.12);border:1.5px solid var(--accent);border-radius:8px;color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;">🔒 Locked</button>`
       : `<button onclick="lockLoopBoardOrder()" style="padding:8px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;">🔒 Lock Order</button>`;

@@ -1071,11 +1071,13 @@
     .loop-tally-sel { width: 60px; background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 6px; padding: 10px 4px; font-size: 15px; text-align: center; cursor: pointer; }
     .loop-tally-sel:focus { outline: none; border-color: var(--border); }
     .loop-tally-sel.has-val { background: #ffffff; border-color: var(--border); color: #111111; font-weight: 700; }
-    .loop-tally-sel.has-val-L { background: #fefce8; border-color: #fde68a; color: #92400e; }
+    .loop-tally-sel.has-val-L  { background: #fefce8; border-color: #fde68a; color: #92400e; }
+    .loop-tally-sel.has-val-ML { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
     .loop-tally-sel.has-val-IF { background: #f0fdf4; border-color: #86efac; color: #166534; }
     .loop-tally-static { display: block; width: 60px; text-align: center; padding: 10px 4px; font-size: 15px; border-radius: 6px; color: var(--muted); }
-    .loop-tally-static.has-val { background: #ffffff; color: #111111; font-weight: 700; }
-    .loop-tally-static.has-val-L { background: #fefce8; color: #92400e; }
+    .loop-tally-static.has-val  { background: #ffffff; color: #111111; font-weight: 700; }
+    .loop-tally-static.has-val-L  { background: #fefce8; color: #92400e; }
+    .loop-tally-static.has-val-ML { background: #fff7ed; color: #9a3412; }
     .loop-tally-static.has-val-IF { background: #f0fdf4; color: #166534; }
     .notif-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 0; border-bottom:1px solid var(--border); }
     .notif-label { font-size:14px; font-weight:600; color:var(--text); }
@@ -4335,7 +4337,7 @@ function renderPilotLoopBoard() {
     row += `<td class="loop-td-pilot" style="${nameStyle}">${pilotNameVal ? esc(pilotNameVal) : '<span style="color:var(--muted)">—</span>'}</td>`;
     for (let c = 1; c <= 12; c++) {
       const v = tallies[c - 1] || '';
-      row += `<td class="loop-td-tally"><span class="loop-tally-sel${v ? (v === 'L' ? ' has-val has-val-L' : v === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" style="display:block;text-align:center;padding:8px 4px;font-size:14px;">${v || '–'}</span></td>`;
+      row += `<td class="loop-td-tally"><span class="loop-tally-sel${v ? (v === 'L' ? ' has-val has-val-L' : v === 'ML' ? ' has-val has-val-ML' : v === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" style="display:block;text-align:center;padding:8px 4px;font-size:14px;">${v || '–'}</span></td>`;
     }
     row += '</tr>';
     return row;
@@ -6044,9 +6046,9 @@ async function reconcileLoopBoardTallies() {
     const flightNum = parseInt(pilot.client_name);
     console.log(`[reconcile] ${pilot.name} status=${pilot.status} client_name=${pilot.client_name} flightNum=${flightNum} tallies=${JSON.stringify(tallies)}`);
     if (pilot.status === 'airborne' && !isNaN(flightNum) && flightNum >= 1 && flightNum <= 12) {
-      // L-marked columns are missed rounds — flight #N uses the Nth non-L column
+      // L and ML-marked columns are missed rounds — flight #N uses the Nth non-missed column
       const nonLCols = [];
-      for (let i = 0; i < 12; i++) { if (tallies[i] !== 'L') nonLCols.push(i + 1); }
+      for (let i = 0; i < 12; i++) { if (tallies[i] !== 'L' && tallies[i] !== 'ML') nonLCols.push(i + 1); }
       const effectiveCol = nonLCols[flightNum - 1];
       console.log(`[reconcile] ${pilot.name} airborne: flightNum=${flightNum} nonLCols=${JSON.stringify(nonLCols)} effectiveCol=${effectiveCol}`);
       if (effectiveCol && tallies[effectiveCol - 1] !== 'IF') {
@@ -6115,7 +6117,7 @@ function renderLoopBoard() {
       html += `<tr><td class="loop-td-slot">${i}</td><td class="loop-td-pilot"><div class="loop-pilot-cell">${pName}</div></td>`;
       for (let c = 1; c <= 12; c++) {
         const val = tallies[c - 1] || '';
-        html += `<td class="loop-td-tally"><span class="loop-tally-static${val ? (val === 'L' ? ' has-val has-val-L' : val === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}">${val || '–'}</span></td>`;
+        html += `<td class="loop-td-tally"><span class="loop-tally-static${val ? (val === 'L' ? ' has-val has-val-L' : val === 'ML' ? ' has-val has-val-ML' : val === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}">${val || '–'}</span></td>`;
       }
       html += '</tr>';
     } else {
@@ -6135,7 +6137,7 @@ function renderLoopBoard() {
       for (let c = 1; c <= 12; c++) {
         const val = tallies[c - 1] || '';
         const tOpts = tallyOpts.map(v => `<option value="${v}" ${val === v ? 'selected' : ''}>${v || '–'}</option>`).join('');
-        html += `<td class="loop-td-tally"><select class="loop-tally-sel${val ? (val === 'L' ? ' has-val has-val-L' : val === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" onchange="setLoopTally(${i},${c},this)">${tOpts}</select></td>`;
+        html += `<td class="loop-td-tally"><select class="loop-tally-sel${val ? (val === 'L' ? ' has-val has-val-L' : val === 'ML' ? ' has-val has-val-ML' : val === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" onchange="setLoopTally(${i},${c},this)">${tOpts}</select></td>`;
       }
       html += '</tr>';
     }
@@ -6180,10 +6182,10 @@ function renderLoopBoard() {
       for (let c = 1; c <= 12; c++) {
         const cv = ct[c - 1] || '';
         if (isPast) {
-          cHtml += `<td class="loop-td-tally"><span class="loop-tally-static${cv ? (cv === 'L' ? ' has-val has-val-L' : cv === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}">${cv || '–'}</span></td>`;
+          cHtml += `<td class="loop-td-tally"><span class="loop-tally-static${cv ? (cv === 'L' ? ' has-val has-val-L' : cv === 'ML' ? ' has-val has-val-ML' : cv === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}">${cv || '–'}</span></td>`;
         } else {
           const cOpts = tallyOpts2.map(v => `<option value="${v}" ${cv === v ? 'selected' : ''}>${v || '–'}</option>`).join('');
-          cHtml += `<td class="loop-td-tally"><select class="loop-tally-sel${cv ? (cv === 'L' ? ' has-val has-val-L' : cv === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" onchange="setCompletedTally('${esc(p.id)}',${c},this)">${cOpts}</select></td>`;
+          cHtml += `<td class="loop-td-tally"><select class="loop-tally-sel${cv ? (cv === 'L' ? ' has-val has-val-L' : cv === 'ML' ? ' has-val has-val-ML' : cv === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" onchange="setCompletedTally('${esc(p.id)}',${c},this)">${cOpts}</select></td>`;
         }
       }
       cHtml += `</tr>`;

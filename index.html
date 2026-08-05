@@ -7053,49 +7053,26 @@ function playAlarmSound() {
 }
 
 function notifyPilotSentAway() {
-  // Vibrate — works on Android (pattern: on-off-on-off-on ms)
+  // Vibrate — works on Android
   try { navigator.vibrate && navigator.vibrate([600, 200, 600, 200, 1000]); } catch (e) {}
 
   // Alarm sound
   playAlarmSound();
 
-  // Build group info
-  const groupInfo = myStatus.group_name ? `📋 ${esc(myStatus.group_name)}` : '';
+  // Navigate straight to the dashboard so the pilot sees their live timer
+  showPilotTab('ff');
+
+  // System notification — tapping it re-opens the app on the dashboard
+  // (service worker notificationclick already focuses/opens the app)
   const groupPilotsList = (myStatus.group_pilots && myStatus.group_pilots.length)
-    ? myStatus.group_pilots.map(p => esc(p.name || p)).join(', ')
+    ? myStatus.group_pilots.map(p => p.name || p).join(', ')
     : '';
-  const groupSection = (groupInfo || groupPilotsList) ? `
-    <div style="margin:16px 0;padding:12px 16px;background:var(--surface);border-radius:10px;border:1px solid var(--border);">
-      ${groupInfo ? `<div style="font-size:15px;font-weight:700;color:var(--accent);margin-bottom:${groupPilotsList ? '6px' : '0'};">${groupInfo}</div>` : ''}
-      ${groupPilotsList ? `<div style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Flying with</div>
-      <div style="font-size:15px;font-weight:600;color:var(--text);">${groupPilotsList}</div>` : ''}
-    </div>` : '';
-
-  // In-app modal — pulses orange border for visibility; uses CSS vars so it respects light/dark theme
-  const existing = document.getElementById('sent-away-modal');
-  if (existing) existing.remove();
-  const modal = document.createElement('div');
-  modal.id = 'sent-away-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;';
-  modal.innerHTML = `
-    <style>@keyframes pulse-border{0%,100%{box-shadow:0 0 0 0 rgba(243,115,41,0.7)}50%{box-shadow:0 0 0 16px rgba(243,115,41,0)}}</style>
-    <div style="background:var(--card);border:3px solid var(--accent);border-radius:16px;padding:32px 28px;text-align:center;max-width:340px;width:90%;animation:pulse-border 1.2s ease-in-out 4;">
-
-      <div style="font-size:24px;font-weight:700;color:var(--accent);font-family:Montserrat,sans-serif;letter-spacing:1px;margin-bottom:8px;">YOU'RE AWAY!</div>
-      <div style="color:var(--text-2);font-size:14px;">Office has started your timer. Have a great flight!</div>
-      ${groupSection}
-      <button onclick="document.getElementById('sent-away-modal').remove()" style="margin-top:16px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:16px;font-weight:700;padding:14px 32px;cursor:pointer;font-family:Montserrat,sans-serif;width:100%;">GOT IT 👍</button>
-    </div>`;
-  document.body.appendChild(modal);
-  setTimeout(() => { modal.remove(); showPage('dashboard'); }, 5000);
-
-  // System notification via service worker (works on iOS 16.4+ PWA, Android Chrome)
-  const pushTitle = 'GForce — YOU\'RE AWAY!';
+  const pushTitle = "🪂 GForce — YOU'RE AWAY!";
   const pushBody = groupPilotsList
-    ? `You're away! Flying with ${groupPilotsList}.`
-    : "Office has started your timer. Have a great flight!";
+    ? `Flying with ${groupPilotsList}. Timer started — 60 minutes.`
+    : 'Office has started your timer. Have a great flight!';
 
-  function showSystemNotif() {
+  if ('Notification' in window && Notification.permission === 'granted') {
     navigator.serviceWorker.ready.then(reg => {
       reg.showNotification(pushTitle, {
         body: pushBody,
@@ -7108,10 +7085,6 @@ function notifyPilotSentAway() {
     }).catch(() => {
       try { new Notification(pushTitle, { body: pushBody }); } catch (e) {}
     });
-  }
-
-  if ('Notification' in window && Notification.permission === 'granted') {
-    showSystemNotif();
   }
 }
 

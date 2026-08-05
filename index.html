@@ -6118,11 +6118,19 @@ function renderLoopBoard() {
       }
       html += '</tr>';
     } else {
-      const pilotOpts = available.map(p =>
-        `<option value="${p.id}" data-name="${p.name.replace(/"/g, '&quot;')}" ${slot.pilot_id === p.id ? 'selected' : ''}>${p.name}</option>`
-      ).join('');
       html += `<tr><td class="loop-td-slot">${i}</td>`;
-      html += `<td class="loop-td-pilot"><div class="loop-pilot-cell"><select class="loop-pilot-sel" onchange="setLoopSlot(${i},this)"><option value="">— empty —</option>${pilotOpts}</select>${slot.pilot_id ? `<button class="loop-complete-btn" onclick="completeLoopPilot(${i})" title="Done for the day">×</button>` : ''}</div></td>`;
+      if (isLocked) {
+        // Order is locked — show pilot name as plain text, no dropdown
+        const nameDisplay = slot.pilot_name
+          ? `<span style="font-size:15px;font-weight:600;padding:2px 6px;">${esc(slot.pilot_name)}</span>`
+          : `<span style="font-size:13px;color:var(--muted);padding:2px 6px;">—</span>`;
+        html += `<td class="loop-td-pilot"><div class="loop-pilot-cell">${nameDisplay}${slot.pilot_id ? `<button class="loop-complete-btn" onclick="completeLoopPilot(${i})" title="Done for the day">×</button>` : ''}</div></td>`;
+      } else {
+        const pilotOpts = available.map(p =>
+          `<option value="${p.id}" data-name="${p.name.replace(/"/g, '&quot;')}" ${slot.pilot_id === p.id ? 'selected' : ''}>${p.name}</option>`
+        ).join('');
+        html += `<td class="loop-td-pilot"><div class="loop-pilot-cell"><select class="loop-pilot-sel" onchange="setLoopSlot(${i},this)"><option value="">— empty —</option>${pilotOpts}</select>${slot.pilot_id ? `<button class="loop-complete-btn" onclick="completeLoopPilot(${i})" title="Done for the day">×</button>` : ''}</div></td>`;
+      }
       for (let c = 1; c <= 12; c++) {
         const val = tallies[c - 1] || '';
         const tOpts = tallyOpts.map(v => `<option value="${v}" ${val === v ? 'selected' : ''}>${v || '–'}</option>`).join('');

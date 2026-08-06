@@ -4327,57 +4327,138 @@ function renderPilotLoopBoard() {
   const completed = pilotLoopBoardCompleted || [];
   const maxSlot = board.reduce((m, s) => s.pilot_id ? Math.max(m, s.slot) : m, 0);
 
-  const renderTallyRow = (pilotNameVal, talliesJson, highlight) => {
-    let tallies = Array(12).fill('');
-    try { const t = JSON.parse(talliesJson || '[]'); if (Array.isArray(t)) tallies = t; } catch (_) {}
-    while (tallies.length < 12) tallies.push('');
-    const isMe = pilotNameVal === pilotName;
-    const nameStyle = `font-weight:${isMe ? '800' : '500'};color:${isMe ? 'var(--accent)' : (highlight ? 'var(--muted)' : 'var(--text)')};${highlight ? 'text-decoration:line-through;' : ''}`;
-    let row = `<tr${isMe && !highlight ? ' style="background:rgba(243,115,41,0.08);"' : ''}>`;
-    row += `<td class="loop-td-pilot" style="${nameStyle}">${pilotNameVal ? esc(pilotNameVal) : '<span style="color:var(--muted)">—</span>'}</td>`;
-    for (let c = 1; c <= 12; c++) {
-      const v = tallies[c - 1] || '';
-      row += `<td class="loop-td-tally"><span class="loop-tally-sel${v ? (v === 'L' ? ' has-val has-val-L' : v === 'ML' ? ' has-val has-val-ML' : v === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" style="display:block;text-align:center;padding:8px 4px;font-size:14px;">${v || '–'}</span></td>`;
-    }
-    row += '</tr>';
-    return row;
-  };
-
-  const tableHeader = () => {
-    let h = '<thead><tr><th class="loop-th-pilot">Pilot</th>';
-    for (let c = 1; c <= 12; c++) h += `<th class="loop-th-tally">${c}</th>`;
-    h += '</tr></thead>';
-    return h;
-  };
-
-  let html = '';
-
   if (maxSlot === 0 && completed.length === 0) {
     el.innerHTML = '<div class="empty-state">Loop Board is empty</div>';
     return;
   }
 
-  if (maxSlot > 0) {
-    html += '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table class="loop-table">';
-    html += tableHeader() + '<tbody>';
-    for (let i = 1; i <= maxSlot; i++) {
-      const slot = board.find(s => s.slot === i) || { slot: i, pilot_name: null, tallies: null };
-      html += renderTallyRow(slot.pilot_name, slot.tallies, false);
+  // Parse tallies JSON into array of 12
+  const parseTallies = (talliesJson) => {
+    let t = Array(12).fill('');
+    try { const p = JSON.parse(talliesJson || '[]'); if (Array.isArray(p)) t = p; } catch (_) {}
+    while (t.length < 12) t.push('');
+    return t;
+  };
+
+  // Count each type from tallies
+  const countTallies = (tallies) => {
+    let flights = 0, lCount = 0, mlCount = 0, ifCount = 0;
+    for (const v of tallies) {
+      if (v === 'I')        flights++;
+      else if (v === 'IF')  { flights++; ifCount++; }
+      else if (v === 'L')   lCount++;
+      else if (v === 'ML')  mlCount++;
     }
-    html += '</tbody></table></div>';
+    return { flights, lCount, mlCount, ifCount };
+  };
+
+  // Render tally marks in groups of 5:
+  //   Flights (I/IF) 1–4 → vertical bars.
+  //   Flight 5 (or 10) → grey horizontal line drawn across bars 1–4 of that group (gate tally closer).
+  //   Missed/landed (L/ML) at any position → small filled dot.
+  //   If position 5 is L/ML, a dot appears and no horizontal line is drawn for that group.
+  const tallyMarksSVG = (tallies, colour) => {
+    const h        = 26;
+    const barSpc   = 10;   // spacing between bar centres within a group
+    const groupGap = 10;   // gap between complete groups
+    const dotR     = 3.5;
+
+    const marks = tallies.filter(v => v);
+    if (marks.length === 0) return `<span style="font-size:15px;color:var(--muted);line-height:1;">—</span>`;
+
+    let paths = '';
+    let x = 6;
+    let i = 0;
+
+    while (i < marks.length) {
+      const gx        = x;                          // group start x
+      const groupSize = Math.min(5, marks.length - i);
+      const barCount  = Math.min(4, groupSize);      // always draw up to 4 bars
+
+      // Bars / dots for positions 1–4 of this group
+      for (let j = 0; j < barCount; j++) {
+        const v = marks[i + j];
+        const bx = gx + j * barSpc;
+        if (v === 'L' || v === 'ML') {
+          paths += `<circle cx="${bx}" cy="${h / 2}" r="${dotR}" fill="var(--muted)" opacity="0.6"/>`;
+        } else {
+          paths += `<line x1="${bx}" y1="3" x2="${bx}" y2="${h - 3}" stroke="${colour}" stroke-width="2.5" stroke-linecap="round"/>`;
+        }
+      }
+
+      if (groupSize === 5) {
+        const v5 = marks[i + 4];
+        if (v5 === 'L' || v5 === 'ML') {
+          // 5th slot is missed — dot at the 5th bar position, no closing line
+          const dx = gx + 4 * barSpc;
+          paths += `<circle cx="${dx}" cy="${h / 2}" r="${dotR}" fill="var(--muted)" opacity="0.6"/>`;
+          x = dx + barSpc + groupGap;
+        } else {
+          // 5th is a flight — grey horizontal line spanning bars 1–4
+          const lx1 = gx - 4;
+          const lx2 = gx + (barCount - 1) * barSpc + 4;
+          paths += `<line x1="${lx1}" y1="${h / 2}" x2="${lx2}" y2="${h / 2}" stroke="var(--muted)" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>`;
+          x = lx2 + groupGap;
+        }
+        i += 5;
+      } else {
+        x = gx + barCount * barSpc;
+        i += barCount;
+      }
+    }
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${x + 2}" height="${h}" viewBox="0 0 ${x + 2} ${h}" style="display:inline-block;vertical-align:middle;flex-shrink:0;">${paths}</svg>`;
+  };
+
+  // Build one pilot card
+  const pilotCard = (slotNum, name, talliesJson, isCompleted) => {
+    const tallies = parseTallies(talliesJson);
+    const { flights, lCount, mlCount, ifCount } = countTallies(tallies);
+    const isMe = name && name === pilotName;
+
+    const cardBorder  = isMe && !isCompleted ? '1.5px solid var(--accent)' : '1px solid var(--border)';
+    const cardBg      = isMe && !isCompleted ? 'rgba(243,115,41,0.08)' : 'var(--surface)';
+    const nameColor   = isMe ? 'var(--accent)' : isCompleted ? 'var(--muted)' : 'var(--text)';
+    const nameDeco    = isCompleted ? 'text-decoration:line-through;' : '';
+    const markColour  = isMe && !isCompleted ? 'var(--accent)' : isCompleted ? 'var(--muted)' : 'var(--text)';
+
+    // Subtitle — flight count; dots in the SVG handle L/ML visually
+    const subtitle = flights > 0
+      ? `${flights} flight${flights !== 1 ? 's' : ''}${ifCount ? ` (${ifCount} IF)` : ''}`
+      : (lCount + mlCount > 0 ? '' : 'No flights yet');
+
+    return `
+      <div style="border-radius:12px;border:${cardBorder};background:${cardBg};padding:12px 14px;display:flex;align-items:center;gap:12px;">
+        ${slotNum != null ? `<div style="font-size:18px;font-weight:800;color:var(--muted);min-width:22px;text-align:center;line-height:1;">${slotNum}</div>` : ''}
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:16px;font-weight:${isMe ? '800' : '700'};color:${nameColor};${nameDeco}margin-bottom:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+            ${name ? esc(name) : '<span style="color:var(--muted);">—</span>'}
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            ${tallyMarksSVG(tallies, markColour)}
+            ${subtitle ? `<span style="font-size:12px;color:var(--muted);white-space:nowrap;">${subtitle}</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+  };
+
+  let html = '<div style="display:flex;flex-direction:column;gap:8px;padding:4px 0;">';
+
+  // Active pilots
+  for (let i = 1; i <= maxSlot; i++) {
+    const s = board.find(s => s.slot === i) || { slot: i, pilot_name: null, tallies: null };
+    html += pilotCard(i, s.pilot_name, s.tallies, false);
   }
 
+  // Completed pilots
   if (completed.length > 0) {
-    html += `<div class="loop-completed-section">
-      <div class="loop-completed-title">Completed Pilots</div>
-      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table class="loop-table" style="opacity:0.75;">`;
-    html += tableHeader() + '<tbody>';
+    html += `<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin:14px 2px 4px;">Done for the day</div>`;
     for (const p of completed) {
-      html += renderTallyRow(p.pilot_name, p.tallies, true);
+      html += pilotCard(null, p.pilot_name, p.tallies, true);
     }
-    html += '</tbody></table></div></div>';
   }
 
+  html += '</div>';
   html += `<div style="text-align:center;margin-top:20px;padding-bottom:8px;">
     <button onclick="loadPilotLoopBoard()" style="padding:10px 28px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">↻ Refresh</button>
   </div>`;
@@ -5033,7 +5114,7 @@ function renderAwayTab() {
       <button onclick="adjustPilotTimer('${p.id}',-10)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 8px;touch-action:manipulation;">−10</button>
       <button onclick="adjustPilotTimer('${p.id}',10)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 8px;touch-action:manipulation;">+10</button>
       <button onclick="doLandPilot('${p.id}','${p.name.replace(/'/g,"\\'")}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:12px;padding:5px 12px;font-weight:700;touch-action:manipulation;">Land</button>
-      <button class="btn-danger" onclick="confirmLandedEarly('${p.id}','${p.name.replace(/'/g,"\\'")}')">✕</button>
+      <button class="btn-danger" onclick="confirmCancelFF('${p.id}','${p.name.replace(/'/g,"\\'")}')">✕</button>
     </div>`;
 
   let html = `
@@ -5307,9 +5388,37 @@ async function landAllGroup(pilots) {
   await loadOfficeData();
 }
 
-function confirmLandedEarly(pilotId, pilotName) {
-  if (!confirm(`Cancel timer for ${pilotName}? This will mark them as back in office.`)) return;
-  doLandedEarly(pilotId);
+function confirmCancelFF(pilotId, pilotName) {
+  showCancelFFModal(pilotId, pilotName);
+}
+
+function showCancelFFModal(pilotId, pilotName) {
+  const existing = document.getElementById('cancel-ff-modal');
+  if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'cancel-ff-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);';
+  modal.innerHTML = `
+    <div style="background:var(--surface);border-radius:16px;padding:24px;max-width:320px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.25);">
+      <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px;">Cancel flight following?</div>
+      <div style="font-size:14px;color:var(--muted);margin-bottom:20px;"><strong>${esc(pilotName)}</strong> — choose an option:</div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button onclick="doLandedEarly('${pilotId}');document.getElementById('cancel-ff-modal').remove();"
+          style="background:var(--accent);border:none;border-radius:10px;color:#fff;cursor:pointer;font-size:14px;font-weight:700;padding:12px;text-align:left;touch-action:manipulation;">
+          ✈️ &nbsp;Land — cancel timer &amp; log flight
+        </button>
+        <button onclick="doCancelTimerNoFlight('${pilotId}');document.getElementById('cancel-ff-modal').remove();"
+          style="background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;color:#991b1b;cursor:pointer;font-size:14px;font-weight:700;padding:12px;text-align:left;touch-action:manipulation;">
+          🗑️ &nbsp;Delete — cancel timer, no flight logged
+        </button>
+        <button onclick="document.getElementById('cancel-ff-modal').remove();"
+          style="background:var(--surface);border:1px solid var(--border-hi);border-radius:10px;color:var(--muted);cursor:pointer;font-size:14px;padding:10px;touch-action:manipulation;">
+          Back
+        </button>
+      </div>
+    </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
 }
 
 async function doLandedEarly(pilotId) {
@@ -5320,6 +5429,17 @@ async function doLandedEarly(pilotId) {
   if (!res) return;
   const data = await res.json();
   if (res.ok) { toast(data.message); await loadOfficeData(); }
+  else { toast(data.error || 'Error'); }
+}
+
+async function doCancelTimerNoFlight(pilotId) {
+  const res = await officeFetch('/api/office/cancel-timer', {
+    method: 'POST',
+    body: JSON.stringify({ pilot_id: pilotId })
+  });
+  if (!res) return;
+  const data = await res.json();
+  if (res.ok) { toast('Timer deleted — no flight logged'); await loadOfficeData(); }
   else { toast(data.error || 'Error'); }
 }
 
@@ -5788,7 +5908,9 @@ function downloadCSV(csv, filename) {
 // ─── Office Timers ────────────────────────────────────────────────────────────
 function playBell(count) {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // Reuse the shared unlocked AudioContext — new contexts won't play without a user gesture
+    const ctx = ensureAudioCtx();
+    if (!ctx) return;
     const ring = (t) => {
       // Three partials — fundamental + harmonics — give a realistic bell tone
       [[880, 0.55, 2.8], [1760, 0.28, 1.6], [2640, 0.13, 0.9]].forEach(([freq, vol, dur]) => {
@@ -5806,7 +5928,6 @@ function playBell(count) {
       });
     };
     for (let i = 0; i < count; i++) ring(ctx.currentTime + i * 1.15);
-    setTimeout(() => { try { ctx.close(); } catch(e){} }, (count * 1.15 + 3) * 1000);
   } catch (e) { /* audio not supported */ }
 }
 
@@ -5824,26 +5945,36 @@ function toggleMute() {
 function speak(text, pilotNames) {
   try {
     if (officeMuted || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = 0.75;
-    u.pitch = 1;
-    u.volume = 1;
-    const voices = window.speechSynthesis.getVoices();
-    const isCathal = pilotNames && /cathal/i.test(pilotNames);
-    if (isCathal) {
-      // Irish English voice for Cathal
-      const irishVoice = voices.find(v => /en[-_]IE/i.test(v.lang))
-        || voices.find(v => /irish/i.test(v.name));
-      if (irishVoice) u.voice = irishVoice;
+    const doSpeak = () => {
+      try {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.rate = 0.75;
+        u.pitch = 1;
+        u.volume = 1;
+        const voices = window.speechSynthesis.getVoices();
+        const isCathal = pilotNames && /cathal/i.test(pilotNames);
+        if (isCathal) {
+          // Irish English voice for Cathal
+          const irishVoice = voices.find(v => /en[-_]IE/i.test(v.lang))
+            || voices.find(v => /irish/i.test(v.name));
+          if (irishVoice) u.voice = irishVoice;
+        } else {
+          const femaleNames = /samantha|victoria|karen|moira|tessa|serena|hazel|zira|susan|linda|fiona|allison|ava|kate|nicky|siri|google\s+uk\s+english\s+female|google\s+us\s+english|female/i;
+          const femaleVoice = voices.find(v => femaleNames.test(v.name) && /en[-_]/i.test(v.lang))
+            || voices.find(v => femaleNames.test(v.name))
+            || voices.find(v => /female/i.test(v.name));
+          if (femaleVoice) u.voice = femaleVoice;
+        }
+        window.speechSynthesis.speak(u);
+      } catch (e) {}
+    };
+    // Voices load asynchronously on first call — wait for them if not ready yet
+    if (window.speechSynthesis.getVoices().length === 0) {
+      window.speechSynthesis.addEventListener('voiceschanged', doSpeak, { once: true });
     } else {
-      const femaleNames = /samantha|victoria|karen|moira|tessa|serena|hazel|zira|susan|linda|fiona|allison|ava|kate|nicky|siri|google\s+uk\s+english\s+female|google\s+us\s+english|female/i;
-      const femaleVoice = voices.find(v => femaleNames.test(v.name) && /en[-_]/i.test(v.lang))
-        || voices.find(v => femaleNames.test(v.name))
-        || voices.find(v => /female/i.test(v.name));
-      if (femaleVoice) u.voice = femaleVoice;
+      doSpeak();
     }
-    window.speechSynthesis.speak(u);
   } catch (e) {}
 }
 

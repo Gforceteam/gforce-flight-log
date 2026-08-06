@@ -1656,6 +1656,25 @@ app.post('/api/office/land-pilot', verifyOffice, async (req, res) => {
   }
 });
 
+// Office cancel timer — removes the active timer without logging any flight
+app.post('/api/office/cancel-timer', verifyOffice, async (req, res) => {
+  try {
+    const { pilot_id } = req.body;
+    if (!pilot_id) return res.status(400).json({ error: 'pilot_id required' });
+    const timer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [pilot_id]);
+    if (!timer) return res.status(404).json({ error: 'No active timer for this pilot' });
+    await run('DELETE FROM active_timers WHERE pilot_id = ?', [pilot_id]);
+    await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)',
+      [uuidv4(), pilot_id, 'office_cancelled_timer', new Date().toISOString()]);
+    const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [pilot_id]);
+    broadcast({ type: 'DID_NOT_FLY', pilot_id, pilot_name: pilot?.name });
+    res.json({ message: 'Timer cancelled — no flight logged' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.post('/api/office/landed-early', verifyOffice, async (req, res) => {
   try {
     const { pilot_id } = req.body;
@@ -2028,68 +2047,7 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
-// ─── Civil Twilight Notification ────────────────────────────────────────────
-function eveningCivilTwilightUTC(dateStr) {
-  // Returns UTC ms for evening civil twilight in Queenstown, NZ
-  // Lat: -45.0312, Lng: 168.6626
-  const lat = -45.0312 * Math.PI / 180;
-  const date = new Date(dateStr + 'T12:00:00Z');
-  const JD = date.getTime() / 86400000 + 2440587.5;
-  const n = Math.floor(JD - 2451545 + 0.5);
-  const M = ((357.5291 + 0.98560028 * n) % 360 + 360) % 360;
-  const Mrad = M * Math.PI / 180;
-  const C = 1.9148 * Math.sin(Mrad) + 0.02 * Math.sin(2 * Mrad) + 0.0003 * Math.sin(3 * Mrad);
-  const lam = ((M + C + 180 + 102.9372) % 360 + 360) % 360;
-  const lamRad = lam * Math.PI / 180;
-  const Jtransit = 2451545 + 0.0009 + (168.6626) / 360 + n + 0.0053 * Math.sin(Mrad) - 0.0069 * Math.sin(2 * lamRad);
-  const sinDec = Math.sin(lamRad) * Math.sin(23.4397 * Math.PI / 180);
-  const dec = Math.asin(sinDec);
-  const cosOmega = (Math.sin(-6 * Math.PI / 180) - Math.sin(lat) * sinDec) / (Math.cos(lat) * Math.cos(dec));
-  if (cosOmega < -1 || cosOmega > 1) return null;
-  const omega = Math.acos(cosOmega) * 180 / Math.PI;
-  const Jset = Jtransit + omega / 360;
-  return (Jset - 2440587.5) * 86400 * 1000;
-}
-
-async function scheduleCivilTwilightAlert() {
-  const NZ_TZ = 'Pacific/Auckland';
-  const todayNZ = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
-  const twilightMs = eveningCivilTwilightUTC(todayNZ);
-  if (!twilightMs) return;
-  const delay = twilightMs - Date.now();
-  if (delay < -60000) {
-    // Already passed today — schedule for tomorrow
-    const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString('en-CA', { timeZone: NZ_TZ });
-    const tomorrowMs = eveningCivilTwilightUTC(tomorrow);
-    if (tomorrowMs) setTimeout(() => sendCivilTwilightAlerts(), tomorrowMs - Date.now());
-    return;
-  }
-  console.log(`[twilight] Alert scheduled for ${new Date(twilightMs).toISOString()} NZ civil twilight`);
-  setTimeout(async () => {
-    await sendCivilTwilightAlerts();
-    // Reschedule for next day
-    setTimeout(() => scheduleCivilTwilightAlert(), 2 * 60 * 1000); // 2min after to reschedule next day
-  }, Math.max(0, delay));
-}
-
-async function sendCivilTwilightAlerts() {
-  try {
-    const availablePilots = await queryAll(
-      `SELECT p.id FROM pilots p WHERE COALESCE(p.presence, CASE WHEN COALESCE(p.available,0)=1 THEN 1 ELSE 0 END) = 1 AND p.id NOT IN (SELECT pilot_id FROM active_timers)`
-    );
-    console.log(`[twilight] Sending sign-out reminder to ${availablePilots.length} available pilots`);
-    for (const p of availablePilots) {
-      await sendPushToPilot(p.id, {
-        title: '🌆 End of day reminder',
-        body: "You're still signed in. Don't forget to sign out before you head home!",
-        tag: 'civil-twilight'
-      });
-    }
-  } catch (e) { console.error('[twilight] Error:', e.message); }
-}
-
-// Start civil twilight scheduler
-scheduleCivilTwilightAlert();
+// End-of-day pilot sign-out reminders removed — pilots do not want this notification.
 
 // ─── Daily Data Backup ────────────────────────────────────────────────────────
 async function pushDailyBackup() {

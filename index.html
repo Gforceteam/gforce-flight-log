@@ -1880,7 +1880,7 @@ let ws = null;
 /** Which office dashboard tab is visible — only this panel is re-rendered on periodic refresh */
 let officeActiveTab = 'pilots';
 let officePilots = [];
-const PILOT_ORDER = ['Ben F','Casey','Gavin','Pete','Thomas','Dom','Mike','Eddy','Blake','Georges','Cathal','Test','Test 1','Test 2'];
+const PILOT_ORDER = ['Ben F','Casey','Gavin','Pete','Thomas','Dom','Mike','Eddy','Blake','Georges','Cathal'];
 function pilotSort(a, b) {
   const ai = PILOT_ORDER.indexOf(a.name), bi = PILOT_ORDER.indexOf(b.name);
   if (ai !== -1 && bi !== -1) return ai - bi;

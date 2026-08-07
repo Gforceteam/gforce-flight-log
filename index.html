@@ -4430,7 +4430,7 @@ function renderPilotLoopBoard() {
         <div style="flex:1;min-width:0;font-size:15px;font-weight:${nameW};color:${nameColor};${nameDeco}white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
           ${name ? esc(name) : '<span style="color:var(--muted);">—</span>'}
         </div>
-        <div style="flex-shrink:0;min-width:120px;display:flex;justify-content:flex-end;${markOp}">${tallyMarksSVG(tallies, markCol)}</div>
+        <div style="flex-shrink:0;display:flex;justify-content:flex-start;${markOp}">${tallyMarksSVG(tallies, markCol)}</div>
       </div>`;
   };
 

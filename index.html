@@ -4198,8 +4198,10 @@ function pilotTabDateStr() {
   return new Date().toLocaleDateString('en-NZ', { timeZone: NZ_TZ, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 }
 function setPilotTabDates() {
-  const d = pilotTabDateStr();
-  ['pilot-date-ff', 'pilot-date-loop'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = d; });
+  const d   = pilotTabDateStr();
+  const lob = calcLOBTime();
+  const html = `<span>${d}</span><span style="display:block;font-size:12px;font-weight:700;color:var(--muted);letter-spacing:0.05em;margin-top:2px;">${lob}</span>`;
+  ['pilot-date-ff', 'pilot-date-loop'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = html; });
 }
 
 function togglePilotMenu() {

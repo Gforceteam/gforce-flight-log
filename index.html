@@ -4394,10 +4394,10 @@ function renderPilotLoopBoard() {
           paths += `<circle cx="${dx}" cy="${h / 2}" r="${dotR}" fill="var(--muted)" opacity="0.6"/>`;
           x = dx + barSpc + groupGap;
         } else {
-          // 5th is a flight — grey horizontal line spanning bars 1–4
+          // 5th is a flight — diagonal slash across bars 1–4 (traditional gate tally)
           const lx1 = gx - 4;
           const lx2 = gx + (barCount - 1) * barSpc + 4;
-          paths += `<line x1="${lx1}" y1="${h / 2}" x2="${lx2}" y2="${h / 2}" stroke="var(--muted)" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>`;
+          paths += `<line x1="${lx1}" y1="${h - 3}" x2="${lx2}" y2="3" stroke="${colour}" stroke-width="2" stroke-linecap="round"/>`;
           x = lx2 + groupGap;
         }
         i += 5;
@@ -4410,55 +4410,50 @@ function renderPilotLoopBoard() {
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${x + 2}" height="${h}" viewBox="0 0 ${x + 2} ${h}" style="display:inline-block;vertical-align:middle;flex-shrink:0;">${paths}</svg>`;
   };
 
-  // Build one pilot card
-  const pilotCard = (slotNum, name, talliesJson, isCompleted) => {
-    const tallies = parseTallies(talliesJson);
-    const { flights, lCount, mlCount, ifCount } = countTallies(tallies);
-    const isMe = name && name === pilotName;
-
-    const cardBorder  = isMe && !isCompleted ? '1.5px solid var(--accent)' : '1px solid var(--border)';
-    const cardBg      = isMe && !isCompleted ? 'rgba(243,115,41,0.08)' : 'var(--surface)';
-    const nameColor   = isMe ? 'var(--accent)' : isCompleted ? 'var(--muted)' : 'var(--text)';
-    const nameDeco    = isCompleted ? 'text-decoration:line-through;' : '';
-    const markColour  = isMe && !isCompleted ? 'var(--accent)' : isCompleted ? 'var(--muted)' : 'var(--text)';
-
-    // Subtitle — flight count; dots in the SVG handle L/ML visually
-    const subtitle = flights > 0
-      ? `${flights} flight${flights !== 1 ? 's' : ''}${ifCount ? ` (${ifCount} IF)` : ''}`
-      : (lCount + mlCount > 0 ? '' : 'No flights yet');
+  // Build one compact pilot row: slot# | name | tally (right-aligned)
+  const pilotRow = (slotNum, name, talliesJson, isCompleted) => {
+    const tallies   = parseTallies(talliesJson);
+    const isMe      = name && name === pilotName;
+    const rowBg     = isMe && !isCompleted ? 'background:rgba(243,115,41,0.07);' : '';
+    const accent    = isMe && !isCompleted ? 'border-left:3px solid var(--accent);' : 'border-left:3px solid transparent;';
+    const nameColor = isMe ? 'var(--accent)' : isCompleted ? 'var(--muted)' : 'var(--text)';
+    const nameW     = isMe ? '800' : '700';
+    const nameDeco  = isCompleted ? 'text-decoration:line-through;' : '';
+    const markCol   = isMe && !isCompleted ? 'var(--accent)' : isCompleted ? 'var(--muted)' : 'var(--text)';
+    const markOp    = isCompleted ? 'opacity:0.5;' : '';
 
     return `
-      <div style="border-radius:12px;border:${cardBorder};background:${cardBg};padding:12px 14px;display:flex;align-items:center;gap:12px;">
-        ${slotNum != null ? `<div style="font-size:18px;font-weight:800;color:var(--muted);min-width:22px;text-align:center;line-height:1;">${slotNum}</div>` : ''}
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:16px;font-weight:${isMe ? '800' : '700'};color:${nameColor};${nameDeco}margin-bottom:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-            ${name ? esc(name) : '<span style="color:var(--muted);">—</span>'}
-          </div>
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            ${tallyMarksSVG(tallies, markColour)}
-            ${subtitle ? `<span style="font-size:12px;color:var(--muted);white-space:nowrap;">${subtitle}</span>` : ''}
-          </div>
+      <div style="display:flex;align-items:center;padding:9px 14px 9px 11px;gap:10px;${rowBg}${accent}">
+        ${slotNum != null
+          ? `<div style="font-size:12px;font-weight:700;color:var(--muted);min-width:16px;text-align:center;flex-shrink:0;">${slotNum}</div>`
+          : `<div style="min-width:16px;flex-shrink:0;"></div>`}
+        <div style="flex:1;min-width:0;font-size:15px;font-weight:${nameW};color:${nameColor};${nameDeco}white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+          ${name ? esc(name) : '<span style="color:var(--muted);">—</span>'}
         </div>
+        <div style="flex-shrink:0;min-width:120px;display:flex;justify-content:flex-end;${markOp}">${tallyMarksSVG(tallies, markCol)}</div>
       </div>`;
   };
 
-  let html = '<div style="display:flex;flex-direction:column;gap:8px;padding:4px 0;">';
+  const divider = `<div style="height:1px;background:var(--border);margin:0 14px;"></div>`;
 
-  // Active pilots
+  let html = '<div style="border-radius:12px;border:1px solid var(--border);overflow:hidden;margin:4px 0;">';
   for (let i = 1; i <= maxSlot; i++) {
     const s = board.find(s => s.slot === i) || { slot: i, pilot_name: null, tallies: null };
-    html += pilotCard(i, s.pilot_name, s.tallies, false);
+    if (i > 1) html += divider;
+    html += pilotRow(i, s.pilot_name, s.tallies, false);
   }
+  html += '</div>';
 
-  // Completed pilots
   if (completed.length > 0) {
     html += `<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin:14px 2px 4px;">Done for the day</div>`;
-    for (const p of completed) {
-      html += pilotCard(null, p.pilot_name, p.tallies, true);
-    }
+    html += '<div style="border-radius:12px;border:1px solid var(--border);overflow:hidden;">';
+    completed.forEach((p, idx) => {
+      if (idx > 0) html += divider;
+      html += pilotRow(null, p.pilot_name, p.tallies, true);
+    });
+    html += '</div>';
   }
 
-  html += '</div>';
   html += `<div style="text-align:center;margin-top:20px;padding-bottom:8px;">
     <button onclick="loadPilotLoopBoard()" style="padding:10px 28px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">↻ Refresh</button>
   </div>`;

@@ -1880,7 +1880,8 @@ let ws = null;
 /** Which office dashboard tab is visible — only this panel is re-rendered on periodic refresh */
 let officeActiveTab = 'pilots';
 let officePilots = [];
-const PILOT_ORDER = ['Ben F','Casey','Gavin','Pete','Thomas','Dom','Mike','Eddy','Blake','Georges','Cathal'];
+const PILOT_ORDER   = ['Ben F','Casey','Gavin','Pete','Thomas','Dom','Mike','Eddy','Blake','Georges','Cathal'];
+const HIDDEN_PILOTS = ['Test','Test 1','Test 2','Test 3'];
 function pilotSort(a, b) {
   const ai = PILOT_ORDER.indexOf(a.name), bi = PILOT_ORDER.indexOf(b.name);
   if (ai !== -1 && bi !== -1) return ai - bi;
@@ -4490,7 +4491,7 @@ async function renderOfficeFF() {
     d.setDate(d.getDate() - i);
     dates.push(d.toLocaleDateString('en-CA', { timeZone: NZ_TZ }));
   }
-  const ffPilots = [...officePilots].sort(pilotSort).map(p => {
+  const ffPilots = [...officePilots].filter(p => !HIDDEN_PILOTS.includes(p.name)).sort(pilotSort).map(p => {
     const dayCounts = {};
     dates.forEach(d => {
       const autoCnt = allFlights.filter(f => String(f.pilot_id) === String(p.id) && f.date === d).length;

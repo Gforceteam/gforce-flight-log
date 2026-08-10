@@ -1612,6 +1612,49 @@ app.post('/api/office/add-to-group', verifyOffice, async (req, res) => {
   }
 });
 
+// ─── Office Convert Solo to Group ───────────────────────────────────────────
+app.post('/api/office/convert-to-group', verifyOffice, async (req, res) => {
+  try {
+    const { solo_pilot_id, new_pilot_id, client_name } = req.body;
+    if (!solo_pilot_id || !new_pilot_id) return res.status(400).json({ error: 'solo_pilot_id and new_pilot_id required' });
+
+    const soloTimer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [solo_pilot_id]);
+    if (!soloTimer) return res.status(404).json({ error: 'No active timer for solo pilot' });
+    if (soloTimer.group_id) return res.status(400).json({ error: 'Pilot is already in a group' });
+
+    const newPilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [new_pilot_id]);
+    if (!newPilot) return res.status(404).json({ error: 'New pilot not found' });
+
+    const groupId = uuidv4();
+    const now = new Date();
+    const newExpires = new Date(now.getTime() + 60 * 60 * 1000);
+    const groupClientName = soloTimer.client_name || null;
+    const pilotClientName = client_name != null ? sanitize(String(client_name), 100) : groupClientName;
+
+    // Assign group_id to the existing solo timer
+    await run('UPDATE active_timers SET group_id = ? WHERE pilot_id = ?', [groupId, solo_pilot_id]);
+    // Add the new pilot with a fresh 60-min timer in the same group
+    await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, group_id, office_adjustments) VALUES (?, ?, ?, ?, ?, ?)',
+      [new_pilot_id, pilotClientName, now.toISOString(), newExpires.toISOString(), groupId, 0]);
+
+    await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), solo_pilot_id, 'converted_to_group', now.toISOString()]);
+    await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), new_pilot_id, 'added_to_group', now.toISOString()]);
+
+    broadcast({ type: 'PILOT_ADDED_TO_GROUP', pilot_id: new_pilot_id, pilot_name: newPilot.name, group_id: groupId, group_name: groupClientName, expires_at: newExpires.toISOString() });
+    await sendPushToPilot(new_pilot_id, {
+      title: '🪂 GForce — YOU\'RE AWAY!',
+      body: groupClientName ? `Added to group: ${groupClientName}. Timer started — 60 minutes.` : 'Office has added you to a group. Timer started — 60 minutes.',
+      tag: 'pilot-sent-away'
+    });
+
+    const soloPilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [solo_pilot_id]);
+    res.json({ message: `Group created: ${soloPilot?.name} + ${newPilot.name}`, group_id: groupId });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ─── Office Land Pilot (manual landing via office button) ──────────────────
 app.post('/api/office/land-pilot', verifyOffice, async (req, res) => {
   try {

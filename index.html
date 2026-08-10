@@ -6149,6 +6149,7 @@ let loopBoardRows = _getLoopRows(loopBoardDate);
 let loopBoardCompleted = [];
 let loopBoardLockedOrder = null; // array of pilot_ids in locked order, or null if not locked
 let _lastLoopChange = null;
+let loopBoardViewMode = 'visual'; // 'visual' | 'edit'
 let _pendingLoopApiCalls = 0;
 
 function _loopApiStart() { _pendingLoopApiCalls++; }
@@ -6237,96 +6238,153 @@ function renderLoopBoard() {
     <button class="loop-date-btn" onclick="shiftLoopDate(1)" title="Next day">›</button>
   </div>`;
   if (isPast) html += `<div style="padding:6px 12px;background:rgba(100,100,100,0.08);border-bottom:1px solid var(--border);font-size:12px;color:var(--muted);text-align:center;letter-spacing:0.5px;">Viewing history — read only</div>`;
-  html += '<table class="loop-table"><thead><tr>';
-  html += '<th class="loop-th-slot">#</th><th class="loop-th-pilot">Pilot</th>';
-  for (let c = 1; c <= 12; c++) html += `<th class="loop-th-tally">${c}</th>`;
-  html += '</tr></thead><tbody>';
-  for (let i = 1; i <= loopBoardRows; i++) {
-    const slot = loopBoard.find(s => s.slot === i) || { slot: i, pilot_id: null, pilot_name: null, tallies: null };
-    let tallies = Array(12).fill('');
-    try { const t = JSON.parse(slot.tallies || '[]'); if (Array.isArray(t)) tallies = t; } catch (_) {}
-    while (tallies.length < 12) tallies.push('');
-    if (isPast) {
-      // Read-only: show pilot name as plain text, tallies as static cells
-      const pName = slot.pilot_name ? `<span style="font-size:14px;font-weight:600;padding:2px 6px;">${esc(slot.pilot_name)}</span>` : `<span style="color:var(--muted);font-size:13px;padding:2px 6px;">—</span>`;
-      html += `<tr><td class="loop-td-slot">${i}</td><td class="loop-td-pilot"><div class="loop-pilot-cell">${pName}</div></td>`;
-      for (let c = 1; c <= 12; c++) {
-        const val = tallies[c - 1] || '';
-        html += `<td class="loop-td-tally"><span class="loop-tally-static${val ? (val === 'L' ? ' has-val has-val-L' : val === 'ML' ? ' has-val has-val-ML' : val === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}">${val || '–'}</span></td>`;
+
+  // ── Shared tally SVG renderer (mirrors pilot view) ────────────────────────
+  const tlySVG = (talliesRaw, colour) => {
+    const marks = (() => { const t = []; try { const p = JSON.parse(talliesRaw || '[]'); if (Array.isArray(p)) t.push(...p); } catch (_) {} return t.filter(v => v); })();
+    const h = 26, barSpc = 10, groupGap = 10, dotR = 3.5;
+    if (!marks.length) return `<span style="font-size:15px;color:var(--muted);line-height:1;">—</span>`;
+    let paths = '', x = 6, i = 0;
+    while (i < marks.length) {
+      const gx = x, groupSize = Math.min(5, marks.length - i), barCount = Math.min(4, groupSize);
+      for (let j = 0; j < barCount; j++) {
+        const v = marks[i + j], bx = gx + j * barSpc;
+        if (v === 'L' || v === 'ML') { paths += `<circle cx="${bx}" cy="${h/2}" r="${dotR}" fill="var(--muted)" opacity="0.6"/>`; }
+        else { paths += `<line x1="${bx}" y1="3" x2="${bx}" y2="${h-3}" stroke="${v === 'IF' ? '#16a34a' : colour}" stroke-width="2.5" stroke-linecap="round"/>`; }
       }
-      html += '</tr>';
-    } else {
-      html += `<tr><td class="loop-td-slot">${i}</td>`;
-      if (isLocked) {
-        // Order is locked — show pilot name as plain text, no dropdown
-        const nameDisplay = slot.pilot_name
-          ? `<span style="font-size:15px;font-weight:600;padding:2px 6px;">${esc(slot.pilot_name)}</span>`
-          : `<span style="font-size:13px;color:var(--muted);padding:2px 6px;">—</span>`;
-        html += `<td class="loop-td-pilot"><div class="loop-pilot-cell">${nameDisplay}${slot.pilot_id ? `<button class="loop-complete-btn" onclick="completeLoopPilot(${i})" title="Done for the day">×</button>` : ''}</div></td>`;
-      } else {
-        const pilotOpts = available.map(p =>
-          `<option value="${p.id}" data-name="${p.name.replace(/"/g, '&quot;')}" ${slot.pilot_id === p.id ? 'selected' : ''}>${p.name}</option>`
-        ).join('');
-        html += `<td class="loop-td-pilot"><div class="loop-pilot-cell"><select class="loop-pilot-sel" onchange="setLoopSlot(${i},this)"><option value="">— empty —</option>${pilotOpts}</select>${slot.pilot_id ? `<button class="loop-complete-btn" onclick="completeLoopPilot(${i})" title="Done for the day">×</button>` : ''}</div></td>`;
-      }
-      for (let c = 1; c <= 12; c++) {
-        const val = tallies[c - 1] || '';
-        const tOpts = tallyOpts.map(v => `<option value="${v}" ${val === v ? 'selected' : ''}>${v || '–'}</option>`).join('');
-        html += `<td class="loop-td-tally"><select class="loop-tally-sel${val ? (val === 'L' ? ' has-val has-val-L' : val === 'ML' ? ' has-val has-val-ML' : val === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" onchange="setLoopTally(${i},${c},this)">${tOpts}</select></td>`;
-      }
-      html += '</tr>';
+      if (groupSize === 5) {
+        const v5 = marks[i + 4];
+        if (v5 === 'L' || v5 === 'ML') { const dx = gx + 4 * barSpc; paths += `<circle cx="${dx}" cy="${h/2}" r="${dotR}" fill="var(--muted)" opacity="0.6"/>`; x = dx + barSpc + groupGap; }
+        else { const lx1 = gx - 4, lx2 = gx + (barCount - 1) * barSpc + 4; paths += `<line x1="${lx1}" y1="${h-3}" x2="${lx2}" y2="3" stroke="${v5 === 'IF' ? '#16a34a' : colour}" stroke-width="2" stroke-linecap="round"/>`; x = lx2 + groupGap; }
+        i += 5;
+      } else { x = gx + barCount * barSpc; i += barCount; }
     }
-  }
-  html += '</tbody></table>';
-  if (isPast) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${x+2}" height="${h}" viewBox="0 0 ${x+2} ${h}" style="display:inline-block;vertical-align:middle;flex-shrink:0;">${paths}</svg>`;
+  };
+
+  if (!isPast && loopBoardViewMode === 'visual') {
+    // ── Visual mode — same compact layout pilots see ──────────────────────
+    const divider = `<div style="height:1px;background:var(--border);"></div>`;
+    html += `<div style="border-radius:12px;border:1px solid var(--border);overflow:hidden;margin:8px 0;">`;
+    for (let i = 1; i <= loopBoardRows; i++) {
+      const slot = loopBoard.find(s => s.slot === i) || { slot: i, pilot_id: null, pilot_name: null, tallies: null };
+      if (i > 1) html += divider;
+      html += `<div style="display:flex;align-items:center;padding:9px 14px 9px 11px;gap:10px;border-left:3px solid transparent;">
+        <div style="font-size:12px;font-weight:700;color:var(--muted);min-width:16px;text-align:center;flex-shrink:0;">${i}</div>
+        <div style="flex-shrink:0;font-size:15px;font-weight:700;color:var(--text);white-space:nowrap;min-width:80px;">${slot.pilot_name ? esc(slot.pilot_name) : '<span style="color:var(--muted);">—</span>'}</div>
+        <div style="flex-shrink:0;display:flex;justify-content:flex-start;">${tlySVG(slot.tallies, 'var(--text)')}</div>
+      </div>`;
+    }
+    html += `</div>`;
+    if (loopBoardCompleted.length > 0) {
+      html += `<div class="loop-completed-section"><div class="loop-completed-title">Completed Pilots</div>`;
+      html += `<div style="border-radius:12px;border:1px solid var(--border);overflow:hidden;">`;
+      loopBoardCompleted.forEach((p, idx) => {
+        if (idx > 0) html += divider;
+        html += `<div style="display:flex;align-items:center;padding:9px 14px 9px 11px;gap:10px;opacity:0.5;">
+          <div style="min-width:16px;flex-shrink:0;"></div>
+          <div style="flex-shrink:0;font-size:15px;font-weight:700;color:var(--muted);text-decoration:line-through;white-space:nowrap;min-width:80px;">${esc(p.pilot_name)}</div>
+          <div style="flex-shrink:0;display:flex;justify-content:flex-start;">${tlySVG(p.tallies, 'var(--muted)')}</div>
+        </div>`;
+      });
+      html += `</div></div>`;
+    }
     html += `<div class="loop-board-controls">
-      <button onclick="loadLoopBoard()" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">↻ Refresh</button>
+      <button onclick="loopBoardViewMode='edit';renderLoopBoard();" style="padding:8px 18px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">✏ Edit</button>
+      <button onclick="loadLoopBoard()" style="padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;">↻ Refresh</button>
       <button onclick="exportLoopBoardCSV()" style="padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;">⬇ Export</button>
     </div>`;
   } else {
-    const lockBtn = isLocked
-      ? `<button onclick="unlockLoopBoardOrder()" style="padding:8px 14px;background:rgba(99,102,241,0.12);border:1.5px solid var(--accent);border-radius:8px;color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;">🔒 Locked</button>`
-      : `<button onclick="lockLoopBoardOrder()" style="padding:8px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;">🔒 Lock Order</button>`;
-    html += `<div class="loop-board-controls">
-      <button onclick="addLoopRow()" style="padding:8px 22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:22px;line-height:1;cursor:pointer;" ${loopBoardRows >= 20 ? 'disabled' : ''}>+</button>
-      <button onclick="removeLoopRow()" style="padding:8px 22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:22px;line-height:1;cursor:pointer;" ${loopBoardRows <= 1 ? 'disabled' : ''}>−</button>
-      ${lockBtn}
-      <button onclick="loadLoopBoard()" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">↻ Refresh</button>
-      <button onclick="exportLoopBoardCSV()" style="padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;">⬇ Export</button>
-      <button onclick="undoLoopChange()" ${!_lastLoopChange ? 'disabled' : ''} style="padding:8px 20px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;margin-left:auto;opacity:${_lastLoopChange ? '1' : '0.4'};">↩ Reverse</button>
-      <button onclick="resetLoopBoard()" style="padding:8px 20px;background:rgba(239,68,68,0.08);border:1px solid var(--danger);border-radius:8px;color:var(--danger);font-size:13px;font-weight:700;cursor:pointer;">Reset</button>
-    </div>`;
-  }
-  if (loopBoardCompleted.length > 0) {
-    const tallyOpts2 = ['', 'I', 'L', 'IF', 'ML'];
-    let cHtml = `<div class="loop-completed-section">
-      <div class="loop-completed-title">Completed Pilots</div>
-      <table class="loop-table" style="opacity:0.75;">
-        <thead><tr>
-          <th class="loop-th-pilot">Pilot</th>`;
-    for (let c = 1; c <= 12; c++) cHtml += `<th class="loop-th-tally">${c}</th>`;
-    cHtml += `</tr></thead><tbody>`;
-    for (const p of loopBoardCompleted) {
-      let ct = Array(12).fill('');
-      try { const t = JSON.parse(p.tallies || '[]'); if (Array.isArray(t)) ct = t; } catch (_) {}
-      while (ct.length < 12) ct.push('');
-      cHtml += `<tr><td class="loop-td-pilot"><div class="loop-pilot-cell">
-          <span style="font-size:15px;font-weight:600;padding:2px 4px;text-decoration:line-through;color:var(--muted);">${esc(p.pilot_name)}</span>
-          ${!isPast ? `<button class="loop-complete-btn" onclick="uncompleteLoopPilot('${esc(p.id)}')" title="Re-add to loop board" style="background:var(--accent);color:#fff;border-color:var(--accent);font-size:14px;">↑</button>` : ''}
-        </div></td>`;
-      for (let c = 1; c <= 12; c++) {
-        const cv = ct[c - 1] || '';
-        if (isPast) {
-          cHtml += `<td class="loop-td-tally"><span class="loop-tally-static${cv ? (cv === 'L' ? ' has-val has-val-L' : cv === 'ML' ? ' has-val has-val-ML' : cv === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}">${cv || '–'}</span></td>`;
-        } else {
-          const cOpts = tallyOpts2.map(v => `<option value="${v}" ${cv === v ? 'selected' : ''}>${v || '–'}</option>`).join('');
-          cHtml += `<td class="loop-td-tally"><select class="loop-tally-sel${cv ? (cv === 'L' ? ' has-val has-val-L' : cv === 'ML' ? ' has-val has-val-ML' : cv === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" onchange="setCompletedTally('${esc(p.id)}',${c},this)">${cOpts}</select></td>`;
+    // ── Edit mode (or past) — existing table with dropdowns ───────────────
+    html += '<table class="loop-table"><thead><tr>';
+    html += '<th class="loop-th-slot">#</th><th class="loop-th-pilot">Pilot</th>';
+    for (let c = 1; c <= 12; c++) html += `<th class="loop-th-tally">${c}</th>`;
+    html += '</tr></thead><tbody>';
+    for (let i = 1; i <= loopBoardRows; i++) {
+      const slot = loopBoard.find(s => s.slot === i) || { slot: i, pilot_id: null, pilot_name: null, tallies: null };
+      let tallies = Array(12).fill('');
+      try { const t = JSON.parse(slot.tallies || '[]'); if (Array.isArray(t)) tallies = t; } catch (_) {}
+      while (tallies.length < 12) tallies.push('');
+      if (isPast) {
+        const pName = slot.pilot_name ? `<span style="font-size:14px;font-weight:600;padding:2px 6px;">${esc(slot.pilot_name)}</span>` : `<span style="color:var(--muted);font-size:13px;padding:2px 6px;">—</span>`;
+        html += `<tr><td class="loop-td-slot">${i}</td><td class="loop-td-pilot"><div class="loop-pilot-cell">${pName}</div></td>`;
+        for (let c = 1; c <= 12; c++) {
+          const val = tallies[c - 1] || '';
+          html += `<td class="loop-td-tally"><span class="loop-tally-static${val ? (val === 'L' ? ' has-val has-val-L' : val === 'ML' ? ' has-val has-val-ML' : val === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}">${val || '–'}</span></td>`;
         }
+        html += '</tr>';
+      } else {
+        html += `<tr><td class="loop-td-slot">${i}</td>`;
+        if (isLocked) {
+          const nameDisplay = slot.pilot_name
+            ? `<span style="font-size:15px;font-weight:600;padding:2px 6px;">${esc(slot.pilot_name)}</span>`
+            : `<span style="font-size:13px;color:var(--muted);padding:2px 6px;">—</span>`;
+          html += `<td class="loop-td-pilot"><div class="loop-pilot-cell">${nameDisplay}${slot.pilot_id ? `<button class="loop-complete-btn" onclick="completeLoopPilot(${i})" title="Done for the day">×</button>` : ''}</div></td>`;
+        } else {
+          const pilotOpts = available.map(p =>
+            `<option value="${p.id}" data-name="${p.name.replace(/"/g, '&quot;')}" ${slot.pilot_id === p.id ? 'selected' : ''}>${p.name}</option>`
+          ).join('');
+          html += `<td class="loop-td-pilot"><div class="loop-pilot-cell"><select class="loop-pilot-sel" onchange="setLoopSlot(${i},this)"><option value="">— empty —</option>${pilotOpts}</select>${slot.pilot_id ? `<button class="loop-complete-btn" onclick="completeLoopPilot(${i})" title="Done for the day">×</button>` : ''}</div></td>`;
+        }
+        for (let c = 1; c <= 12; c++) {
+          const val = tallies[c - 1] || '';
+          const tOpts = tallyOpts.map(v => `<option value="${v}" ${val === v ? 'selected' : ''}>${v || '–'}</option>`).join('');
+          html += `<td class="loop-td-tally"><select class="loop-tally-sel${val ? (val === 'L' ? ' has-val has-val-L' : val === 'ML' ? ' has-val has-val-ML' : val === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" onchange="setLoopTally(${i},${c},this)">${tOpts}</select></td>`;
+        }
+        html += '</tr>';
       }
-      cHtml += `</tr>`;
     }
-    cHtml += `</tbody></table></div>`;
-    html += cHtml;
+    html += '</tbody></table>';
+    if (isPast) {
+      html += `<div class="loop-board-controls">
+        <button onclick="loadLoopBoard()" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">↻ Refresh</button>
+        <button onclick="exportLoopBoardCSV()" style="padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;">⬇ Export</button>
+      </div>`;
+    } else {
+      const lockBtn = isLocked
+        ? `<button onclick="unlockLoopBoardOrder()" style="padding:8px 14px;background:rgba(99,102,241,0.12);border:1.5px solid var(--accent);border-radius:8px;color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;">🔒 Locked</button>`
+        : `<button onclick="lockLoopBoardOrder()" style="padding:8px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;">🔒 Lock Order</button>`;
+      html += `<div class="loop-board-controls">
+        <button onclick="loopBoardViewMode='visual';renderLoopBoard();" style="padding:8px 16px;background:var(--surface);border:1.5px solid var(--accent);border-radius:8px;color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;">👁 View</button>
+        <button onclick="addLoopRow()" style="padding:8px 22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:22px;line-height:1;cursor:pointer;" ${loopBoardRows >= 20 ? 'disabled' : ''}>+</button>
+        <button onclick="removeLoopRow()" style="padding:8px 22px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:22px;line-height:1;cursor:pointer;" ${loopBoardRows <= 1 ? 'disabled' : ''}>−</button>
+        ${lockBtn}
+        <button onclick="loadLoopBoard()" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">↻ Refresh</button>
+        <button onclick="exportLoopBoardCSV()" style="padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;">⬇ Export</button>
+        <button onclick="undoLoopChange()" ${!_lastLoopChange ? 'disabled' : ''} style="padding:8px 20px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;margin-left:auto;opacity:${_lastLoopChange ? '1' : '0.4'};">↩ Reverse</button>
+        <button onclick="resetLoopBoard()" style="padding:8px 20px;background:rgba(239,68,68,0.08);border:1px solid var(--danger);border-radius:8px;color:var(--danger);font-size:13px;font-weight:700;cursor:pointer;">Reset</button>
+      </div>`;
+    }
+    if (loopBoardCompleted.length > 0) {
+      const tallyOpts2 = ['', 'I', 'L', 'IF', 'ML'];
+      let cHtml = `<div class="loop-completed-section">
+        <div class="loop-completed-title">Completed Pilots</div>
+        <table class="loop-table" style="opacity:0.75;">
+          <thead><tr><th class="loop-th-pilot">Pilot</th>`;
+      for (let c = 1; c <= 12; c++) cHtml += `<th class="loop-th-tally">${c}</th>`;
+      cHtml += `</tr></thead><tbody>`;
+      for (const p of loopBoardCompleted) {
+        let ct = Array(12).fill('');
+        try { const t = JSON.parse(p.tallies || '[]'); if (Array.isArray(t)) ct = t; } catch (_) {}
+        while (ct.length < 12) ct.push('');
+        cHtml += `<tr><td class="loop-td-pilot"><div class="loop-pilot-cell">
+            <span style="font-size:15px;font-weight:600;padding:2px 4px;text-decoration:line-through;color:var(--muted);">${esc(p.pilot_name)}</span>
+            ${!isPast ? `<button class="loop-complete-btn" onclick="uncompleteLoopPilot('${esc(p.id)}')" title="Re-add to loop board" style="background:var(--accent);color:#fff;border-color:var(--accent);font-size:14px;">↑</button>` : ''}
+          </div></td>`;
+        for (let c = 1; c <= 12; c++) {
+          const cv = ct[c - 1] || '';
+          if (isPast) {
+            cHtml += `<td class="loop-td-tally"><span class="loop-tally-static${cv ? (cv === 'L' ? ' has-val has-val-L' : cv === 'ML' ? ' has-val has-val-ML' : cv === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}">${cv || '–'}</span></td>`;
+          } else {
+            const cOpts = tallyOpts2.map(v => `<option value="${v}" ${cv === v ? 'selected' : ''}>${v || '–'}</option>`).join('');
+            cHtml += `<td class="loop-td-tally"><select class="loop-tally-sel${cv ? (cv === 'L' ? ' has-val has-val-L' : cv === 'ML' ? ' has-val has-val-ML' : cv === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" onchange="setCompletedTally('${esc(p.id)}',${c},this)">${cOpts}</select></td>`;
+          }
+        }
+        cHtml += `</tr>`;
+      }
+      cHtml += `</tbody></table></div>`;
+      html += cHtml;
+    }
   }
   el.innerHTML = html;
 }

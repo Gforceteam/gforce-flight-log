@@ -5949,37 +5949,55 @@ function toggleMute() {
 function speak(text, pilotNames) {
   try {
     if (officeMuted || !window.speechSynthesis) return;
+    // iOS: wake the engine if it has silently paused
+    try { window.speechSynthesis.resume(); } catch (_) {}
+
     const doSpeak = () => {
       try {
         window.speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(text);
-        u.rate = 0.75;
-        u.pitch = 1;
-        u.volume = 1;
-        const voices = window.speechSynthesis.getVoices();
-        const isCathal = pilotNames && /cathal/i.test(pilotNames);
-        if (isCathal) {
-          // Irish English voice for Cathal
-          const irishVoice = voices.find(v => /en[-_]IE/i.test(v.lang))
-            || voices.find(v => /irish/i.test(v.name));
-          if (irishVoice) u.voice = irishVoice;
-        } else {
-          const femaleNames = /samantha|victoria|karen|moira|tessa|serena|hazel|zira|susan|linda|fiona|allison|ava|kate|nicky|siri|google\s+uk\s+english\s+female|google\s+us\s+english|female/i;
-          const femaleVoice = voices.find(v => femaleNames.test(v.name) && /en[-_]/i.test(v.lang))
-            || voices.find(v => femaleNames.test(v.name))
-            || voices.find(v => /female/i.test(v.name));
-          if (femaleVoice) u.voice = femaleVoice;
-        }
-        window.speechSynthesis.speak(u);
+        // Brief delay after cancel — iOS drops utterances queued immediately after cancel
+        setTimeout(() => {
+          try {
+            const u = new SpeechSynthesisUtterance(text);
+            u.rate = 0.75;
+            u.pitch = 1;
+            u.volume = 1;
+            const voices = window.speechSynthesis.getVoices();
+            const isCathal = pilotNames && /cathal/i.test(pilotNames);
+            if (isCathal) {
+              const irishVoice = voices.find(v => /en[-_]IE/i.test(v.lang))
+                || voices.find(v => /irish/i.test(v.name));
+              if (irishVoice) u.voice = irishVoice;
+            } else {
+              const femaleNames = /samantha|victoria|karen|moira|tessa|serena|hazel|zira|susan|linda|fiona|allison|ava|kate|nicky|siri|google\s+uk\s+english\s+female|google\s+us\s+english|female/i;
+              const femaleVoice = voices.find(v => femaleNames.test(v.name) && /en[-_]/i.test(v.lang))
+                || voices.find(v => femaleNames.test(v.name))
+                || voices.find(v => /female/i.test(v.name));
+              if (femaleVoice) u.voice = femaleVoice;
+            }
+            window.speechSynthesis.speak(u);
+          } catch (e) {}
+        }, 80);
       } catch (e) {}
     };
-    // Voices load asynchronously on first call — wait for them if not ready yet
-    if (window.speechSynthesis.getVoices().length === 0) {
+
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices.length) {
       window.speechSynthesis.addEventListener('voiceschanged', doSpeak, { once: true });
     } else {
       doSpeak();
     }
   } catch (e) {}
+}
+
+// iOS keep-alive: speechSynthesis silently pauses itself after inactivity.
+// Resume it every 10 s so timer-triggered utterances aren't swallowed.
+if (window.speechSynthesis) {
+  setInterval(() => {
+    try {
+      if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+    } catch (_) {}
+  }, 10000);
 }
 
 function updateTimers() {

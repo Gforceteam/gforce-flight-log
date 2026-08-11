@@ -7124,7 +7124,11 @@ function connectWS() {
         if (!data.date || data.date === loopBoardDate) {
           loopBoard = data.board;
           if (data.completed !== undefined) loopBoardCompleted = data.completed;
-          if (data.rowCountDelta !== undefined) {
+          // Only apply rowCountDelta from a remote device. If we have pending API
+          // calls, this broadcast is from our own action and the optimistic update
+          // in completeLoopPilot/uncompleteLoopPilot already adjusted loopBoardRows.
+          // Applying it again here would double-count and hide the last pilot.
+          if (data.rowCountDelta !== undefined && _pendingLoopApiCalls === 0) {
             _setLoopRows(loopBoardDate, loopBoardRows + data.rowCountDelta);
           }
           if (officeActiveTab === 'loop' && _pendingLoopApiCalls === 0) _loopSafeRender();

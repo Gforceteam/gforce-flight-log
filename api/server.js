@@ -2374,7 +2374,10 @@ app.post('/api/office/loop-board/complete', verifyOffice, async (req, res) => {
     const allRows = await queryAll(
       'SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]
     );
-    const maxSlot = allRows.length > 0 ? allRows[allRows.length - 1].slot : 20;
+    // Use last OCCUPIED slot — allRows always has 20 rows (pre-created by ensureLoopBoardDate),
+    // so allRows[allRows.length-1].slot is always 20, which would wipe real pilots with NULLs.
+    const occupied = allRows.filter(r => r.pilot_name || r.pilot_id);
+    const maxSlot = occupied.length > 0 ? occupied[occupied.length - 1].slot : slot;
     for (let i = slot; i < maxSlot; i++) {
       const next = allRows.find(r => r.slot === i + 1);
       await run(

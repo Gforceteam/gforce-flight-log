@@ -2259,12 +2259,36 @@ app.post('/api/pilot/location', verifyPilotOrOffice, async (req, res) => {
     if (!req.pilot) return res.status(403).json({ error: 'Pilot token required' });
     const { lat, lng, accuracy } = req.body;
     if (lat == null || lng == null) return res.status(400).json({ error: 'lat and lng required' });
+    // Only record location for pilots the office has opted in
+    const settingRow = await queryOne("SELECT value FROM app_settings WHERE key = 'tracker_enabled_pilots'");
+    const enabledIds = settingRow ? JSON.parse(settingRow.value) : [];
+    if (!enabledIds.includes(req.pilot.id)) return res.json({ ok: true, tracking: false });
     const now = new Date().toISOString();
     await run(
       'INSERT OR REPLACE INTO pilot_locations (pilot_id, pilot_name, lat, lng, accuracy, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
       [req.pilot.id, req.pilot.name, lat, lng, accuracy || null, now]
     );
     broadcast({ type: 'PILOT_LOCATION', pilot_id: req.pilot.id, pilot_name: req.pilot.name, lat, lng, accuracy: accuracy || null, updated_at: now });
+    res.json({ ok: true, tracking: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/office/tracker-settings', verifyOffice, async (req, res) => {
+  try {
+    const row = await queryOne("SELECT value FROM app_settings WHERE key = 'tracker_enabled_pilots'");
+    res.json({ enabled_pilot_ids: row ? JSON.parse(row.value) : [] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/office/tracker-settings', verifyOffice, async (req, res) => {
+  try {
+    const { enabled_pilot_ids } = req.body;
+    if (!Array.isArray(enabled_pilot_ids)) return res.status(400).json({ error: 'enabled_pilot_ids must be an array' });
+    await run("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('tracker_enabled_pilots', ?)", [JSON.stringify(enabled_pilot_ids)]);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });

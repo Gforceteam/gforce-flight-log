@@ -1558,6 +1558,10 @@
               <div id="pilot-tracker-legend" style="font-size:12px;color:var(--muted);flex:1;"></div>
               <button onclick="loadTrackerLocations()" style="flex-shrink:0;padding:6px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;margin-left:10px;">↻ Refresh</button>
             </div>
+            <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:10px;">Tracking enabled for</div>
+              <div id="tracker-pilot-toggles" style="display:flex;flex-direction:column;gap:2px;"></div>
+            </div>
           </div>
         </div>
 
@@ -6747,6 +6751,7 @@ function setNotifPref(key, enabled) {
 // ─── Pilot Tracker ────────────────────────────────────────────────────────────
 let _trackerMap = null;
 let _trackerMarkers = {}; // pilot_id → Leaflet marker
+let _trackerEnabledIds = new Set();
 const QUEENSTOWN = [-45.0312, 168.6626];
 
 function toggleTrackerPanel() {
@@ -6755,7 +6760,54 @@ function toggleTrackerPanel() {
   const open = panel.style.display === 'none';
   panel.style.display = open ? 'block' : 'none';
   chevron.style.transform = open ? 'rotate(90deg)' : '';
-  if (open) initTrackerMap();
+  if (open) { initTrackerMap(); loadTrackerSettings(); }
+}
+
+async function loadTrackerSettings() {
+  try {
+    const res = await officeFetch('/api/office/tracker-settings');
+    if (!res.ok) return;
+    const data = await res.json();
+    _trackerEnabledIds = new Set(data.enabled_pilot_ids || []);
+    renderTrackerSettings();
+  } catch (_) {}
+}
+
+function renderTrackerSettings() {
+  const el = document.getElementById('tracker-pilot-toggles');
+  if (!el) return;
+  const sorted = [...(officePilots || [])].sort(pilotSort);
+  if (!sorted.length) { el.innerHTML = '<div style="font-size:13px;color:var(--muted);">No pilots found.</div>'; return; }
+  el.innerHTML = sorted.map(p => `
+    <label style="display:flex;align-items:center;gap:10px;padding:7px 0;cursor:pointer;border-bottom:1px solid var(--border);">
+      <input type="checkbox" ${_trackerEnabledIds.has(p.id) ? 'checked' : ''}
+        onchange="toggleTrackerPilot('${p.id}', this.checked)"
+        style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;">
+      <span style="font-size:14px;font-weight:600;color:var(--text);">${esc(p.name)}</span>
+    </label>`).join('');
+}
+
+async function toggleTrackerPilot(pilotId, enabled) {
+  if (enabled) {
+    _trackerEnabledIds.add(pilotId);
+  } else {
+    _trackerEnabledIds.delete(pilotId);
+    // Remove stale marker from map immediately
+    if (_trackerMarkers[pilotId] && _trackerMap) {
+      _trackerMap.removeLayer(_trackerMarkers[pilotId]);
+      delete _trackerMarkers[pilotId];
+    }
+  }
+  try {
+    await officeFetch('/api/office/tracker-settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled_pilot_ids: [..._trackerEnabledIds] })
+    });
+    // Refresh legend after change
+    const locs = [...Object.keys(_trackerMarkers)];
+    updateTrackerLegend(locs.map(id => ({ pilot_id: id })));
+  } catch (_) { toast('Failed to save tracker settings', 'err'); }
 }
 
 function initTrackerMap() {

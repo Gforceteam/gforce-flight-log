@@ -2306,6 +2306,21 @@ app.get('/api/office/pilot-locations', verifyOffice, async (req, res) => {
   }
 });
 
+// Pilot-accessible: returns locations for tracker-enabled pilots only
+app.get('/api/pilot/tracker-locations', verifyPilotOrOffice, async (req, res) => {
+  try {
+    const settingRow = await queryOne("SELECT value FROM app_settings WHERE key = 'tracker_enabled_pilots'");
+    const enabledIds = settingRow ? JSON.parse(settingRow.value) : [];
+    if (!enabledIds.length) return res.json([]);
+    const locations = await queryAll(
+      'SELECT pilot_id, pilot_name, lat, lng, accuracy, updated_at FROM pilot_locations ORDER BY updated_at DESC'
+    );
+    res.json(locations.filter(l => enabledIds.includes(l.pilot_id)));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Loop Board ───────────────────────────────────────────────────────────────
 app.get('/api/pilot/loop-board', verifyPilotOrOffice, async (req, res) => {
   try {

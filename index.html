@@ -5074,7 +5074,6 @@ function renderAwayTab() {
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px;">
             <span class="tdf-group-label">Single Pax</span>
             <div style="display:flex;align-items:center;gap:6px;">
-              ${p.client_name ? `<span style="font-size:12px;color:var(--accent);font-weight:600;">${esc(p.client_name)}</span>` : ''}
               <button onclick="showConvertToGroupModal('${p.id}','${p.name.replace(/'/g,"\\'")}' )" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:16px;font-weight:700;padding:2px 10px;cursor:pointer;line-height:1.4;touch-action:manipulation;" title="Add pilot — make group">+</button>
             </div>
           </div>

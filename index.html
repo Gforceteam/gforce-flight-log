@@ -1545,6 +1545,19 @@
     <div class="office-tab-content" id="office-tab-settings">
       <div style="padding:4px 0 24px;">
 
+        <!-- Pilot Tracker -->
+        <div class="card stat-section" style="margin-bottom:12px;padding:0;overflow:hidden;">
+          <button onclick="toggleTrackerPanel()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:16px;background:none;border:none;cursor:pointer;text-align:left;">
+            <span style="font-size:15px;font-weight:700;color:var(--text);">📍 Pilot Tracker</span>
+            <span id="tracker-chevron" style="font-size:18px;color:var(--muted);transition:transform 0.2s;">›</span>
+          </button>
+          <div id="tracker-panel" style="display:none;padding:0 16px 16px;">
+            <div style="font-size:13px;color:var(--muted);margin-bottom:12px;">Live location of pilots who have location sharing enabled on their device.</div>
+            <div id="pilot-tracker-map" style="width:100%;height:360px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--surface);"></div>
+            <div id="pilot-tracker-legend" style="margin-top:10px;font-size:12px;color:var(--muted);"></div>
+          </div>
+        </div>
+
         <!-- Notifications -->
         <div class="card stat-section" style="margin-bottom:12px;padding:0;overflow:hidden;">
           <button onclick="toggleNotifPanel()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:16px;background:none;border:none;cursor:pointer;text-align:left;">
@@ -2354,6 +2367,7 @@ async function doLogin() {
 // ─── Pilot Logout ─────────────────────────────────────────────────────────────
 function doLogout() {
   unsubscribeFromPush();
+  stopLocationSharing();
   pilotToken = pilotId = pilotName = null;
   if (ws && !officeToken) { ws.close(); ws = null; }
   clearInterval(window._statusPoll);
@@ -2414,6 +2428,30 @@ function showApp(name) {
   startStatusPoll();
   startPilotClock();
   connectWS();
+  startLocationSharing();
+}
+
+// ─── Pilot Location Sharing ───────────────────────────────────────────────────
+let _locationInterval = null;
+function startLocationSharing() {
+  if (!navigator.geolocation || !pilotToken) return;
+  stopLocationSharing();
+  const send = () => {
+    if (!pilotToken) { stopLocationSharing(); return; }
+    navigator.geolocation.getCurrentPosition(pos => {
+      apiFetch('/api/pilot/location', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy })
+      }).catch(() => {});
+    }, () => {}, { enableHighAccuracy: true, timeout: 10000, maximumAge: 20000 });
+  };
+  send();
+  _locationInterval = setInterval(send, 20000);
+}
+function stopLocationSharing() {
+  clearInterval(_locationInterval);
+  _locationInterval = null;
 }
 
 function startStatusPoll() {
@@ -6703,6 +6741,95 @@ function notifEnabled(key) {
 function setNotifPref(key, enabled) {
   localStorage.setItem(key, enabled ? '1' : '0');
 }
+// ─── Pilot Tracker ────────────────────────────────────────────────────────────
+let _trackerMap = null;
+let _trackerMarkers = {}; // pilot_id → Leaflet marker
+const QUEENSTOWN = [-45.0312, 168.6626];
+
+function toggleTrackerPanel() {
+  const panel = document.getElementById('tracker-panel');
+  const chevron = document.getElementById('tracker-chevron');
+  const open = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  chevron.style.transform = open ? 'rotate(90deg)' : '';
+  if (open) initTrackerMap();
+}
+
+function initTrackerMap() {
+  // Load Leaflet CSS + JS on first open
+  if (!document.getElementById('leaflet-css')) {
+    const link = document.createElement('link');
+    link.id = 'leaflet-css';
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+  }
+  const loadMap = () => {
+    if (_trackerMap) { _trackerMap.invalidateSize(); loadTrackerLocations(); return; }
+    const el = document.getElementById('pilot-tracker-map');
+    if (!el) return;
+    _trackerMap = L.map(el, { zoomControl: true }).setView(QUEENSTOWN, 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors', maxZoom: 19
+    }).addTo(_trackerMap);
+    loadTrackerLocations();
+  };
+  if (window.L) { loadMap(); return; }
+  if (!document.getElementById('leaflet-js')) {
+    const script = document.createElement('script');
+    script.id = 'leaflet-js';
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.onload = loadMap;
+    document.head.appendChild(script);
+  }
+}
+
+async function loadTrackerLocations() {
+  try {
+    const res = await officeFetch('/api/office/pilot-locations');
+    if (!res.ok) return;
+    const locs = await res.json();
+    locs.forEach(l => updateTrackerMarker(l));
+    updateTrackerLegend(locs);
+  } catch (_) {}
+}
+
+function updateTrackerMarker(loc) {
+  if (!_trackerMap || loc.lat == null || loc.lng == null) return;
+  const staleMs = Date.now() - new Date(loc.updated_at).getTime();
+  const isStale = staleMs > 5 * 60 * 1000; // >5 min = stale
+  const colour = isStale ? '#9ca3af' : '#F37329';
+  const icon = L.divIcon({
+    className: '',
+    html: `<div style="background:${colour};border:2px solid #fff;border-radius:50%;width:14px;height:14px;box-shadow:0 1px 4px rgba(0,0,0,0.4);"></div>`,
+    iconSize: [14, 14], iconAnchor: [7, 7]
+  });
+  const mins = Math.floor(staleMs / 60000);
+  const age = staleMs < 60000 ? 'just now' : `${mins}m ago`;
+  const popup = `<b>${loc.pilot_name}</b><br>${age}${loc.accuracy ? `<br>±${Math.round(loc.accuracy)}m` : ''}`;
+  if (_trackerMarkers[loc.pilot_id]) {
+    _trackerMarkers[loc.pilot_id].setLatLng([loc.lat, loc.lng]).setIcon(icon).setPopupContent(popup);
+  } else {
+    _trackerMarkers[loc.pilot_id] = L.marker([loc.lat, loc.lng], { icon })
+      .addTo(_trackerMap).bindPopup(popup);
+  }
+}
+
+function updateTrackerLegend(locs) {
+  const el = document.getElementById('pilot-tracker-legend');
+  if (!el || !locs.length) { if (el) el.textContent = 'No pilot locations received yet.'; return; }
+  el.innerHTML = locs.map(l => {
+    const staleMs = Date.now() - new Date(l.updated_at).getTime();
+    const mins = Math.floor(staleMs / 60000);
+    const age = staleMs < 60000 ? 'just now' : `${mins}m ago`;
+    const colour = staleMs > 5 * 60 * 1000 ? '#9ca3af' : '#F37329';
+    return `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;">
+      <span style="background:${colour};border-radius:50%;width:9px;height:9px;display:inline-block;flex-shrink:0;"></span>
+      ${esc(l.pilot_name)} <span style="color:var(--muted)">${age}</span>
+    </span>`;
+  }).join('');
+}
+
 function toggleNotifPanel() {
   const panel = document.getElementById('notif-panel');
   const chevron = document.getElementById('notif-chevron');
@@ -6993,6 +7120,16 @@ function connectWS() {
         loadOfficeData();
         if (pilotId) refreshPilotTodayFlights();
         break;
+      case 'PILOT_LOCATION': {
+        // Update tracker map live if panel is open
+        const panel = document.getElementById('tracker-panel');
+        if (panel && panel.style.display !== 'none' && _trackerMap) {
+          updateTrackerMarker(data);
+          // Refresh legend
+          officeFetch('/api/office/pilot-locations').then(r => r.ok ? r.json() : []).then(locs => updateTrackerLegend(locs)).catch(() => {});
+        }
+        break;
+      }
       case 'LOOP_COMPLETED_UPDATE': {
         const today = todayStr();
         if (!data.date || data.date === today) {

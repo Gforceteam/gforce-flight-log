@@ -255,6 +255,14 @@ async function createTables() {
   try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN slot INTEGER'); } catch (_) {}
   try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN tallies TEXT'); } catch (_) {}
   try { await db.execute('ALTER TABLE loop_board_v2 ADD COLUMN done INTEGER DEFAULT 0'); } catch (_) {}
+  await db.execute(`CREATE TABLE IF NOT EXISTS pilot_locations (
+    pilot_id   TEXT PRIMARY KEY,
+    pilot_name TEXT NOT NULL,
+    lat        REAL NOT NULL,
+    lng        REAL NOT NULL,
+    accuracy   REAL,
+    updated_at TEXT NOT NULL
+  )`);
   await db.execute(`CREATE TABLE IF NOT EXISTS duty_sheet_overrides (
     pilot_id TEXT NOT NULL,
     date TEXT NOT NULL,
@@ -2240,6 +2248,35 @@ app.post('/api/office/push-test/:pilotId', verifyOffice, async (req, res) => {
       }
     }));
     res.json({ ok: true, pilot_name: pilot.name, sent, failed });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Pilot Location Tracker ───────────────────────────────────────────────────
+app.post('/api/pilot/location', verifyPilotOrOffice, async (req, res) => {
+  try {
+    if (!req.pilot) return res.status(403).json({ error: 'Pilot token required' });
+    const { lat, lng, accuracy } = req.body;
+    if (lat == null || lng == null) return res.status(400).json({ error: 'lat and lng required' });
+    const now = new Date().toISOString();
+    await run(
+      'INSERT OR REPLACE INTO pilot_locations (pilot_id, pilot_name, lat, lng, accuracy, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [req.pilot.id, req.pilot.name, lat, lng, accuracy || null, now]
+    );
+    broadcast({ type: 'PILOT_LOCATION', pilot_id: req.pilot.id, pilot_name: req.pilot.name, lat, lng, accuracy: accuracy || null, updated_at: now });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/office/pilot-locations', verifyOffice, async (req, res) => {
+  try {
+    const locations = await queryAll(
+      'SELECT pilot_id, pilot_name, lat, lng, accuracy, updated_at FROM pilot_locations ORDER BY updated_at DESC'
+    );
+    res.json(locations);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

@@ -6282,7 +6282,6 @@ function renderLoopBoard() {
           <div style="font-size:12px;font-weight:700;color:var(--muted);min-width:16px;text-align:center;flex-shrink:0;">${i}</div>
           <div style="flex-shrink:0;font-size:15px;font-weight:700;color:var(--muted);text-decoration:line-through;white-space:nowrap;min-width:80px;">${slot.pilot_name ? esc(slot.pilot_name) : '<span style="color:var(--muted);">—</span>'}</div>
           <div style="flex-shrink:0;display:flex;justify-content:flex-start;">${tlySVG(slot.tallies, 'var(--muted)')}</div>
-          <button onclick="uncompleteLoopPilot(${i})" title="Mark active again" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:13px;font-weight:700;padding:2px 8px;cursor:pointer;flex-shrink:0;line-height:1.6;">×</button>
         </div>`;
       } else {
         html += `<div style="display:flex;align-items:center;padding:9px 14px 9px 11px;gap:10px;border-left:3px solid transparent;">

@@ -255,6 +255,12 @@ async function createTables() {
   try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN slot INTEGER'); } catch (_) {}
   try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN tallies TEXT'); } catch (_) {}
   try { await db.execute('ALTER TABLE loop_board_v2 ADD COLUMN done INTEGER DEFAULT 0'); } catch (_) {}
+  try { await db.execute('ALTER TABLE pilots ADD COLUMN owntracks_key TEXT'); } catch (_) {}
+  // Generate OwnTracks keys for any pilots that don't have one yet
+  const pilotsWithoutKey = await queryAll('SELECT id FROM pilots WHERE owntracks_key IS NULL');
+  for (const p of pilotsWithoutKey) {
+    await run('UPDATE pilots SET owntracks_key = ? WHERE id = ?', [uuidv4(), p.id]);
+  }
   await db.execute(`CREATE TABLE IF NOT EXISTS pilot_locations (
     pilot_id   TEXT PRIMARY KEY,
     pilot_name TEXT NOT NULL,
@@ -2316,6 +2322,50 @@ app.get('/api/pilot/tracker-locations', verifyPilotOrOffice, async (req, res) =>
       'SELECT pilot_id, pilot_name, lat, lng, accuracy, updated_at FROM pilot_locations ORDER BY updated_at DESC'
     );
     res.json(locations.filter(l => enabledIds.includes(l.pilot_id)));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// OwnTracks HTTP receiver — no JWT auth, uses per-pilot owntracks_key in query string
+app.post('/api/owntracks', async (req, res) => {
+  try {
+    const { key } = req.query;
+    if (!key) return res.status(400).json({ error: 'key required' });
+    const pilot = await queryOne('SELECT id, name FROM pilots WHERE owntracks_key = ?', [key]);
+    if (!pilot) return res.status(403).json({ error: 'Invalid key' });
+
+    // OwnTracks uses "lon" not "lng"
+    const { lat, lon, acc, _type } = req.body;
+    if (_type && _type !== 'location') return res.json({}); // ignore non-location payloads (transitions etc)
+    if (lat == null || lon == null) return res.status(400).json({ error: 'lat and lon required' });
+
+    // Only store location if pilot tracking is enabled by office
+    const settingRow = await queryOne("SELECT value FROM app_settings WHERE key = 'tracker_enabled_pilots'");
+    const enabledIds = settingRow ? JSON.parse(settingRow.value) : [];
+    if (!enabledIds.includes(pilot.id)) return res.json({});
+
+    const updatedAt = new Date().toISOString();
+    await run(
+      'INSERT OR REPLACE INTO pilot_locations (pilot_id, pilot_name, lat, lng, accuracy, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [pilot.id, pilot.name, lat, lon, acc ?? null, updatedAt]
+    );
+    broadcast({ type: 'PILOT_LOCATION', pilot_id: pilot.id, pilot_name: pilot.name, lat, lng: lon, accuracy: acc ?? null, updated_at: updatedAt });
+    res.json({});
+  } catch (e) {
+    console.error('[owntracks]', e);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/office/tracker-keys', verifyOffice, async (req, res) => {
+  try {
+    const pilots = await queryAll('SELECT id, name, owntracks_key FROM pilots ORDER BY name ASC');
+    res.json(pilots.map(p => ({
+      id: p.id,
+      name: p.name,
+      owntracks_url: `https://gforce-api.fly.dev/api/owntracks?key=${p.owntracks_key}`
+    })));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

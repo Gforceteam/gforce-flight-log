@@ -1430,17 +1430,6 @@
       </section>
 
 
-      <!-- App update -->
-      <section class="settings-card">
-        <p class="settings-card-title">📍 Pilot Tracker</p>
-        <p class="settings-card-desc" style="margin-bottom:12px;">Live location of pilots currently out on the hill.</p>
-        <div id="pilot-settings-tracker-map" style="width:100%;height:320px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--surface);"></div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
-          <div id="pilot-settings-tracker-legend" style="font-size:12px;color:var(--muted);flex:1;"></div>
-          <button onclick="loadPilotTrackerLocations()" style="flex-shrink:0;padding:6px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;margin-left:10px;">↻ Refresh</button>
-        </div>
-      </section>
-
       <section class="settings-card">
         <p class="settings-card-title">Updates</p>
         <h2 style="margin:0 0 8px;font-size:17px;font-weight:700;">App version</h2>
@@ -4292,7 +4281,6 @@ function showPilotTab(name) {
       dst.appendChild(src.firstElementChild);
     }
     void renderSettingsPage();
-    setTimeout(initPilotTrackerMap, 50); // allow DOM to settle before init
   }
 }
 
@@ -6763,89 +6751,9 @@ function setNotifPref(key, enabled) {
 let _trackerMap = null;
 let _trackerMarkers = {}; // pilot_id → Leaflet marker
 let _trackerEnabledIds = new Set();
+let _trackerKeys = {}; // pilotId -> owntracks_url
 const QUEENSTOWN = [-45.0312, 168.6626];
 
-// ─── Pilot Tracker (pilot settings view — read-only) ─────────────────────────
-let _pilotTrackerMap = null;
-let _pilotTrackerMarkers = {};
-
-function initPilotTrackerMap() {
-  if (!document.getElementById('leaflet-css')) {
-    const link = document.createElement('link');
-    link.id = 'leaflet-css';
-    link.rel = 'stylesheet';
-    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-    document.head.appendChild(link);
-  }
-  const loadMap = () => {
-    if (_pilotTrackerMap) { _pilotTrackerMap.invalidateSize(); loadPilotTrackerLocations(); return; }
-    const el = document.getElementById('pilot-settings-tracker-map');
-    if (!el) return;
-    _pilotTrackerMap = L.map(el, { zoomControl: true }).setView(QUEENSTOWN, 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors', maxZoom: 19
-    }).addTo(_pilotTrackerMap);
-    loadPilotTrackerLocations();
-  };
-  if (window.L) { loadMap(); return; }
-  if (!document.getElementById('leaflet-js')) {
-    const script = document.createElement('script');
-    script.id = 'leaflet-js';
-    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    script.onload = loadMap;
-    document.head.appendChild(script);
-  } else {
-    // Script tag exists but L not ready yet — wait
-    const wait = setInterval(() => { if (window.L) { clearInterval(wait); loadMap(); } }, 100);
-  }
-}
-
-async function loadPilotTrackerLocations() {
-  try {
-    const res = await apiFetch('/api/pilot/tracker-locations');
-    if (!res || !res.ok) return;
-    const locs = await res.json();
-    locs.forEach(l => updatePilotTrackerMarker(l));
-    updatePilotTrackerLegend(locs);
-  } catch (_) {}
-}
-
-function updatePilotTrackerMarker(loc) {
-  if (!_pilotTrackerMap || loc.lat == null || loc.lng == null) return;
-  const staleMs = Date.now() - new Date(loc.updated_at).getTime();
-  const isStale = staleMs > 5 * 60 * 1000;
-  const colour = isStale ? '#9ca3af' : '#F37329';
-  const icon = L.divIcon({
-    className: '',
-    html: `<div style="background:${colour};border:2px solid #fff;border-radius:50%;width:14px;height:14px;box-shadow:0 1px 4px rgba(0,0,0,0.4);"></div>`,
-    iconSize: [14, 14], iconAnchor: [7, 7]
-  });
-  const mins = Math.floor(staleMs / 60000);
-  const age = staleMs < 60000 ? 'just now' : `${mins}m ago`;
-  const popup = `<b>${loc.pilot_name}</b><br>${age}`;
-  if (_pilotTrackerMarkers[loc.pilot_id]) {
-    _pilotTrackerMarkers[loc.pilot_id].setLatLng([loc.lat, loc.lng]).setIcon(icon).setPopupContent(popup);
-  } else {
-    _pilotTrackerMarkers[loc.pilot_id] = L.marker([loc.lat, loc.lng], { icon })
-      .addTo(_pilotTrackerMap).bindPopup(popup);
-  }
-}
-
-function updatePilotTrackerLegend(locs) {
-  const el = document.getElementById('pilot-settings-tracker-legend');
-  if (!el) return;
-  if (!locs.length) { el.textContent = 'No pilot locations received yet.'; return; }
-  el.innerHTML = locs.map(l => {
-    const staleMs = Date.now() - new Date(l.updated_at).getTime();
-    const mins = Math.floor(staleMs / 60000);
-    const age = staleMs < 60000 ? 'just now' : `${mins}m ago`;
-    const colour = staleMs > 5 * 60 * 1000 ? '#9ca3af' : '#F37329';
-    return `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;">
-      <span style="background:${colour};border-radius:50%;width:9px;height:9px;display:inline-block;flex-shrink:0;"></span>
-      ${esc(l.pilot_name)} <span style="color:var(--muted)">${age}</span>
-    </span>`;
-  }).join('');
-}
 
 function toggleTrackerPanel() {
   const panel = document.getElementById('tracker-panel');
@@ -6858,10 +6766,19 @@ function toggleTrackerPanel() {
 
 async function loadTrackerSettings() {
   try {
-    const res = await officeFetch('/api/office/tracker-settings');
-    if (!res.ok) return;
-    const data = await res.json();
-    _trackerEnabledIds = new Set(data.enabled_pilot_ids || []);
+    const [settingsRes, keysRes] = await Promise.all([
+      officeFetch('/api/office/tracker-settings'),
+      officeFetch('/api/office/tracker-keys')
+    ]);
+    if (settingsRes.ok) {
+      const data = await settingsRes.json();
+      _trackerEnabledIds = new Set(data.enabled_pilot_ids || []);
+    }
+    if (keysRes.ok) {
+      const keys = await keysRes.json();
+      _trackerKeys = {};
+      keys.forEach(k => { _trackerKeys[k.id] = k.owntracks_url; });
+    }
     renderTrackerSettings();
   } catch (_) {}
 }
@@ -6871,13 +6788,23 @@ function renderTrackerSettings() {
   if (!el) return;
   const sorted = [...(officePilots || [])].sort(pilotSort);
   if (!sorted.length) { el.innerHTML = '<div style="font-size:13px;color:var(--muted);">No pilots found.</div>'; return; }
-  el.innerHTML = sorted.map(p => `
-    <label style="display:flex;align-items:center;gap:10px;padding:7px 0;cursor:pointer;border-bottom:1px solid var(--border);">
-      <input type="checkbox" ${_trackerEnabledIds.has(p.id) ? 'checked' : ''}
-        onchange="toggleTrackerPilot('${p.id}', this.checked)"
-        style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;">
-      <span style="font-size:14px;font-weight:600;color:var(--text);">${esc(p.name)}</span>
-    </label>`).join('');
+  el.innerHTML = sorted.map(p => {
+    const url = _trackerKeys[p.id] || '';
+    return `
+    <div style="padding:8px 0;border-bottom:1px solid var(--border);">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+        <input type="checkbox" ${_trackerEnabledIds.has(p.id) ? 'checked' : ''}
+          onchange="toggleTrackerPilot('${p.id}', this.checked)"
+          style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;">
+        <span style="font-size:14px;font-weight:600;color:var(--text);">${esc(p.name)}</span>
+      </label>
+      ${url ? `<div style="display:flex;align-items:center;gap:6px;margin-top:5px;margin-left:27px;">
+        <span style="font-size:11px;color:var(--muted);font-family:monospace;word-break:break-all;flex:1;">${esc(url)}</span>
+        <button onclick="navigator.clipboard.writeText('${url.replace(/'/g,"\\'")}').then(()=>toast('Copied!'))"
+          style="flex-shrink:0;padding:3px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-weight:600;cursor:pointer;">Copy</button>
+      </div>` : ''}
+    </div>`;
+  }).join('');
 }
 
 async function toggleTrackerPilot(pilotId, enabled) {
@@ -7274,11 +7201,6 @@ function connectWS() {
         if (panel && panel.style.display !== 'none' && _trackerMap) {
           updateTrackerMarker(data);
           officeFetch('/api/office/pilot-locations').then(r => r.ok ? r.json() : []).then(locs => updateTrackerLegend(locs)).catch(() => {});
-        }
-        // Update pilot tracker map live if settings tab is open
-        if (_pilotTrackerMap) {
-          updatePilotTrackerMarker(data);
-          apiFetch('/api/pilot/tracker-locations').then(r => r && r.ok ? r.json() : []).then(locs => updatePilotTrackerLegend(locs)).catch(() => {});
         }
         break;
       }

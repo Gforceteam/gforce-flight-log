@@ -6281,7 +6281,7 @@ function renderLoopBoard() {
         html += `<div style="display:flex;align-items:center;padding:9px 14px 9px 11px;gap:10px;border-left:3px solid transparent;opacity:0.45;">
           <div style="font-size:12px;font-weight:700;color:var(--muted);min-width:16px;text-align:center;flex-shrink:0;">${i}</div>
           <div style="flex-shrink:0;font-size:15px;font-weight:700;color:var(--muted);text-decoration:line-through;white-space:nowrap;min-width:80px;">${slot.pilot_name ? esc(slot.pilot_name) : '<span style="color:var(--muted);">—</span>'}</div>
-          <div style="flex-shrink:0;display:flex;justify-content:flex-start;">${tlySVG(slot.tallies, 'var(--muted)')}</div>
+          <div style="flex-shrink:0;display:flex;align-items:center;gap:6px;">${tlySVG(slot.tallies, 'var(--muted)')}<span style="font-size:15px;font-weight:800;color:var(--text);line-height:1;">✕</span></div>
         </div>`;
       } else {
         html += `<div style="display:flex;align-items:center;padding:9px 14px 9px 11px;gap:10px;border-left:3px solid transparent;">

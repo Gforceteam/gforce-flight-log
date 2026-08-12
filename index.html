@@ -4282,7 +4282,7 @@ function renderPilotLoopBoard() {
   const completed = pilotLoopBoardCompleted || [];
   const maxSlot = board.reduce((m, s) => s.pilot_id ? Math.max(m, s.slot) : m, 0);
 
-  if (maxSlot === 0 && completed.length === 0) {
+  if (maxSlot === 0) {
     el.innerHTML = '<div class="empty-state">Loop Board is empty</div>';
     return;
   }
@@ -4395,21 +4395,11 @@ function renderPilotLoopBoard() {
 
   let html = '<div style="border-radius:12px;border:1px solid var(--border);overflow:hidden;margin:4px 0;">';
   for (let i = 1; i <= maxSlot; i++) {
-    const s = board.find(s => s.slot === i) || { slot: i, pilot_name: null, tallies: null };
+    const s = board.find(s => s.slot === i) || { slot: i, pilot_name: null, tallies: null, done: 0 };
     if (i > 1) html += divider;
-    html += pilotRow(i, s.pilot_name, s.tallies, false);
+    html += pilotRow(i, s.pilot_name, s.tallies, !!s.done);
   }
   html += '</div>';
-
-  if (completed.length > 0) {
-    html += `<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin:14px 2px 4px;">Done for the day</div>`;
-    html += '<div style="border-radius:12px;border:1px solid var(--border);overflow:hidden;">';
-    completed.forEach((p, idx) => {
-      if (idx > 0) html += divider;
-      html += pilotRow(null, p.pilot_name, p.tallies, true);
-    });
-    html += '</div>';
-  }
 
   html += `<div style="text-align:center;margin-top:20px;padding-bottom:8px;">
     <button onclick="loadPilotLoopBoard()" style="padding:10px 28px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">↻ Refresh</button>
@@ -6285,28 +6275,26 @@ function renderLoopBoard() {
     const divider = `<div style="height:1px;background:var(--border);"></div>`;
     html += `<div style="border-radius:12px;border:1px solid var(--border);overflow:hidden;margin:8px 0;">`;
     for (let i = 1; i <= loopBoardRows; i++) {
-      const slot = loopBoard.find(s => s.slot === i) || { slot: i, pilot_id: null, pilot_name: null, tallies: null };
+      const slot = loopBoard.find(s => s.slot === i) || { slot: i, pilot_id: null, pilot_name: null, tallies: null, done: 0 };
+      const isDone = !!slot.done;
       if (i > 1) html += divider;
-      html += `<div style="display:flex;align-items:center;padding:9px 14px 9px 11px;gap:10px;border-left:3px solid transparent;">
-        <div style="font-size:12px;font-weight:700;color:var(--muted);min-width:16px;text-align:center;flex-shrink:0;">${i}</div>
-        <div style="flex-shrink:0;font-size:15px;font-weight:700;color:var(--text);white-space:nowrap;min-width:80px;">${slot.pilot_name ? esc(slot.pilot_name) : '<span style="color:var(--muted);">—</span>'}</div>
-        <div style="flex-shrink:0;display:flex;justify-content:flex-start;">${tlySVG(slot.tallies, 'var(--text)')}</div>
-      </div>`;
+      if (isDone) {
+        html += `<div style="display:flex;align-items:center;padding:9px 14px 9px 11px;gap:10px;border-left:3px solid transparent;opacity:0.45;">
+          <div style="font-size:12px;font-weight:700;color:var(--muted);min-width:16px;text-align:center;flex-shrink:0;">${i}</div>
+          <div style="flex-shrink:0;font-size:15px;font-weight:700;color:var(--muted);text-decoration:line-through;white-space:nowrap;min-width:80px;">${slot.pilot_name ? esc(slot.pilot_name) : '<span style="color:var(--muted);">—</span>'}</div>
+          <div style="flex-shrink:0;display:flex;justify-content:flex-start;">${tlySVG(slot.tallies, 'var(--muted)')}</div>
+          <button onclick="uncompleteLoopPilot(${i})" title="Mark active again" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:13px;font-weight:700;padding:2px 8px;cursor:pointer;flex-shrink:0;line-height:1.6;">×</button>
+        </div>`;
+      } else {
+        html += `<div style="display:flex;align-items:center;padding:9px 14px 9px 11px;gap:10px;border-left:3px solid transparent;">
+          <div style="font-size:12px;font-weight:700;color:var(--muted);min-width:16px;text-align:center;flex-shrink:0;">${i}</div>
+          <div style="flex-shrink:0;font-size:15px;font-weight:700;color:var(--text);white-space:nowrap;min-width:80px;">${slot.pilot_name ? esc(slot.pilot_name) : '<span style="color:var(--muted);">—</span>'}</div>
+          <div style="flex-shrink:0;display:flex;justify-content:flex-start;">${tlySVG(slot.tallies, 'var(--text)')}</div>
+          ${slot.pilot_id ? `<button onclick="completeLoopPilot(${i})" title="Done for the day" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:13px;font-weight:700;padding:2px 8px;cursor:pointer;flex-shrink:0;line-height:1.6;">×</button>` : ''}
+        </div>`;
+      }
     }
     html += `</div>`;
-    if (loopBoardCompleted.length > 0) {
-      html += `<div class="loop-completed-section"><div class="loop-completed-title">Completed Pilots</div>`;
-      html += `<div style="border-radius:12px;border:1px solid var(--border);overflow:hidden;">`;
-      loopBoardCompleted.forEach((p, idx) => {
-        if (idx > 0) html += divider;
-        html += `<div style="display:flex;align-items:center;padding:9px 14px 9px 11px;gap:10px;opacity:0.5;">
-          <div style="min-width:16px;flex-shrink:0;"></div>
-          <div style="flex-shrink:0;font-size:15px;font-weight:700;color:var(--muted);text-decoration:line-through;white-space:nowrap;min-width:80px;">${esc(p.pilot_name)}</div>
-          <div style="flex-shrink:0;display:flex;justify-content:flex-start;">${tlySVG(p.tallies, 'var(--muted)')}</div>
-        </div>`;
-      });
-      html += `</div></div>`;
-    }
     html += `<div class="loop-board-controls">
       <button onclick="loopBoardViewMode='edit';renderLoopBoard();" style="padding:8px 18px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">✏ Edit</button>
       <button onclick="loadLoopBoard()" style="padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;">↻ Refresh</button>
@@ -6319,16 +6307,30 @@ function renderLoopBoard() {
     for (let c = 1; c <= 12; c++) html += `<th class="loop-th-tally">${c}</th>`;
     html += '</tr></thead><tbody>';
     for (let i = 1; i <= loopBoardRows; i++) {
-      const slot = loopBoard.find(s => s.slot === i) || { slot: i, pilot_id: null, pilot_name: null, tallies: null };
+      const slot = loopBoard.find(s => s.slot === i) || { slot: i, pilot_id: null, pilot_name: null, tallies: null, done: 0 };
+      const isDone = !!slot.done;
       let tallies = Array(12).fill('');
       try { const t = JSON.parse(slot.tallies || '[]'); if (Array.isArray(t)) tallies = t; } catch (_) {}
       while (tallies.length < 12) tallies.push('');
       if (isPast) {
-        const pName = slot.pilot_name ? `<span style="font-size:14px;font-weight:600;padding:2px 6px;">${esc(slot.pilot_name)}</span>` : `<span style="color:var(--muted);font-size:13px;padding:2px 6px;">—</span>`;
-        html += `<tr><td class="loop-td-slot">${i}</td><td class="loop-td-pilot"><div class="loop-pilot-cell">${pName}</div></td>`;
+        const pName = slot.pilot_name
+          ? `<span style="font-size:14px;font-weight:600;padding:2px 6px;${isDone ? 'color:var(--muted);text-decoration:line-through;' : ''}">${esc(slot.pilot_name)}</span>`
+          : `<span style="color:var(--muted);font-size:13px;padding:2px 6px;">—</span>`;
+        html += `<tr${isDone ? ' style="opacity:0.45;"' : ''}><td class="loop-td-slot">${i}</td><td class="loop-td-pilot"><div class="loop-pilot-cell">${pName}</div></td>`;
         for (let c = 1; c <= 12; c++) {
           const val = tallies[c - 1] || '';
           html += `<td class="loop-td-tally"><span class="loop-tally-static${val ? (val === 'L' ? ' has-val has-val-L' : val === 'ML' ? ' has-val has-val-ML' : val === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}">${val || '–'}</span></td>`;
+        }
+        html += '</tr>';
+      } else if (isDone) {
+        // Done pilot — greyed name, tally dropdowns still editable, × button to undo
+        const nameDisplay = `<span style="font-size:15px;font-weight:600;padding:2px 6px;color:var(--muted);text-decoration:line-through;">${esc(slot.pilot_name)}</span>`;
+        html += `<tr style="opacity:0.5;"><td class="loop-td-slot">${i}</td>`;
+        html += `<td class="loop-td-pilot"><div class="loop-pilot-cell">${nameDisplay}<button class="loop-complete-btn" onclick="uncompleteLoopPilot(${i})" title="Mark active again" style="background:none;border-color:var(--border);color:var(--muted);">×</button></div></td>`;
+        for (let c = 1; c <= 12; c++) {
+          const val = tallies[c - 1] || '';
+          const tOpts = tallyOpts.map(v => `<option value="${v}" ${val === v ? 'selected' : ''}>${v || '–'}</option>`).join('');
+          html += `<td class="loop-td-tally"><select class="loop-tally-sel${val ? (val === 'L' ? ' has-val has-val-L' : val === 'ML' ? ' has-val has-val-ML' : val === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" onchange="setLoopTally(${i},${c},this)">${tOpts}</select></td>`;
         }
         html += '</tr>';
       } else {
@@ -6372,36 +6374,6 @@ function renderLoopBoard() {
         <button onclick="undoLoopChange()" ${!_lastLoopChange ? 'disabled' : ''} style="padding:8px 20px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;margin-left:auto;opacity:${_lastLoopChange ? '1' : '0.4'};">↩ Reverse</button>
         <button onclick="resetLoopBoard()" style="padding:8px 20px;background:rgba(239,68,68,0.08);border:1px solid var(--danger);border-radius:8px;color:var(--danger);font-size:13px;font-weight:700;cursor:pointer;">Reset</button>
       </div>`;
-    }
-    if (loopBoardCompleted.length > 0) {
-      const tallyOpts2 = ['', 'I', 'L', 'IF', 'ML'];
-      let cHtml = `<div class="loop-completed-section">
-        <div class="loop-completed-title">Completed Pilots</div>
-        <table class="loop-table" style="opacity:0.75;">
-          <thead><tr><th class="loop-th-pilot">Pilot</th>`;
-      for (let c = 1; c <= 12; c++) cHtml += `<th class="loop-th-tally">${c}</th>`;
-      cHtml += `</tr></thead><tbody>`;
-      for (const p of loopBoardCompleted) {
-        let ct = Array(12).fill('');
-        try { const t = JSON.parse(p.tallies || '[]'); if (Array.isArray(t)) ct = t; } catch (_) {}
-        while (ct.length < 12) ct.push('');
-        cHtml += `<tr><td class="loop-td-pilot"><div class="loop-pilot-cell">
-            <span style="font-size:15px;font-weight:600;padding:2px 4px;text-decoration:line-through;color:var(--muted);">${esc(p.pilot_name)}</span>
-            ${!isPast ? `<button class="loop-complete-btn" onclick="uncompleteLoopPilot('${esc(p.id)}')" title="Re-add to loop board" style="background:var(--accent);color:#fff;border-color:var(--accent);font-size:14px;">↑</button>` : ''}
-          </div></td>`;
-        for (let c = 1; c <= 12; c++) {
-          const cv = ct[c - 1] || '';
-          if (isPast) {
-            cHtml += `<td class="loop-td-tally"><span class="loop-tally-static${cv ? (cv === 'L' ? ' has-val has-val-L' : cv === 'ML' ? ' has-val has-val-ML' : cv === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}">${cv || '–'}</span></td>`;
-          } else {
-            const cOpts = tallyOpts2.map(v => `<option value="${v}" ${cv === v ? 'selected' : ''}>${v || '–'}</option>`).join('');
-            cHtml += `<td class="loop-td-tally"><select class="loop-tally-sel${cv ? (cv === 'L' ? ' has-val has-val-L' : cv === 'ML' ? ' has-val has-val-ML' : cv === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" onchange="setCompletedTally('${esc(p.id)}',${c},this)">${cOpts}</select></td>`;
-          }
-        }
-        cHtml += `</tr>`;
-      }
-      cHtml += `</tbody></table></div>`;
-      html += cHtml;
     }
   }
   el.innerHTML = html;
@@ -6461,18 +6433,13 @@ async function completeLoopPilot(slot) {
   const slotData = loopBoard.find(s => s.slot === slot);
   if (!slotData || !slotData.pilot_id) { toast('No pilot in this slot'); return; }
   _loopApiStart();
-  _setLoopRows(loopBoardDate, loopBoardRows - 1);
   try {
     const res = await officeFetch('/api/office/loop-board/complete', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ slot, date: loopBoardDate })
     });
-    if (!res.ok) {
-      _setLoopRows(loopBoardDate, loopBoardRows + 1);
-      toast('Failed to complete pilot', 'err');
-    }
+    if (!res.ok) toast('Failed to mark pilot done', 'err');
   } catch (_) {
-    _setLoopRows(loopBoardDate, loopBoardRows + 1);
     toast('Cannot reach server', 'err');
   } finally {
     _loopApiEnd();
@@ -6494,21 +6461,18 @@ async function setCompletedTally(completedId, col, selectEl) {
   finally { _loopApiEnd(); }
 }
 
-async function uncompleteLoopPilot(completedId) {
+async function uncompleteLoopPilot(slot) {
   _loopApiStart();
-  _setLoopRows(loopBoardDate, loopBoardRows + 1);
   try {
     const res = await officeFetch('/api/office/loop-board/uncomplete', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: completedId, date: loopBoardDate })
+      body: JSON.stringify({ slot, date: loopBoardDate })
     });
     if (!res.ok) {
-      _setLoopRows(loopBoardDate, loopBoardRows - 1);
       const d = await res.json();
-      toast(d.error || 'Failed to re-add pilot', 'err');
+      toast(d.error || 'Failed to re-activate pilot', 'err');
     }
   } catch (_) {
-    _setLoopRows(loopBoardDate, loopBoardRows - 1);
     toast('Cannot reach server', 'err');
   } finally {
     _loopApiEnd();

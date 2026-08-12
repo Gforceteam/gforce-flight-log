@@ -254,6 +254,7 @@ async function createTables() {
   await db.execute('CREATE INDEX IF NOT EXISTS idx_lbc_date ON loop_board_completed(date)');
   try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN slot INTEGER'); } catch (_) {}
   try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN tallies TEXT'); } catch (_) {}
+  try { await db.execute('ALTER TABLE loop_board_v2 ADD COLUMN done INTEGER DEFAULT 0'); } catch (_) {}
   await db.execute(`CREATE TABLE IF NOT EXISTS duty_sheet_overrides (
     pilot_id TEXT NOT NULL,
     date TEXT NOT NULL,
@@ -1239,7 +1240,7 @@ app.delete('/api/office/pilots/:id', verifyOffice, async (req, res) => {
     await run('DELETE FROM active_timers WHERE pilot_id = ?', [id]);
     await run('DELETE FROM push_subscriptions WHERE pilot_id = ?', [id]);
     await run('UPDATE loop_board SET pilot_id = NULL, pilot_name = NULL WHERE pilot_id = ?', [id]);
-    await run('UPDATE loop_board_v2 SET pilot_id = NULL, pilot_name = NULL WHERE pilot_id = ?', [id]);
+    await run('UPDATE loop_board_v2 SET pilot_id = NULL, pilot_name = NULL, done = 0 WHERE pilot_id = ?', [id]);
     await run('DELETE FROM pilots WHERE id = ?', [id]);
     broadcast({ type: 'PILOT_DELETED', pilot_id: id, pilot_name: pilot.name });
     res.json({ ok: true, pilot_name: pilot.name });
@@ -2249,7 +2250,7 @@ app.get('/api/pilot/loop-board', verifyPilotOrOffice, async (req, res) => {
   try {
     const date = nzToday();
     await ensureLoopBoardDate(date);
-    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
     const completed = await queryAll('SELECT id, pilot_id, pilot_name, completed_at, slot, tallies FROM loop_board_completed WHERE date = ? ORDER BY completed_at ASC', [date]);
     res.json({ board, completed });
   } catch (e) {
@@ -2261,7 +2262,7 @@ app.get('/api/office/loop-board', verifyOffice, async (req, res) => {
   try {
     const date = req.query.date || nzToday();
     await ensureLoopBoardDate(date);
-    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
     const completed = await queryAll('SELECT id, pilot_id, pilot_name, completed_at, slot, tallies FROM loop_board_completed WHERE date = ? ORDER BY completed_at ASC', [date]);
     const lockRow = await queryOne("SELECT value FROM app_settings WHERE key = ?", [`loop_board_order_${date}`]);
     const locked_order = lockRow ? JSON.parse(lockRow.value) : null;
@@ -2307,10 +2308,10 @@ app.post('/api/office/loop-board/slot', verifyOffice, async (req, res) => {
     if (!slot || slot < 1 || slot > 20) return res.status(400).json({ error: 'Invalid slot' });
     await ensureLoopBoardDate(date);
     await run(
-      'UPDATE loop_board_v2 SET pilot_id = ?, pilot_name = ? WHERE date = ? AND slot = ?',
+      'UPDATE loop_board_v2 SET pilot_id = ?, pilot_name = ?, done = 0 WHERE date = ? AND slot = ?',
       [pilot_id || null, pilot_name || null, date, slot]
     );
-    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
     broadcast({ type: 'LOOP_BOARD_UPDATE', board, date });
     res.json({ ok: true });
   } catch (e) {
@@ -2322,8 +2323,8 @@ app.post('/api/office/loop-board/reset', verifyOffice, async (req, res) => {
   try {
     const { date: reqDate } = req.body || {};
     const date = reqDate || nzToday();
-    await run('UPDATE loop_board_v2 SET pilot_id = NULL, pilot_name = NULL, tallies = NULL WHERE date = ?', [date]);
-    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    await run('UPDATE loop_board_v2 SET pilot_id = NULL, pilot_name = NULL, tallies = NULL, done = 0 WHERE date = ?', [date]);
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
     broadcast({ type: 'LOOP_BOARD_UPDATE', board, date });
     res.json({ ok: true });
   } catch (e) {
@@ -2347,7 +2348,7 @@ app.post('/api/office/loop-board/tally', verifyOffice, async (req, res) => {
     while (tallies.length < 12) tallies.push('');
     tallies[col - 1] = value || '';
     await run('UPDATE loop_board_v2 SET tallies = ? WHERE date = ? AND slot = ?', [JSON.stringify(tallies), date, slot]);
-    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
     broadcast({ type: 'LOOP_BOARD_UPDATE', board, date });
     res.json({ ok: true });
   } catch (e) {
@@ -2364,33 +2365,17 @@ app.post('/api/office/loop-board/complete', verifyOffice, async (req, res) => {
     const targetRow = await queryOne('SELECT pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? AND slot = ?', [date, slot]);
     if (!targetRow || !targetRow.pilot_name) return res.status(404).json({ error: 'No pilot in this slot' });
 
-    // Record as completed — preserve tallies
+    // Mark pilot as done in-place — they stay in their slot, just greyed on client
+    await run('UPDATE loop_board_v2 SET done = 1 WHERE date = ? AND slot = ?', [date, slot]);
+
+    // Record in completed table as a historical log
     await run(
-      'INSERT INTO loop_board_completed (id, date, pilot_id, pilot_name, completed_at, slot, tallies) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT OR REPLACE INTO loop_board_completed (id, date, pilot_id, pilot_name, completed_at, slot, tallies) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [uuidv4(), date, targetRow.pilot_id, targetRow.pilot_name, new Date().toISOString(), slot, targetRow.tallies || null]
     );
 
-    // Shift pilots in slots above the completed one upward by one
-    const allRows = await queryAll(
-      'SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]
-    );
-    // Use last OCCUPIED slot — allRows always has 20 rows (pre-created by ensureLoopBoardDate),
-    // so allRows[allRows.length-1].slot is always 20, which would wipe real pilots with NULLs.
-    const occupied = allRows.filter(r => r.pilot_name || r.pilot_id);
-    const maxSlot = occupied.length > 0 ? occupied[occupied.length - 1].slot : slot;
-    for (let i = slot; i < maxSlot; i++) {
-      const next = allRows.find(r => r.slot === i + 1);
-      await run(
-        'UPDATE loop_board_v2 SET pilot_id = ?, pilot_name = ?, tallies = ? WHERE date = ? AND slot = ?',
-        [next?.pilot_id || null, next?.pilot_name || null, next?.tallies || null, date, i]
-      );
-    }
-    // Clear the now-vacated last slot
-    await run('UPDATE loop_board_v2 SET pilot_id = NULL, pilot_name = NULL, tallies = NULL WHERE date = ? AND slot = ?', [date, maxSlot]);
-
-    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
-    const completed = await queryAll('SELECT id, pilot_id, pilot_name, completed_at, slot, tallies FROM loop_board_completed WHERE date = ? ORDER BY completed_at ASC', [date]);
-    broadcast({ type: 'LOOP_BOARD_UPDATE', board, completed, rowCountDelta: -1, date });
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    broadcast({ type: 'LOOP_BOARD_UPDATE', board, date });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -2425,71 +2410,19 @@ app.post('/api/office/loop-board/completed-tally', verifyOffice, async (req, res
 
 app.post('/api/office/loop-board/uncomplete', verifyOffice, async (req, res) => {
   try {
-    const { id, date: reqDate } = req.body;
+    const { slot: slotRaw, date: reqDate } = req.body;
     const date = reqDate || nzToday();
-    if (!id) return res.status(400).json({ error: 'id required' });
+    const slot = parseInt(slotRaw, 10);
+    if (!slot || slot < 1 || slot > 20) return res.status(400).json({ error: 'Invalid slot' });
 
-    const record = await queryOne('SELECT * FROM loop_board_completed WHERE id = ?', [id]);
-    if (!record) return res.status(404).json({ error: 'Completed record not found' });
+    // Clear done flag — pilot stays in their slot, becomes active again
+    await run('UPDATE loop_board_v2 SET done = 0 WHERE date = ? AND slot = ?', [date, slot]);
 
-    // Find the highest occupied slot
-    const lastRow = await queryOne(
-      'SELECT slot FROM loop_board_v2 WHERE date = ? AND pilot_id IS NOT NULL ORDER BY slot DESC LIMIT 1', [date]
-    );
-    const lastOccupied = lastRow ? lastRow.slot : 0;
-    if (lastOccupied >= 20) return res.status(400).json({ error: 'Board is full — cannot re-add pilot' });
+    // Remove matching completed log entry if one exists
+    await run('DELETE FROM loop_board_completed WHERE date = ? AND slot = ?', [date, slot]);
 
-    // Determine target slot — use locked order if available, otherwise fall back to original slot
-    let targetSlot = record.slot || 1;
-    const lockRow = await queryOne("SELECT value FROM app_settings WHERE key = ?", [`loop_board_order_${date}`]);
-    if (lockRow) {
-      const lockedOrder = JSON.parse(lockRow.value); // array of pilot_ids in locked order
-      const pilotIdx = lockedOrder.indexOf(record.pilot_id);
-      if (pilotIdx !== -1) {
-        // Find which pilots are currently on the active board
-        const activeSlots = await queryAll(
-          'SELECT slot, pilot_id FROM loop_board_v2 WHERE date = ? AND pilot_id IS NOT NULL ORDER BY slot ASC', [date]
-        );
-        // Insert after the last active pilot whose locked index is lower than this pilot's
-        let insertAfterSlot = 0;
-        for (const s of activeSlots) {
-          const sIdx = lockedOrder.indexOf(s.pilot_id);
-          if (sIdx !== -1 && sIdx < pilotIdx) insertAfterSlot = s.slot;
-        }
-        targetSlot = insertAfterSlot + 1;
-      } else {
-        // Not in locked order — append at end
-        targetSlot = lastOccupied + 1;
-      }
-    }
-
-    // Ensure targetSlot row exists
-    await ensureLoopBoardDate(date);
-
-    // Shift all occupied slots from lastOccupied down to targetSlot down by one (higher slot numbers)
-    const allRows = await queryAll(
-      'SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot DESC', [date]
-    );
-    for (let i = lastOccupied; i >= targetSlot; i--) {
-      const row = allRows.find(r => r.slot === i);
-      await run(
-        'UPDATE loop_board_v2 SET pilot_id = ?, pilot_name = ?, tallies = ? WHERE date = ? AND slot = ?',
-        [row?.pilot_id || null, row?.pilot_name || null, row?.tallies || null, date, i + 1]
-      );
-    }
-
-    // Re-insert pilot at their correct slot, restoring their tallies
-    await run(
-      'UPDATE loop_board_v2 SET pilot_id = ?, pilot_name = ?, tallies = ? WHERE date = ? AND slot = ?',
-      [record.pilot_id, record.pilot_name, record.tallies || null, date, targetSlot]
-    );
-
-    // Remove from completed list
-    await run('DELETE FROM loop_board_completed WHERE id = ?', [id]);
-
-    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
-    const completed = await queryAll('SELECT id, pilot_id, pilot_name, completed_at, slot, tallies FROM loop_board_completed WHERE date = ? ORDER BY completed_at ASC', [date]);
-    broadcast({ type: 'LOOP_BOARD_UPDATE', board, completed, rowCountDelta: 1, date });
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    broadcast({ type: 'LOOP_BOARD_UPDATE', board, date });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });

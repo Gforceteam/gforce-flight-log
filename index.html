@@ -1554,7 +1554,10 @@
           <div id="tracker-panel" style="display:none;padding:0 16px 16px;">
             <div style="font-size:13px;color:var(--muted);margin-bottom:12px;">Live location of pilots who have location sharing enabled on their device.</div>
             <div id="pilot-tracker-map" style="width:100%;height:360px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--surface);"></div>
-            <div id="pilot-tracker-legend" style="margin-top:10px;font-size:12px;color:var(--muted);"></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
+              <div id="pilot-tracker-legend" style="font-size:12px;color:var(--muted);flex:1;"></div>
+              <button onclick="loadTrackerLocations()" style="flex-shrink:0;padding:6px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;margin-left:10px;">↻ Refresh</button>
+            </div>
           </div>
         </div>
 

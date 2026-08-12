@@ -255,6 +255,20 @@ async function createTables() {
   try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN slot INTEGER'); } catch (_) {}
   try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN tallies TEXT'); } catch (_) {}
   try { await db.execute('ALTER TABLE loop_board_v2 ADD COLUMN done INTEGER DEFAULT 0'); } catch (_) {}
+  // Pilot location tracker
+  try { await db.execute('ALTER TABLE pilots ADD COLUMN owntracks_key TEXT'); } catch (_) {}
+  const pilotsMissingKey = await queryAll('SELECT id FROM pilots WHERE owntracks_key IS NULL');
+  for (const p of pilotsMissingKey) {
+    await run('UPDATE pilots SET owntracks_key = ? WHERE id = ?', [uuidv4(), p.id]);
+  }
+  await db.execute(`CREATE TABLE IF NOT EXISTS pilot_locations (
+    pilot_id   TEXT PRIMARY KEY,
+    pilot_name TEXT NOT NULL,
+    lat        REAL NOT NULL,
+    lng        REAL NOT NULL,
+    accuracy   REAL,
+    updated_at TEXT NOT NULL
+  )`);
   await db.execute(`CREATE TABLE IF NOT EXISTS duty_sheet_overrides (
     pilot_id TEXT NOT NULL,
     date TEXT NOT NULL,
@@ -2240,6 +2254,56 @@ app.post('/api/office/push-test/:pilotId', verifyOffice, async (req, res) => {
       }
     }));
     res.json({ ok: true, pilot_name: pilot.name, sent, failed });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Pilot Location Tracker ───────────────────────────────────────────────────
+
+// OwnTracks HTTP receiver — no JWT auth, uses per-pilot owntracks_key in query string
+app.post('/api/owntracks', async (req, res) => {
+  try {
+    const { key } = req.query;
+    if (!key) return res.json({});
+    const pilot = await queryOne('SELECT id, name FROM pilots WHERE owntracks_key = ?', [key]);
+    if (!pilot) return res.status(403).json({});
+    const { lat, lon, acc, _type } = req.body;
+    if (_type && _type !== 'location') return res.json({}); // ignore non-location payloads
+    if (lat == null || lon == null) return res.json({});
+    const updatedAt = new Date().toISOString();
+    await run(
+      'INSERT OR REPLACE INTO pilot_locations (pilot_id, pilot_name, lat, lng, accuracy, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [pilot.id, pilot.name, lat, lon, acc ?? null, updatedAt]
+    );
+    res.json({});
+  } catch (e) {
+    console.error('[owntracks]', e);
+    res.status(500).json({});
+  }
+});
+
+// Returns all stored pilot locations (office only)
+app.get('/api/office/pilot-locations', verifyOffice, async (req, res) => {
+  try {
+    const locations = await queryAll(
+      'SELECT pilot_id, pilot_name, lat, lng, accuracy, updated_at FROM pilot_locations ORDER BY updated_at DESC'
+    );
+    res.json(locations);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Returns each pilot's OwnTracks URL for setup (office only)
+app.get('/api/office/owntracks-setup', verifyOffice, async (req, res) => {
+  try {
+    const pilots = await queryAll('SELECT id, name, owntracks_key FROM pilots ORDER BY name ASC');
+    res.json(pilots.map(p => ({
+      id: p.id,
+      name: p.name,
+      url: `https://gforce-api.fly.dev/api/owntracks?key=${p.owntracks_key}`
+    })));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

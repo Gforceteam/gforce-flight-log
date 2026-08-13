@@ -25,6 +25,7 @@ const OFFICE_PASSWORD = process.env.OFFICE_PASSWORD;
 
 // ─── App Settings (in-memory, persisted to DB) ────────────────────────────────
 let _pushNotificationsEnabled = false; // off by default; loaded from DB at startup
+let _trackerEnabled = true;            // pilot tracker master switch; loaded from DB at startup
 let _officeTv = 0;              // token version — incremented on password change to invalidate all sessions
 let _officeRefreshSecret = '';  // refresh secret — rotated on password change; seeded from env var
 
@@ -2284,6 +2285,7 @@ app.post('/api/owntracks', async (req, res) => {
       'SELECT consented FROM pilot_location_consent WHERE pilot_id = ? AND date = ?',
       [pilot.id, today]
     );
+    if (!_trackerEnabled) return res.json({}); // tracker disabled by office
     if (!consent || !consent.consented) return res.json({}); // no consent — discard silently
     const updatedAt = new Date().toISOString();
     await run(
@@ -2294,6 +2296,22 @@ app.post('/api/owntracks', async (req, res) => {
   } catch (e) {
     console.error('[owntracks]', e);
     res.status(500).json({});
+  }
+});
+
+// Tracker master switch
+app.get('/api/office/tracker-enabled', verifyOffice, (req, res) => {
+  res.json({ enabled: _trackerEnabled });
+});
+
+app.put('/api/office/tracker-enabled', verifyOffice, async (req, res) => {
+  try {
+    const enabled = !!req.body.enabled;
+    _trackerEnabled = enabled;
+    await run("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('tracker_enabled', ?)", [enabled ? 'true' : 'false']);
+    res.json({ ok: true, enabled });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -2568,6 +2586,9 @@ async function start() {
   const pushSetting = await queryOne("SELECT value FROM app_settings WHERE key = 'push_notifications_enabled'");
   _pushNotificationsEnabled = pushSetting?.value === 'true';
   console.log(`Push notifications: ${_pushNotificationsEnabled ? 'ENABLED' : 'DISABLED'}`);
+  const trackerSetting = await queryOne("SELECT value FROM app_settings WHERE key = 'tracker_enabled'");
+  _trackerEnabled = trackerSetting ? trackerSetting.value !== 'false' : true; // default on
+  console.log(`Pilot tracker: ${_trackerEnabled ? 'ENABLED' : 'DISABLED'}`);
 
   // Load office token version (used to invalidate all sessions on password change)
   const tvRow = await queryOne("SELECT value FROM app_settings WHERE key = 'office_token_version'");

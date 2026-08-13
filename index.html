@@ -1563,11 +1563,20 @@
 
         <!-- Pilot Tracker -->
         <div class="card stat-section" style="margin-bottom:12px;padding:0;overflow:hidden;">
-          <button onclick="toggleTrackerCard()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:16px;background:none;border:none;cursor:pointer;text-align:left;">
-            <span style="font-size:15px;font-weight:700;color:var(--text);">📍 Pilot Tracker</span>
-            <span id="tracker-card-chevron" style="font-size:18px;color:var(--muted);transition:transform 0.2s;">›</span>
-          </button>
+          <div style="display:flex;align-items:center;padding:16px;gap:12px;">
+            <button onclick="toggleTrackerCard()" style="flex:1;display:flex;align-items:center;gap:8px;background:none;border:none;cursor:pointer;text-align:left;padding:0;">
+              <span style="font-size:15px;font-weight:700;color:var(--text);">📍 Pilot Tracker</span>
+              <span id="tracker-card-chevron" style="font-size:18px;color:var(--muted);transition:transform 0.2s;">›</span>
+            </button>
+            <label class="notif-switch" style="flex-shrink:0;" title="Enable/disable pilot tracker">
+              <input type="checkbox" id="tracker-master-toggle" onchange="setTrackerEnabled(this.checked)">
+              <span class="notif-slider"></span>
+            </label>
+          </div>
           <div id="tracker-card-body" style="display:none;padding:0 16px 16px;">
+            <div id="tracker-disabled-banner" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px;font-size:13px;color:var(--muted);text-align:center;">
+              🚫 Pilot tracker is disabled — pilots' locations are not being recorded.
+            </div>
             <div id="tracker-map-el" style="width:100%;height:340px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--surface);margin-bottom:10px;"></div>
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
               <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--muted);">Currently tracking</div>
@@ -6913,13 +6922,46 @@ const QUEENSTOWN = [-45.0312, 168.6626];
 let _tMap = null;
 let _tMarkers = {};
 
+let _trackerEnabled = true;
+
 function toggleTrackerCard() {
   const body = document.getElementById('tracker-card-body');
   const chev = document.getElementById('tracker-card-chevron');
   const open = body.style.display === 'none';
   body.style.display = open ? 'block' : 'none';
   chev.style.transform = open ? 'rotate(90deg)' : '';
-  if (open) { initTrackerMap(); loadTrackerLocations(); loadTrackerSetupUrls(); }
+  if (open) { loadTrackerEnabledState(); initTrackerMap(); loadTrackerLocations(); loadTrackerSetupUrls(); }
+}
+
+async function loadTrackerEnabledState() {
+  try {
+    const res = await officeFetch('/api/office/tracker-enabled');
+    if (!res.ok) return;
+    const data = await res.json();
+    _trackerEnabled = !!data.enabled;
+    const toggle = document.getElementById('tracker-master-toggle');
+    if (toggle) toggle.checked = _trackerEnabled;
+    renderTrackerEnabledBanner();
+  } catch (_) {}
+}
+
+function renderTrackerEnabledBanner() {
+  const el = document.getElementById('tracker-disabled-banner');
+  if (!el) return;
+  el.style.display = _trackerEnabled ? 'none' : 'block';
+}
+
+async function setTrackerEnabled(enabled) {
+  try {
+    await officeFetch('/api/office/tracker-enabled', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled })
+    });
+    _trackerEnabled = enabled;
+    renderTrackerEnabledBanner();
+    toast(enabled ? '📍 Pilot tracker enabled' : 'Pilot tracker disabled');
+  } catch (_) { toast('Could not save setting', 'err'); }
 }
 
 function initTrackerMap() {

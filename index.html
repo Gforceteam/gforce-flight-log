@@ -1434,7 +1434,17 @@
         <p class="settings-card-title">My Location</p>
         <p class="settings-card-desc" style="margin-bottom:12px;">Your last known position as seen by the office. Only visible to you.</p>
         <div id="pilot-self-map-el" style="width:100%;height:260px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--surface);margin-bottom:8px;"></div>
-        <div id="pilot-self-map-status" style="font-size:12px;color:var(--muted);">Loading…</div>
+        <div id="pilot-self-map-status" style="font-size:12px;color:var(--muted);margin-bottom:14px;">Loading…</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border);">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:var(--text);">Share location with office</div>
+            <div id="pilot-consent-desc" style="font-size:12px;color:var(--muted);margin-top:2px;">Loading…</div>
+          </div>
+          <label class="notif-switch" style="flex-shrink:0;margin-left:16px;">
+            <input type="checkbox" id="pilot-consent-toggle" onchange="setPilotLocationSharing(this.checked)">
+            <span class="notif-slider"></span>
+          </label>
+        </div>
       </section>
 
       <section class="settings-card">
@@ -2414,12 +2424,13 @@ function initPilotSelfMap() {
   const loadMap = () => {
     const el = document.getElementById('pilot-self-map-el');
     if (!el) return;
-    if (_selfMap) { _selfMap.invalidateSize(); loadPilotSelfLocation(); return; }
+    if (_selfMap) { _selfMap.invalidateSize(); loadPilotSelfLocation(); loadPilotConsentToggle(); return; }
     _selfMap = L.map(el, { zoomControl: true }).setView([-45.0312, 168.6626], 14);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors', maxZoom: 19
     }).addTo(_selfMap);
     loadPilotSelfLocation();
+    loadPilotConsentToggle();
   };
   if (!document.getElementById('leaflet-css')) {
     const link = document.createElement('link');
@@ -2437,6 +2448,39 @@ function initPilotSelfMap() {
   } else {
     const wait = setInterval(() => { if (window.L) { clearInterval(wait); loadMap(); } }, 100);
   }
+}
+
+async function loadPilotConsentToggle() {
+  try {
+    const res = await apiFetch('/api/pilot/location-consent');
+    if (!res || !res.ok) return;
+    const data = await res.json();
+    const toggle = document.getElementById('pilot-consent-toggle');
+    const desc = document.getElementById('pilot-consent-desc');
+    if (toggle) toggle.checked = !!(data.answered && data.consented);
+    if (desc) {
+      if (!data.answered) desc.textContent = 'Not set for today — toggle to enable';
+      else if (data.consented) desc.textContent = 'On — office can see your location today';
+      else desc.textContent = 'Off — your location is hidden today';
+    }
+  } catch (_) {}
+}
+
+async function setPilotLocationSharing(enabled) {
+  const desc = document.getElementById('pilot-consent-desc');
+  try {
+    const res = await apiFetch('/api/pilot/location-consent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ consented: enabled })
+    });
+    if (!res || !res.ok) { toast('Could not save', 'err'); return; }
+    if (desc) desc.textContent = enabled ? 'On — office can see your location today' : 'Off — your location is hidden today';
+    // Also dismiss the modal if it's showing
+    const modal = document.getElementById('location-consent-modal');
+    if (modal) modal.style.display = 'none';
+    toast(enabled ? '📍 Location sharing enabled for today' : 'Location sharing disabled for today');
+  } catch (_) { toast('Could not save', 'err'); }
 }
 
 async function loadPilotSelfLocation() {

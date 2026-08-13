@@ -6819,10 +6819,11 @@ async function loadTrackerSetupUrls() {
     if (!el) return;
     el.innerHTML = pilots.map(p => `
       <div style="margin-bottom:12px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;">
-        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px;">${esc(p.name)}</div>
-        <div style="font-size:11px;color:var(--muted);font-family:monospace;word-break:break-all;margin-bottom:10px;line-height:1.5;">${esc(p.url)}</div>
-        <button onclick="navigator.clipboard.writeText(${JSON.stringify(p.url)}).then(()=>toast('✅ URL copied — paste into OwnTracks'))"
-          style="width:100%;padding:10px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:0.2px;">
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;">${esc(p.name)}</div>
+        <input readonly onclick="this.select()" value="${p.url.replace(/"/g,'&quot;')}"
+          style="width:100%;box-sizing:border-box;padding:9px 10px;font-size:11px;font-family:monospace;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);margin-bottom:8px;cursor:text;">
+        <button onclick="(()=>{const inp=this.previousElementSibling;inp.select();try{navigator.clipboard.writeText(inp.value).then(()=>toast('✅ Copied!')).catch(()=>{document.execCommand('copy');toast('✅ Copied!')});}catch(e){document.execCommand('copy');toast('✅ Copied!');};})()"
+          style="width:100%;padding:10px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">
           📋 Copy URL for ${esc(p.name)}
         </button>
       </div>`).join('');

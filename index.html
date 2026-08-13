@@ -1569,10 +1569,11 @@
           </button>
           <div id="tracker-card-body" style="display:none;padding:0 16px 16px;">
             <div id="tracker-map-el" style="width:100%;height:340px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--surface);margin-bottom:10px;"></div>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-              <div id="tracker-map-status" style="font-size:13px;color:var(--muted);">No locations yet.</div>
-              <button onclick="loadTrackerLocations()" style="flex-shrink:0;padding:6px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;margin-left:10px;">↻ Refresh</button>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--muted);">Currently tracking</div>
+              <button onclick="loadTrackerLocations()" style="flex-shrink:0;padding:6px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;">↻ Refresh</button>
             </div>
+            <div id="tracker-pilot-list" style="margin-bottom:16px;"></div>
             <div style="border-top:1px solid var(--border);padding-top:14px;">
               <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:4px;">OwnTracks Setup</div>
               <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Open OwnTracks on the pilot's phone → ⚙️ → Connection → paste this URL</div>
@@ -6953,20 +6954,25 @@ async function loadTrackerLocations() {
     const res = await officeFetch('/api/office/pilot-locations');
     if (!res.ok) return;
     const locs = await res.json();
-    const statusEl = document.getElementById('tracker-map-status');
+    const listEl = document.getElementById('tracker-pilot-list');
+
     if (!locs.length) {
-      if (statusEl) statusEl.textContent = 'No locations received yet.';
+      if (listEl) listEl.innerHTML = '<div style="font-size:13px;color:var(--muted);">No pilots tracking yet.</div>';
       return;
     }
+
+    // Update map markers with dot + name label
     locs.forEach(l => {
       if (!_tMap || l.lat == null || l.lng == null) return;
       const staleMs = Date.now() - new Date(l.updated_at).getTime();
-      const isStale = staleMs > 5 * 60 * 1000;
-      const colour = isStale ? '#9ca3af' : '#F37329';
+      const colour = staleMs > 5 * 60 * 1000 ? '#9ca3af' : '#F37329';
       const icon = L.divIcon({
         className: '',
-        html: `<div style="background:${colour};border:2px solid #fff;border-radius:50%;width:14px;height:14px;box-shadow:0 1px 4px rgba(0,0,0,0.35);"></div>`,
-        iconSize: [14, 14], iconAnchor: [7, 7]
+        html: `<div style="display:flex;align-items:center;gap:5px;">
+          <div style="background:${colour};border:2px solid #fff;border-radius:50%;width:14px;height:14px;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,0.35);"></div>
+          <span style="font-size:11px;font-weight:700;color:#1a1a1a;background:rgba(255,255,255,0.85);padding:1px 5px;border-radius:4px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.2);">${esc(l.pilot_name)}</span>
+        </div>`,
+        iconSize: [null, 14], iconAnchor: [7, 7]
       });
       const mins = Math.floor(staleMs / 60000);
       const age = staleMs < 60000 ? 'just now' : `${mins}m ago`;
@@ -6977,16 +6983,19 @@ async function loadTrackerLocations() {
         _tMarkers[l.pilot_id] = L.marker([l.lat, l.lng], { icon }).addTo(_tMap).bindPopup(popup);
       }
     });
-    if (statusEl) {
-      statusEl.innerHTML = locs.map(l => {
+
+    // Pilot list below map
+    if (listEl) {
+      listEl.innerHTML = locs.map(l => {
         const staleMs = Date.now() - new Date(l.updated_at).getTime();
         const colour = staleMs > 5 * 60 * 1000 ? '#9ca3af' : '#F37329';
         const mins = Math.floor(staleMs / 60000);
         const age = staleMs < 60000 ? 'just now' : `${mins}m ago`;
-        return `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px;">
-          <span style="background:${colour};border-radius:50%;width:9px;height:9px;display:inline-block;"></span>
-          ${esc(l.pilot_name)} <span style="color:var(--muted)">${age}</span>
-        </span>`;
+        return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+          <div style="background:${colour};border-radius:50%;width:10px;height:10px;flex-shrink:0;"></div>
+          <div style="font-size:14px;font-weight:600;color:var(--text);flex:1;">${esc(l.pilot_name)}</div>
+          <div style="font-size:12px;color:var(--muted);">${age}</div>
+        </div>`;
       }).join('');
     }
   } catch (_) {}

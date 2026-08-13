@@ -1431,6 +1431,13 @@
 
 
       <section class="settings-card">
+        <p class="settings-card-title">My Location</p>
+        <p class="settings-card-desc" style="margin-bottom:12px;">Your last known position as seen by the office. Only visible to you.</p>
+        <div id="pilot-self-map-el" style="width:100%;height:260px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--surface);margin-bottom:8px;"></div>
+        <div id="pilot-self-map-status" style="font-size:12px;color:var(--muted);">Loading…</div>
+      </section>
+
+      <section class="settings-card">
         <p class="settings-card-title">Updates</p>
         <h2 style="margin:0 0 8px;font-size:17px;font-weight:700;">App version</h2>
         <p id="settings-version-display" style="font-size:14px;color:var(--accent);font-weight:700;margin:0 0 8px;">—</p>
@@ -2397,6 +2404,69 @@ function doLogout() {
 /** Header shows the server pilot name; tap opens Settings to edit the weekly CSV “name on export” (local only). */
 function openPilotExportNameSettings() {
   editPilotExportName();
+}
+
+// ─── Pilot Self-Map (settings tab) ───────────────────────────────────────────
+let _selfMap = null;
+let _selfMarker = null;
+
+function initPilotSelfMap() {
+  const loadMap = () => {
+    const el = document.getElementById('pilot-self-map-el');
+    if (!el) return;
+    if (_selfMap) { _selfMap.invalidateSize(); loadPilotSelfLocation(); return; }
+    _selfMap = L.map(el, { zoomControl: true }).setView([-45.0312, 168.6626], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors', maxZoom: 19
+    }).addTo(_selfMap);
+    loadPilotSelfLocation();
+  };
+  if (!document.getElementById('leaflet-css')) {
+    const link = document.createElement('link');
+    link.id = 'leaflet-css'; link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+  }
+  if (window.L) { loadMap(); return; }
+  if (!document.getElementById('leaflet-js')) {
+    const s = document.createElement('script');
+    s.id = 'leaflet-js';
+    s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    s.onload = loadMap;
+    document.head.appendChild(s);
+  } else {
+    const wait = setInterval(() => { if (window.L) { clearInterval(wait); loadMap(); } }, 100);
+  }
+}
+
+async function loadPilotSelfLocation() {
+  const statusEl = document.getElementById('pilot-self-map-status');
+  try {
+    const res = await apiFetch('/api/pilot/my-location');
+    if (!res || !res.ok) { if (statusEl) statusEl.textContent = 'Could not load location.'; return; }
+    const loc = await res.json();
+    if (!loc) {
+      if (statusEl) statusEl.textContent = 'No location recorded yet. Make sure OwnTracks is running and you have consented to sharing today.';
+      return;
+    }
+    const staleMs = Date.now() - new Date(loc.updated_at).getTime();
+    const mins = Math.floor(staleMs / 60000);
+    const age = staleMs < 60000 ? 'just now' : `${mins} min ago`;
+    const colour = staleMs > 5 * 60 * 1000 ? '#9ca3af' : '#F37329';
+    if (statusEl) statusEl.textContent = `Last updated: ${age}${loc.accuracy ? ` · ±${Math.round(loc.accuracy)}m` : ''}`;
+    if (!_selfMap) return;
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="background:${colour};border:2px solid #fff;border-radius:50%;width:14px;height:14px;box-shadow:0 1px 4px rgba(0,0,0,0.35);"></div>`,
+      iconSize: [14, 14], iconAnchor: [7, 7]
+    });
+    if (_selfMarker) {
+      _selfMarker.setLatLng([loc.lat, loc.lng]).setIcon(icon);
+    } else {
+      _selfMarker = L.marker([loc.lat, loc.lng], { icon }).addTo(_selfMap).bindPopup(`<b>${esc(loc.pilot_name)}</b><br>${age}`);
+    }
+    _selfMap.setView([loc.lat, loc.lng], 14);
+  } catch (_) { if (statusEl) statusEl.textContent = 'Could not load location.'; }
 }
 
 // ─── Daily Location Consent ───────────────────────────────────────────────────
@@ -4323,6 +4393,7 @@ function showPilotTab(name) {
       dst.appendChild(src.firstElementChild);
     }
     void renderSettingsPage();
+    setTimeout(initPilotSelfMap, 50);
   }
 }
 

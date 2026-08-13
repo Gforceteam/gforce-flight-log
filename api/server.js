@@ -2311,6 +2311,19 @@ app.get('/api/pilot/location-consent', verifyToken, async (req, res) => {
   }
 });
 
+// Returns the requesting pilot's own stored location
+app.get('/api/pilot/my-location', verifyToken, async (req, res) => {
+  try {
+    const row = await queryOne(
+      'SELECT pilot_id, pilot_name, lat, lng, accuracy, updated_at FROM pilot_locations WHERE pilot_id = ?',
+      [req.pilot.id]
+    );
+    res.json(row || null);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/pilot/location-consent', verifyToken, async (req, res) => {
   try {
     const { consented } = req.body;

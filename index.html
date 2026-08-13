@@ -1583,11 +1583,6 @@
               <button onclick="loadTrackerLocations()" style="flex-shrink:0;padding:6px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;">↻ Refresh</button>
             </div>
             <div id="tracker-pilot-list" style="margin-bottom:16px;"></div>
-            <div style="border-top:1px solid var(--border);padding-top:14px;">
-              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:4px;">OwnTracks Setup</div>
-              <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Open OwnTracks on the pilot's phone → ⚙️ → Connection → paste this URL</div>
-              <div id="tracker-setup-urls"></div>
-            </div>
           </div>
         </div>
 
@@ -6930,7 +6925,7 @@ function toggleTrackerCard() {
   const open = body.style.display === 'none';
   body.style.display = open ? 'block' : 'none';
   chev.style.transform = open ? 'rotate(90deg)' : '';
-  if (open) { loadTrackerEnabledState(); initTrackerMap(); loadTrackerLocations(); loadTrackerSetupUrls(); }
+  if (open) { loadTrackerEnabledState(); initTrackerMap(); loadTrackerLocations(); }
 }
 
 async function loadTrackerEnabledState() {
@@ -7043,25 +7038,6 @@ async function loadTrackerLocations() {
   } catch (_) {}
 }
 
-async function loadTrackerSetupUrls() {
-  try {
-    const res = await officeFetch('/api/office/owntracks-setup');
-    if (!res.ok) return;
-    const pilots = await res.json();
-    const el = document.getElementById('tracker-setup-urls');
-    if (!el) return;
-    el.innerHTML = pilots.map(p => `
-      <div style="margin-bottom:12px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;">
-        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;">${esc(p.name)}</div>
-        <input readonly onclick="this.select()" value="${p.url.replace(/"/g,'&quot;')}"
-          style="width:100%;box-sizing:border-box;padding:9px 10px;font-size:11px;font-family:monospace;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);margin-bottom:8px;cursor:text;">
-        <button onclick="(()=>{const inp=this.previousElementSibling;inp.select();try{navigator.clipboard.writeText(inp.value).then(()=>toast('✅ Copied!')).catch(()=>{document.execCommand('copy');toast('✅ Copied!')});}catch(e){document.execCommand('copy');toast('✅ Copied!');};})()"
-          style="width:100%;padding:10px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">
-          📋 Copy URL for ${esc(p.name)}
-        </button>
-      </div>`).join('');
-  } catch (_) {}
-}
 
 function toggleNotifPanel() {
   const panel = document.getElementById('notif-panel');

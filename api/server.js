@@ -255,6 +255,13 @@ async function createTables() {
   try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN slot INTEGER'); } catch (_) {}
   try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN tallies TEXT'); } catch (_) {}
   try { await db.execute('ALTER TABLE loop_board_v2 ADD COLUMN done INTEGER DEFAULT 0'); } catch (_) {}
+  await db.execute(`CREATE TABLE IF NOT EXISTS pilot_location_consent (
+    pilot_id    TEXT NOT NULL,
+    date        TEXT NOT NULL,
+    consented   INTEGER NOT NULL DEFAULT 0,
+    consented_at TEXT,
+    PRIMARY KEY (pilot_id, date)
+  )`);
   // Pilot location tracker
   try { await db.execute('ALTER TABLE pilots ADD COLUMN owntracks_key TEXT'); } catch (_) {}
   const pilotsMissingKey = await queryAll('SELECT id FROM pilots WHERE owntracks_key IS NULL');
@@ -2271,6 +2278,13 @@ app.post('/api/owntracks', async (req, res) => {
     const { lat, lon, acc, _type } = req.body;
     if (_type && _type !== 'location') return res.json({}); // ignore non-location payloads
     if (lat == null || lon == null) return res.json({});
+    // Check pilot has consented to location sharing today
+    const today = nzToday();
+    const consent = await queryOne(
+      'SELECT consented FROM pilot_location_consent WHERE pilot_id = ? AND date = ?',
+      [pilot.id, today]
+    );
+    if (!consent || !consent.consented) return res.json({}); // no consent — discard silently
     const updatedAt = new Date().toISOString();
     await run(
       'INSERT OR REPLACE INTO pilot_locations (pilot_id, pilot_name, lat, lng, accuracy, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -2280,6 +2294,35 @@ app.post('/api/owntracks', async (req, res) => {
   } catch (e) {
     console.error('[owntracks]', e);
     res.status(500).json({});
+  }
+});
+
+// Pilot daily location consent
+app.get('/api/pilot/location-consent', verifyToken, async (req, res) => {
+  try {
+    const today = nzToday();
+    const row = await queryOne(
+      'SELECT consented FROM pilot_location_consent WHERE pilot_id = ? AND date = ?',
+      [req.pilot.id, today]
+    );
+    res.json({ date: today, answered: !!row, consented: row ? !!row.consented : null });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/pilot/location-consent', verifyToken, async (req, res) => {
+  try {
+    const { consented } = req.body;
+    if (typeof consented !== 'boolean') return res.status(400).json({ error: 'consented must be boolean' });
+    const today = nzToday();
+    await run(
+      'INSERT OR REPLACE INTO pilot_location_consent (pilot_id, date, consented, consented_at) VALUES (?, ?, ?, ?)',
+      [req.pilot.id, today, consented ? 1 : 0, new Date().toISOString()]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

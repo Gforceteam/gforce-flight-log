@@ -2399,6 +2399,72 @@ function openPilotExportNameSettings() {
   editPilotExportName();
 }
 
+// ─── Daily Location Consent ───────────────────────────────────────────────────
+let _consentChecked = false;
+let _consentTimer = null;
+
+function nzHour() {
+  return parseInt(new Date().toLocaleString('en-US', { timeZone: 'Pacific/Auckland', hour: 'numeric', hour12: false }));
+}
+
+function msUntil8amNZ() {
+  const nzNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Pacific/Auckland' }));
+  const nz8am = new Date(nzNow);
+  nz8am.setHours(8, 0, 0, 0);
+  return Math.max(0, nz8am - nzNow);
+}
+
+async function checkLocationConsent() {
+  if (!pilotToken) return;
+  try {
+    const res = await apiFetch('/api/pilot/location-consent');
+    if (!res || !res.ok) return;
+    const data = await res.json();
+    if (data.answered) { _consentChecked = true; return; } // already answered today
+    if (nzHour() >= 8) {
+      showLocationConsentPrompt();
+    } else {
+      // Wait until 8am NZ then ask
+      clearTimeout(_consentTimer);
+      _consentTimer = setTimeout(checkLocationConsent, msUntil8amNZ() + 1000);
+    }
+  } catch (_) {}
+}
+
+function showLocationConsentPrompt() {
+  let el = document.getElementById('location-consent-modal');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'location-consent-modal';
+    el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = `
+    <div style="background:var(--surface);border-radius:18px;padding:32px 24px;max-width:340px;width:100%;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,0.35);">
+      <div style="font-size:40px;margin-bottom:14px;">📍</div>
+      <div style="font-size:19px;font-weight:800;color:var(--text);margin-bottom:10px;">Location sharing</div>
+      <div style="font-size:14px;color:var(--muted);line-height:1.55;margin-bottom:26px;">Allow the office to see your location on the map today?<br><br>Your location is only visible while you are active on the loop board.</div>
+      <button onclick="submitLocationConsent(true)" style="width:100%;padding:15px;background:var(--accent);border:none;border-radius:11px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px;">✅ Yes, share my location</button>
+      <button onclick="submitLocationConsent(false)" style="width:100%;padding:14px;background:transparent;border:1px solid var(--border);border-radius:11px;color:var(--muted);font-size:15px;font-weight:600;cursor:pointer;">No thanks</button>
+    </div>`;
+  el.style.display = 'flex';
+}
+
+async function submitLocationConsent(consented) {
+  try {
+    const res = await apiFetch('/api/pilot/location-consent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ consented })
+    });
+    if (!res || !res.ok) { toast('Could not save preference', 'err'); return; }
+    _consentChecked = true;
+    const el = document.getElementById('location-consent-modal');
+    if (el) el.style.display = 'none';
+    toast(consented ? '📍 Location sharing enabled for today' : 'Location sharing declined for today');
+  } catch (_) { toast('Could not save preference', 'err'); }
+}
+
 let _pilotClockInterval;
 function startPilotClock() {
   if (_pilotClockInterval) clearInterval(_pilotClockInterval);
@@ -2433,6 +2499,7 @@ function showApp(name) {
   startStatusPoll();
   startPilotClock();
   connectWS();
+  checkLocationConsent();
 }
 
 function startStatusPoll() {

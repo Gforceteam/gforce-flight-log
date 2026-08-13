@@ -2283,11 +2283,19 @@ app.post('/api/owntracks', async (req, res) => {
   }
 });
 
-// Returns all stored pilot locations (office only)
+// Returns pilot locations — only for pilots active on today's loop board (not done)
 app.get('/api/office/pilot-locations', verifyOffice, async (req, res) => {
   try {
+    const today = nzToday();
     const locations = await queryAll(
-      'SELECT pilot_id, pilot_name, lat, lng, accuracy, updated_at FROM pilot_locations ORDER BY updated_at DESC'
+      `SELECT pl.pilot_id, pl.pilot_name, pl.lat, pl.lng, pl.accuracy, pl.updated_at
+       FROM pilot_locations pl
+       INNER JOIN loop_board_v2 lb
+         ON lb.pilot_id = pl.pilot_id
+        AND lb.date = ?
+        AND COALESCE(lb.done, 0) = 0
+       ORDER BY pl.updated_at DESC`,
+      [today]
     );
     res.json(locations);
   } catch (e) {

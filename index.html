@@ -1557,8 +1557,8 @@
               <button onclick="loadTrackerLocations()" style="flex-shrink:0;padding:6px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;margin-left:10px;">↻ Refresh</button>
             </div>
             <div style="border-top:1px solid var(--border);padding-top:14px;">
-              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:10px;">OwnTracks Setup</div>
-              <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Paste this URL into OwnTracks → Settings → Connection → URL</div>
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:4px;">OwnTracks Setup</div>
+              <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Open OwnTracks on the pilot's phone → ⚙️ → Connection → paste this URL</div>
               <div id="tracker-setup-urls"></div>
             </div>
           </div>
@@ -6818,11 +6818,13 @@ async function loadTrackerSetupUrls() {
     const el = document.getElementById('tracker-setup-urls');
     if (!el) return;
     el.innerHTML = pilots.map(p => `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
-        <span style="font-size:13px;font-weight:600;color:var(--text);min-width:60px;">${esc(p.name)}</span>
-        <span style="font-size:11px;color:var(--muted);font-family:monospace;flex:1;word-break:break-all;">${esc(p.url)}</span>
-        <button onclick="navigator.clipboard.writeText(${JSON.stringify(p.url)}).then(()=>toast('Copied!'))"
-          style="flex-shrink:0;padding:4px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-weight:600;cursor:pointer;">Copy</button>
+      <div style="margin-bottom:12px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;">
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px;">${esc(p.name)}</div>
+        <div style="font-size:11px;color:var(--muted);font-family:monospace;word-break:break-all;margin-bottom:10px;line-height:1.5;">${esc(p.url)}</div>
+        <button onclick="navigator.clipboard.writeText(${JSON.stringify(p.url)}).then(()=>toast('✅ URL copied — paste into OwnTracks'))"
+          style="width:100%;padding:10px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:0.2px;">
+          📋 Copy URL for ${esc(p.name)}
+        </button>
       </div>`).join('');
   } catch (_) {}
 }

@@ -1292,7 +1292,7 @@
   <div class="page" id="page-flights" style="padding-top:0;">
     <div style="position:sticky;top:0;z-index:10;background:var(--bg);padding:14px 16px 12px;border-bottom:1px solid var(--border);margin-bottom:16px;">
       <button onclick="showPilotTab('ff')" style="background:none;border:none;color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;padding:0;font-family:'Montserrat',sans-serif;letter-spacing:0.3px;">← Dashboard</button>
-      <div style="font-size:22px;font-weight:800;color:var(--text);font-family:'Montserrat',sans-serif;margin-top:4px;letter-spacing:0.3px;">My Flight Logs</div>
+      <div style="font-size:22px;font-weight:800;color:var(--text);font-family:'Montserrat',sans-serif;margin-top:4px;letter-spacing:0.3px;">My Flights</div>
     </div>
     <div id="flights-list"></div>
   </div>
@@ -1319,76 +1319,6 @@
     </div>
   </div>
 
-  <div class="page" id="page-log">
-    <div class="card" id="flight-card">
-      <div style="margin-bottom:14px;">
-        <h2 id="card-title" style="margin-bottom:0;">New Flight</h2>
-      </div>
-
-      <div class="flight-num-row" id="field-flightnum">
-        <label>Flight #</label>
-        <div class="flight-num-controls">
-          <button class="flight-num-btn" onclick="adjustFlightNum(-1)">−</button>
-          <div class="flight-num-display" id="f-num-display">1</div>
-          <button class="flight-num-btn" onclick="adjustFlightNum(1)">+</button>
-        </div>
-      </div>
-
-      <div class="field">
-        <label>Date</label>
-        <input type="date" id="f-date" onchange="onDateChange()" />
-      </div>
-
-      <div id="field-weight" class="field">
-        <label>Client Weight (kg)</label>
-        <div class="weight-slider-row">
-          <input type="range" class="weight-slider" id="f-weight" min="15" max="120" value="72" oninput="updateWeightDisplay()" />
-          <div class="weight-value" id="f-weight-display">72 kg</div>
-        </div>
-      </div>
-
-      <div id="field-takeoff" class="field">
-        <label>Takeoff</label>
-        <div class="btn-group site" id="fg-takeoff">
-          <button data-val="E">E</button>
-          <button data-val="W">W</button>
-          <button data-val="G">G</button>
-          <button data-val="CP">CP</button>
-        </div>
-      </div>
-
-      <div id="field-landing" class="field">
-        <label>Landing</label>
-        <div class="btn-group site" id="fg-landing">
-          <button data-val="S">S</button>
-          <button data-val="R">R</button>
-          <button data-val="FP">FP</button>
-          <button data-val="WP">WP</button>
-        </div>
-      </div>
-
-      <div id="field-time" class="field">
-        <label>Flight Time (min): <span id="time-val" style="font-size:20px;font-weight:700;color:var(--accent);">10</span></label>
-        <input type="range" class="weight-slider" id="fg-time" min="5" max="15" step="1" value="10"
-          oninput="document.getElementById('time-val').textContent=this.value" />
-      </div>
-
-      <div class="field">
-        <label>Notes</label>
-        <textarea id="f-notes" placeholder="Optional..."></textarea>
-      </div>
-
-      <div id="field-wing" class="field">
-        <label>Glider</label>
-        <select id="f-wing" style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:15px;box-sizing:border-box;"
-          onchange="onWingSelectChange(this)"></select>
-        <div id="f-wing-hint" style="font-size:11px;color:var(--muted);margin-top:6px;">Add gliders in Settings if the list is empty.</div>
-      </div>
-
-      <button class="btn-primary" id="save-btn" onclick="saveFlight()">Save Flight</button>
-      <button class="btn-cancel" id="cancel-btn" onclick="cancelEdit()" style="display:none">Cancel Edit</button>
-    </div>
-  </div>
 
   <!-- Settings inner content (moved into pilot-settings-inner at runtime) -->
   <div id="page-settings-source" style="display:none">
@@ -1836,7 +1766,6 @@ function esc(s) {
 let pilotToken = localStorage.getItem('gforce_pilot_token');
 let pilotId = localStorage.getItem('gforce_pilot_id');
 let pilotName = localStorage.getItem('gforce_pilot_name');
-let editingId = null;
 let myFlights = [];
 let allTodayFlights = []; // all pilots' flights today — shown in pilot FF page
 let myDrives = [];
@@ -2400,11 +2329,6 @@ function doLogout() {
   clearInterval(window._statusPoll);
   clearInterval(window._dashboardTimer);
   if (window._statusPollAbort) { window._statusPollAbort.abort(); window._statusPollAbort = null; }
-  // Clear pending hours save timers so stale writes don't fire after logout
-  if (typeof _hoursSaveTimers !== 'undefined') {
-    Object.values(_hoursSaveTimers).forEach(clearTimeout);
-    _hoursSaveTimers = {};
-  }
   localStorage.removeItem('gforce_pilot_token');
   localStorage.removeItem('gforce_pilot_id');
   localStorage.removeItem('gforce_pilot_name');
@@ -2611,8 +2535,6 @@ function showApp(name) {
     av.classList.remove('has-photo');
     av.textContent = name.charAt(0).toUpperCase();
   }
-  setupBtnGroups();
-  setupForm();
   setPilotTabDates();
   loadMyData();
   startStatusPoll();
@@ -2669,9 +2591,9 @@ function startStatusPoll() {
         if (newStatus.status === 'airborne' && prevStatus === 'in_office') {
           notifyPilotSentAway();
         }
-        // Office landed the pilot — prompt them to fill in the flight details
+        // Office landed the pilot — refresh dashboard
         if (prevStatus === 'airborne' && newStatus.status !== 'airborne') {
-          showPage('log');
+          renderDashboard();
         }
       }
       // Always re-render dashboard to keep flying list current
@@ -2690,14 +2612,6 @@ function startStatusPoll() {
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && pilotToken) pollTick();
   }, { signal: window._statusPollAbort.signal });
-}
-
-function setupForm() {
-  const dateEl = document.getElementById('f-date');
-  dateEl.value = todayStr();
-  refreshWingDropdown();
-  updateWeightDisplay();
-  onDateChange();
 }
 
 // ─── Pilot API ────────────────────────────────────────────────────────────────
@@ -2983,12 +2897,6 @@ async function loadMyData() {
     renderFlights();
     updateStatusBadge();
     setServerStatus('synced');
-    if (editingId === null) {
-      refreshWingDropdown();
-      const dateEl = document.getElementById('f-date');
-      if (dateEl) updateFlightNumForDate(dateEl.value);
-    }
-    scheduleLogPostSaveTimeout();
   } catch {
     setServerStatus('offline');
   }
@@ -3044,25 +2952,6 @@ function canSetPilotPresence(next) {
     toast('Cancel or let your away timer finish before signing out');
     return false;
   }
-  if (next === 0 && !pilotDayFlightsCompleteForSignOut()) {
-    toast('Complete your flight log for today before signing out — missing fields or hours');
-    return false;
-  }
-  return true;
-}
-
-function pilotDayFlightsCompleteForSignOut() {
-  const t = todayStr();
-  const dayFlights = myFlights.filter(f => f.date === t);
-  if (dayFlights.length === 0) return true;
-  for (const f of dayFlights) {
-    const pending = f.notes && String(f.notes).includes('PENDING_PILOT_FILL');
-    if (pending) return false;
-    if (f.weight == null || f.takeoff == null || String(f.takeoff).trim() === '' || f.landing == null || String(f.landing).trim() === '' || f.time == null) return false;
-    if (f.wing_reg == null || String(f.wing_reg).trim() === '') return false;
-  }
-  const last = dayFlights.slice().sort((a, b) => (b.flight_num || 0) - (a.flight_num || 0))[0];
-  if (last && (last.hours_worked == null || last.hours_worked === '')) return false;
   return true;
 }
 
@@ -3156,7 +3045,6 @@ function renderFlyingList(excludeSelf = false) {
 
 let _lastDashboardKey = '';
 let _pilotLandedAt = null;    // timestamp when "Land" was clicked (drives "Just Landed" UI)
-let _pendingFlightId = null;  // flight id of the PENDING_PILOT_FILL record created on landing
 
 async function pilotLandGroupMember(targetId, targetName) {
   try {
@@ -3188,7 +3076,6 @@ async function pilotLand() {
     }
     const data = await res.json();
     _pilotLandedAt = Date.now();
-    _pendingFlightId = data.flight_id || null;
     myStatus.status = 'in_office';
     myStatus.timer_expires_at = null;
     clearInterval(window._dashboardTimer);
@@ -3203,50 +3090,7 @@ async function pilotLand() {
 
 function clearPilotLandState() {
   _pilotLandedAt = null;
-  _pendingFlightId = null;
 }
-function renderTodayFlightsList() {
-  const today = todayStr();
-  const todayFlights = myFlights
-    .filter(f => f.date === today)
-    .sort((a, b) => (Number(a.flight_num) || 0) - (Number(b.flight_num) || 0));
-  if (!todayFlights.length) return '';
-  const fmtTime = ts => ts
-    ? new Date(ts).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', timeZone: NZ_TZ })
-    : null;
-  const rows = todayFlights.map(f => {
-    const isPending = f.notes && String(f.notes).includes('PENDING_PILOT_FILL');
-    const pendingDot = (isPending || !f.office_ack_emoji) ? `<span style="width:7px;height:7px;border-radius:50%;background:var(--warning);display:inline-block;margin-right:6px;flex-shrink:0;"></span>` : '';
-    const awayTime = fmtTime(f.sent_away_at);
-    const landedTime = fmtTime(f.landed_at);
-    const groupNames = f.group_pilot_names
-      ? (() => {
-          const ns = f.group_pilot_names.split(', ').filter(Boolean);
-          return ns.length > 1 ? ns.slice(0, -1).join(', ') + ' & ' + ns[ns.length - 1] : ns[0];
-        })()
-      : null;
-    const timeLine = [awayTime ? `Away ${awayTime}` : null, landedTime ? `Landed ${landedTime}` : (isPending ? null : 'Airborne')].filter(Boolean).join(' · ');
-    const logLine = isPending
-      ? `<div class="ff-flight-row-detail" style="color:var(--warning);">⚠ Log not completed — tap to finish</div>`
-      : '';
-    return `
-      <div class="ff-flight-row" onclick="editFlightFromFF('${f.id}')">
-        <div class="ff-flight-row-left">
-          <div class="ff-flight-row-num">${pendingDot}Flight #${f.flight_num}${awayTime && !landedTime && !isPending ? ' Today' : ''}</div>
-          ${timeLine ? `<div class="ff-flight-row-detail">${timeLine}</div>` : ''}
-          ${groupNames ? `<div class="ff-flight-row-detail" style="color:var(--muted);">Group with ${esc(groupNames)}</div>` : ''}
-          ${logLine}
-        </div>
-        <div class="ff-flight-row-arrow">›</div>
-      </div>`;
-  }).join('');
-  return `
-    <div class="ff-flights-section">
-      <div class="ff-flights-heading">Today's Flights</div>
-      ${rows}
-    </div>`;
-}
-
 function renderDashboard() {
   const el = document.getElementById('dashboard-content');
   if (!el) return;
@@ -3259,7 +3103,7 @@ function renderDashboard() {
   const todayFlights = myFlights.filter(f => f.date === todayStr_);
   const _curFlightNum = myStatus.status === 'airborne'
     ? todayFlights.length + 1
-    : (myFlights.find(f => f.id === _pendingFlightId)?.flight_num || todayFlights.length);
+    : todayFlights.length;
 
   if (myStatus.status === 'airborne') {
     // ── Flying ──────────────────────────────────────────────────────────────
@@ -3400,22 +3244,6 @@ async function refreshPilotTodayFlights() {
   } catch (_) {}
 }
 
-function editFlightFromFF(id) {
-  editFlight(id);
-}
-
-function goToLogFlight() {
-  if (_pendingFlightId) {
-    editFlight(_pendingFlightId);
-  } else {
-    if (editingId === null) {
-      const dateEl = document.getElementById('f-date');
-      if (dateEl) updateFlightNumForDate(dateEl.value);
-    }
-    showPage('log');
-  }
-}
-
 async function didNotFly() {
   const btn = document.getElementById('btn-dnf');
   if (!confirm('Mark as Did Not Fly? This cancels your timer without logging a flight.')) return;
@@ -3464,7 +3292,6 @@ async function requestExtension() {
 function startDashboardCountdown(expires_at) {
   clearInterval(window._dashboardTimer);
   const expires = new Date(expires_at).getTime();
-  let _expiredPrompted = false;
   window._dashboardTimer = setInterval(() => {
     const now = Date.now();
     const remaining = expires - now;
@@ -3473,11 +3300,6 @@ function startDashboardCountdown(expires_at) {
     if (remaining <= 0) {
       timerEl.textContent = 'EXPIRED';
       timerEl.classList.add('urgent');
-      // Auto-navigate to log form once on expiry
-      if (!_expiredPrompted) {
-        _expiredPrompted = true;
-        showPage('log');
-      }
     } else {
       const mins = Math.floor(remaining / 60000);
       const secs = Math.floor((remaining % 60000) / 1000);
@@ -3575,210 +3397,6 @@ function formatShortWeekRangeForButton(mon, sun) {
   return `${part(mon)} - ${part(sun)}`;
 }
 
-// ─── Pilot Button Groups ──────────────────────────────────────────────────────
-function setupBtnGroups() {
-  document.querySelectorAll('.btn-group').forEach(group => {
-    group.addEventListener('click', e => {
-      const btn = e.target.closest('button');
-      if (!btn) return;
-      group.querySelectorAll('button').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-    });
-  });
-}
-
-function getGroupVal(groupId) {
-  const selected = document.querySelector(`#${groupId} button.selected`);
-  return selected ? selected.getAttribute('data-val') : '';
-}
-
-function setGroupVal(groupId, val) {
-  const btns = document.querySelectorAll(`#${groupId} button`);
-  btns.forEach(b => {
-    b.classList.toggle('selected', b.getAttribute('data-val') === val);
-  });
-}
-function getTimeVal() {
-  return document.getElementById('fg-time').value;
-}
-function setTimeVal(val) {
-  const el = document.getElementById('fg-time');
-  el.value = val;
-  document.getElementById('time-val').textContent = val;
-}
-
-function updateWeightDisplay() {
-  document.getElementById('f-weight-display').textContent = document.getElementById('f-weight').value + ' kg';
-}
-function updateFlightNumForDate(date) {
-  if (editingId !== null) return;
-  const todayFlights = myFlights.filter(f => f.date === date);
-  document.getElementById('f-num-display').textContent = todayFlights.length + 1;
-}
-function adjustFlightNum(delta) {
-  const display = document.getElementById('f-num-display');
-  const current = parseInt(display.textContent);
-  display.textContent = Math.max(1, current + delta);
-}
-function onDateChange() {
-  const date = document.getElementById('f-date').value;
-  updateFlightNumForDate(date);
-}
-
-
-function logPostsaveDeadlineKey() {
-  return pilotId ? `gforce_log_postsave_deadline_${pilotId}` : 'gforce_log_postsave_deadline';
-}
-function logPostsaveFlightIdKey() {
-  return pilotId ? `gforce_log_postsave_flight_id_${pilotId}` : 'gforce_log_postsave_flight_id';
-}
-
-function clearLogPostSaveTimerOnly() {
-  if (window._logPostSaveTimer) {
-    clearTimeout(window._logPostSaveTimer);
-    window._logPostSaveTimer = null;
-  }
-}
-
-/** Clear 15‑min “saved flight” window (timer + storage). */
-function clearLogPostSaveState() {
-  clearLogPostSaveTimerOnly();
-  localStorage.removeItem(logPostsaveDeadlineKey());
-  localStorage.removeItem(logPostsaveFlightIdKey());
-}
-
-/** Arm deadline from first successful NEW flight save only (15 min from then). Updates do not extend/reset it. */
-function armLogPostSaveDeadline(flightId) {
-  const deadline = Date.now() + 15 * 60 * 1000;
-  localStorage.setItem(logPostsaveDeadlineKey(), String(deadline));
-  localStorage.setItem(logPostsaveFlightIdKey(), flightId);
-  scheduleLogPostSaveTimeout();
-}
-
-/** Schedule timeout from stored deadline (call after load / arm). */
-function scheduleLogPostSaveTimeout() {
-  clearLogPostSaveTimerOnly();
-  const deadline = Number(localStorage.getItem(logPostsaveDeadlineKey()));
-  const fid = localStorage.getItem(logPostsaveFlightIdKey());
-  if (!deadline || !fid || !Number.isFinite(deadline)) return;
-  const ms = deadline - Date.now();
-  if (ms <= 0) {
-    if (editingId === fid) {
-      resetForm();
-      toast('Form reset — start a new flight when you are ready');
-    } else {
-      clearLogPostSaveState();
-    }
-    return;
-  }
-  window._logPostSaveTimer = setTimeout(() => {
-    window._logPostSaveTimer = null;
-    const curFid = localStorage.getItem(logPostsaveFlightIdKey());
-    if (editingId === curFid) {
-      resetForm();
-      toast('Form reset — start a new flight when you are ready');
-    }
-    clearLogPostSaveState();
-  }, ms);
-}
-
-function startFreshFlightForm() {
-  clearLogPostSaveState();
-  resetForm();
-  const dateEl = document.getElementById('f-date');
-  if (dateEl) updateFlightNumForDate(dateEl.value);
-  toast('New flight form');
-}
-
-// ─── Save Flight ──────────────────────────────────────────────────────────────
-async function saveFlight() {
-  const date = document.getElementById('f-date').value;
-  const notes = document.getElementById('f-notes').value;
-
-  const flightNum = parseInt(document.getElementById('f-num-display').textContent);
-  const weight = document.getElementById('f-weight').value;
-  const takeoff = getGroupVal('fg-takeoff');
-  const landing = getGroupVal('fg-landing');
-  const time = getTimeVal();
-
-  if (!date || !flightNum || !weight || !takeoff || !landing || !time) {
-    toast('Fill in all required fields');
-    return;
-  }
-
-  if (editingId === null) {
-    const dup = myFlights.find(f => f.date === date && Number(f.flight_num) === Number(flightNum));
-    if (dup) {
-      toast('You already have a flight with this number on that day');
-      return;
-    }
-  }
-
-  setServerStatus('syncing');
-  try {
-    if (editingId !== null) {
-      const wingReg = (document.getElementById('f-wing')?.value || '').trim().toUpperCase() || null;
-      const savedEditingId = editingId;
-      const res = await apiFetch(`/api/flights/${editingId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ date, flight_num: flightNum, weight, takeoff, landing, time, notes, wing_reg: wingReg })
-      });
-      if (!res.ok) throw new Error(await res.text());
-      toast('Flight updated!');
-      await loadMyData();
-      resetForm();
-      showPage('dashboard');
-    } else {
-      const wingReg = (document.getElementById('f-wing')?.value || '').trim().toUpperCase() || null;
-      if (wingReg && wingReg !== currentWing) currentWing = wingReg;
-      const res = await apiFetch('/api/flights', {
-        method: 'POST',
-        body: JSON.stringify({ date, flight_num: flightNum, weight, takeoff, landing, time, notes, wing_reg: wingReg })
-      });
-      if (res.status === 409) {
-        const err = await res.json().catch(() => ({}));
-        toast(err.error || 'Duplicate flight');
-        setServerStatus('synced');
-        return;
-      }
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
-      toast('Flight logged! Office notified.');
-      clearPilotLandState();
-      await loadMyData();
-      resetForm();
-      showPage('dashboard');
-    }
-  } catch (e) {
-    toast('Save failed: ' + e.message);
-    setServerStatus('offline');
-  }
-}
-
-function resetForm() {
-  clearLogPostSaveState();
-  editingId = null;
-  ['field-weight','field-takeoff','field-landing','field-time','field-wing','field-flightnum'].forEach(id => {
-    const el = document.getElementById(id); if (el) { el.style.opacity = ''; el.style.pointerEvents = ''; }
-  });
-  document.getElementById('card-title').textContent = 'New Flight';
-  document.getElementById('save-btn').textContent = 'Save Flight';
-  document.getElementById('cancel-btn').style.display = 'none';
-  document.getElementById('flight-card').classList.remove('editing');
-  document.getElementById('f-weight').value = 72;
-  document.getElementById('f-notes').value = '';
-  updateWeightDisplay();
-  document.getElementById('fg-time').value = 10;
-document.getElementById('time-val').textContent = '10';
-  const dateEl = document.getElementById('f-date');
-  dateEl.value = todayStr();
-  refreshWingDropdown();
-}
-
-function cancelEdit() {
-  resetForm();
-  updateFlightNumForDate(document.getElementById('f-date').value);
-}
 
 function setServerStatus(status) {
   const badge = document.getElementById('server-badge');
@@ -3791,36 +3409,19 @@ function setServerStatus(status) {
   }
 }
 
-function editFlight(id) {
-  const psId = localStorage.getItem(logPostsaveFlightIdKey());
-  if (psId && id !== psId) clearLogPostSaveState();
-  const f = myFlights.find(fl => fl.id === id);
-  if (!f) return;
-  editingId = id;
-  document.getElementById('f-date').value = f.date;
-  document.getElementById('f-num-display').textContent = f.flight_num;
-  document.getElementById('f-weight').value = f.weight;
-  updateWeightDisplay();
-  setGroupVal('fg-takeoff', f.takeoff);
-  setGroupVal('fg-landing', f.landing);
-  setTimeVal(f.time);
-  document.getElementById('f-notes').value = f.notes || '';
-  refreshWingDropdown();
-  if (f.wing_reg) ensureWingOptionForReg(f.wing_reg);
-  const wingEl = document.getElementById('f-wing');
-  if (wingEl && f.wing_reg) wingEl.value = f.wing_reg.trim().toUpperCase();
-  showPage('log');
-  document.getElementById('card-title').textContent = 'Edit Flight';
-  document.getElementById('save-btn').textContent = 'Update Flight';
-  document.getElementById('cancel-btn').style.display = 'block';
-  document.getElementById('flight-card').classList.add('editing');
-}
 
 function renderFlights() {
-  const flights = myFlights.slice().reverse();
   const el = document.getElementById('flights-list');
+  if (!el) return;
+  // Show past 14 days only
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 14);
+  const cutoffStr = cutoff.toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+  const flights = myFlights.filter(f => f.date >= cutoffStr).slice().reverse();
   if (flights.length === 0) {
-    el.innerHTML = '<div class="empty-state">No flights logged yet</div>';
+    el.innerHTML = '<div class="empty-state">No flights in the past fortnight</div>';
+    const flightsSub = document.getElementById('header-flights-sub');
+    if (flightsSub) flightsSub.textContent = '';
     return;
   }
   const byDate = {};
@@ -3830,17 +3431,12 @@ function renderFlights() {
   });
   let html = '';
   Object.keys(byDate).sort().reverse().forEach(date => {
-    const dayFlights = byDate[date].slice().sort((a,b) => a.flight_num - b.flight_num);
-    // hours_worked lives on the last (highest-numbered) flight of the day
-    const lastFlight = dayFlights[dayFlights.length - 1];
-    dayFlights.reverse();
-    const hoursVal = (lastFlight && lastFlight.hours_worked != null) ? lastFlight.hours_worked : '';
+    const dayFlights = byDate[date].slice().sort((a, b) => a.flight_num - b.flight_num).reverse();
     html += `<div class="date-group-header" style="display:flex;align-items:center;gap:8px;">
       <span>${fmtDate(date)}</span>
       <span class="duty-badge">${dayFlights.length} flight${dayFlights.length !== 1 ? 's' : ''}</span>
     </div>`;
     dayFlights.forEach(f => {
-      const pendingFill = f.notes && String(f.notes).includes('PENDING_PILOT_FILL');
       const sentAwayAt = f.sent_away_at
         ? new Date(f.sent_away_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' })
         : null;
@@ -3849,91 +3445,20 @@ function renderFlights() {
         : null;
       html += `<div class="flight-item">
         <div>
-          <div style="font-size:14px;font-weight:600">Flight ${f.flight_num} · ${f.weight}kg · ${f.time}min</div>
-          ${f.notes && !pendingFill ? `<div class="flight-meta">${esc(f.notes)}</div>` : ''}
+          <div style="font-size:14px;font-weight:600">Flight ${f.flight_num}${f.weight ? ` · ${f.weight}kg` : ''}${f.time ? ` · ${f.time}min` : ''}</div>
           ${f.client_name ? `<div class="flight-meta" style="color:#fff">${esc(f.client_name)}</div>` : ''}
           ${sentAwayAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">Away ${esc(sentAwayAt)}</div>` : ''}
           ${loggedAt ? `<div class="flight-meta" style="color:var(--muted);font-size:11px;">Landed ${esc(loggedAt)}</div>` : ''}
-        </div>
-        <div style="display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:72px;">
-          <button class="btn-edit" onclick="editFlight('${f.id}')" style="padding:8px 12px;font-size:13px;font-weight:700;text-align:center;">Edit</button>
         </div>
       </div>`;
     });
   });
   el.innerHTML = html;
-  void prefillDutyHoursSuggestions();
   const today = myFlights.filter(f => f.date === todayStr());
   const flightsSub = document.getElementById('header-flights-sub');
   if (flightsSub) flightsSub.textContent = `${myFlights.length} total · ${today.length} today`;
 }
 
-let _hoursSaveTimers = {};
-async function saveHours(date, value) {
-  clearTimeout(_hoursSaveTimers[date]);
-  _hoursSaveTimers[date] = setTimeout(async () => {
-    const hours = value === '' ? null : parseFloat(value);
-    if (hours !== null && (isNaN(hours) || hours < 0)) return;
-    try {
-      const res = await apiFetch('/api/pilot/hours', {
-        method: 'PUT',
-        body: JSON.stringify({ date, hours })
-      });
-      if (!res.ok) throw new Error(await res.text());
-      // Update local state so re-renders show the saved value
-      const data = await res.json();
-      if (data.flight_id) {
-        const f = myFlights.find(f => f.id === data.flight_id);
-        if (f) f.hours_worked = data.hours;
-      }
-      setServerStatus('synced');
-    } catch (e) {
-      toast('Hours save failed: ' + e.message);
-      setServerStatus('offline');
-    }
-  }, 600);
-}
-
-async function prefillDutyHoursSuggestions() {
-  const inputs = document.querySelectorAll('#flights-list input.duty-hrs-input');
-  for (const inp of inputs) {
-    if ((inp.value || '').trim() !== '') continue;
-    const date = inp.getAttribute('data-date');
-    if (!date) continue;
-    try {
-      const res = await apiFetch(`/api/pilot/duty-hours-suggestion?date=${encodeURIComponent(date)}`);
-      if (!res.ok) continue;
-      const data = await res.json();
-      if (data.suggested_hours == null) continue;
-      const hours = data.suggested_hours;
-      const put = await apiFetch('/api/pilot/hours', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, hours })
-      });
-      if (!put.ok) continue;
-      const saved = await put.json();
-      inp.value = String(hours);
-      if (saved.flight_id) {
-        const f = myFlights.find(x => x.id === saved.flight_id);
-        if (f) f.hours_worked = saved.hours;
-      }
-    } catch (_) {}
-  }
-}
-
-async function deleteFlight(id) {
-  if (!confirm('Delete this flight? This cannot be undone.')) return;
-  try {
-    const res = await apiFetch(`/api/flights/${id}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error(await res.text());
-    toast('Flight deleted');
-    await loadMyData();
-    updateFlightNumForDate(document.getElementById('f-date').value);
-  } catch (e) {
-    toast('Delete failed: ' + e.message);
-  }
-}
 
 async function deleteDrive(id) {
   if (!confirm('Delete this drive? This cannot be undone.')) return;
@@ -4458,12 +3983,9 @@ function showSubPage(name) {
   window.scrollTo({ top: 0, behavior: 'instant' });
   if (name === 'stats') { statsMonthOffset = 0; renderStats(); }
   if (name === 'ff') renderPilotFF();
-  if (name === 'log') refreshWingDropdown();
 }
 
-/** Legacy helper — log flight page still called via showPage('log'). */
 function showPage(name) {
-  if (name === 'log') { showSubPage('log'); return; }
   if (name === 'dashboard') { showPilotTab('ff'); return; }
   if (name === 'settings') { showPilotTab('settings'); return; }
   showSubPage(name);

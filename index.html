@@ -1513,6 +1513,15 @@
               <button onclick="loadTrackerLocations()" style="flex-shrink:0;padding:6px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;">↻ Refresh</button>
             </div>
             <div id="tracker-pilot-list" style="margin-bottom:16px;"></div>
+
+            <!-- OwnTracks Setup -->
+            <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--muted);">OwnTracks Setup URLs</div>
+                <button onclick="loadOwnTracksSetup()" style="padding:5px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;">↻</button>
+              </div>
+              <div id="owntracks-setup-list"><div style="font-size:13px;color:var(--muted);">Loading…</div></div>
+            </div>
           </div>
         </div>
 
@@ -6449,7 +6458,44 @@ function toggleTrackerCard() {
   const open = body.style.display === 'none';
   body.style.display = open ? 'block' : 'none';
   chev.style.transform = open ? 'rotate(90deg)' : '';
-  if (open) { loadTrackerEnabledState(); initTrackerMap(); loadTrackerLocations(); }
+  if (open) { loadTrackerEnabledState(); initTrackerMap(); loadTrackerLocations(); loadOwnTracksSetup(); }
+}
+
+async function loadOwnTracksSetup() {
+  const el = document.getElementById('owntracks-setup-list');
+  if (!el) return;
+  try {
+    const res = await officeFetch('/api/office/owntracks-setup');
+    if (!res.ok) throw new Error();
+    const pilots = await res.json();
+    if (!pilots.length) { el.innerHTML = '<div style="font-size:13px;color:var(--muted);">No pilots found.</div>'; return; }
+    el.innerHTML = pilots.map(p => `
+      <div style="margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:5px;">${esc(p.name)}</div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input readonly onclick="this.select()" value="${esc(p.url)}"
+            style="flex:1;font-size:11px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:monospace;cursor:text;min-width:0;">
+          <button onclick="copyOwnTracksUrl(this,'${esc(p.url)}')"
+            style="flex-shrink:0;padding:8px 14px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Copy</button>
+        </div>
+      </div>`).join('');
+  } catch (_) {
+    el.innerHTML = '<div style="font-size:13px;color:var(--muted);">Could not load setup URLs.</div>';
+  }
+}
+
+function copyOwnTracksUrl(btn, url) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(() => { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 1800); }).catch(fallback);
+  } else { fallback(); }
+  function fallback() {
+    const ta = document.createElement('textarea');
+    ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 1800);
+  }
 }
 
 async function loadTrackerEnabledState() {

@@ -4582,6 +4582,8 @@ function renderGroupsTab() {
       <div class="card" style="margin-bottom:16px;">
         <div id="send-away-rows" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
           ${makeSendAwayRow(true)}
+          ${makeSendAwayRow(false)}
+          ${makeSendAwayRow(false)}
         </div>
         <div style="display:flex;gap:10px;">
           <button onclick="addSendAwayRow()" style="padding:11px 20px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:22px;font-weight:400;cursor:pointer;line-height:1;">+</button>

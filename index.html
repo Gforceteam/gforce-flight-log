@@ -6450,6 +6450,7 @@ function toggleTrackerCard() {
   body.style.display = open ? 'block' : 'none';
   chev.style.transform = open ? 'rotate(90deg)' : '';
   if (open) { loadTrackerEnabledState(); initTrackerMap(); loadTrackerLocations(); }
+}
 
 async function loadTrackerEnabledState() {
   try {

@@ -25,7 +25,7 @@ const OFFICE_PASSWORD = process.env.OFFICE_PASSWORD;
 
 // ─── App Settings (in-memory, persisted to DB) ────────────────────────────────
 let _pushNotificationsEnabled = false; // off by default; loaded from DB at startup
-let _trackerEnabled = true;            // pilot tracker master switch; loaded from DB at startup
+let _trackerEnabledDate = null;        // NZ date string when tracker was enabled, null = off; auto-expires at midnight
 let _officeTv = 0;              // token version — incremented on password change to invalidate all sessions
 let _officeRefreshSecret = '';  // refresh secret — rotated on password change; seeded from env var
 
@@ -344,6 +344,10 @@ function isoToNZDateString(iso) {
 }
 function nzToday() {
   return new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+}
+// Tracker is active only if it was enabled today (NZ time) — auto-resets at midnight
+function isTrackerActive() {
+  return _trackerEnabledDate === nzToday();
 }
 async function ensureLoopBoardDate(date) {
   for (let i = 1; i <= 20; i++) {
@@ -2285,7 +2289,7 @@ app.post('/api/owntracks', async (req, res) => {
       'SELECT consented FROM pilot_location_consent WHERE pilot_id = ? AND date = ?',
       [pilot.id, today]
     );
-    if (!_trackerEnabled) return res.json({}); // tracker disabled by office
+    if (!isTrackerActive()) return res.json({}); // tracker disabled or expired for today
     if (!consent || !consent.consented) return res.json({}); // no consent — discard silently
     const updatedAt = new Date().toISOString();
     await run(
@@ -2299,17 +2303,22 @@ app.post('/api/owntracks', async (req, res) => {
   }
 });
 
-// Tracker master switch
+// Tracker master switch — enabled state is per-day (NZ time), auto-resets at midnight
 app.get('/api/office/tracker-enabled', verifyOffice, (req, res) => {
-  res.json({ enabled: _trackerEnabled });
+  res.json({ enabled: isTrackerActive() });
 });
 
 app.put('/api/office/tracker-enabled', verifyOffice, async (req, res) => {
   try {
     const enabled = !!req.body.enabled;
-    _trackerEnabled = enabled;
-    await run("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('tracker_enabled', ?)", [enabled ? 'true' : 'false']);
-    res.json({ ok: true, enabled });
+    if (enabled) {
+      _trackerEnabledDate = nzToday();
+      await run("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('tracker_enabled', ?)", [_trackerEnabledDate]);
+    } else {
+      _trackerEnabledDate = null;
+      await run("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('tracker_enabled', 'off')");
+    }
+    res.json({ ok: true, enabled: isTrackerActive() });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -2587,8 +2596,10 @@ async function start() {
   _pushNotificationsEnabled = pushSetting?.value === 'true';
   console.log(`Push notifications: ${_pushNotificationsEnabled ? 'ENABLED' : 'DISABLED'}`);
   const trackerSetting = await queryOne("SELECT value FROM app_settings WHERE key = 'tracker_enabled'");
-  _trackerEnabled = trackerSetting ? trackerSetting.value !== 'false' : true; // default on
-  console.log(`Pilot tracker: ${_trackerEnabled ? 'ENABLED' : 'DISABLED'}`);
+  const storedTracker = trackerSetting?.value;
+  // Value is an NZ date string (e.g. '2026-08-20') when enabled for that day, or 'off'/'false'/null otherwise
+  _trackerEnabledDate = (storedTracker && storedTracker !== 'off' && storedTracker !== 'false' && storedTracker !== 'true') ? storedTracker : null;
+  console.log(`Pilot tracker: ${isTrackerActive() ? 'ENABLED' : 'DISABLED'} (date: ${_trackerEnabledDate || 'none'})`);
 
   // Load office token version (used to invalidate all sessions on password change)
   const tvRow = await queryOne("SELECT value FROM app_settings WHERE key = 'office_token_version'");

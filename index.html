@@ -1461,6 +1461,7 @@
   <div class="office-tab-bar">
     <button class="office-tab-btn active" onclick="showOfficeTab('pilots')" id="office-tab-pilots-btn">Flight Following</button>
     <button class="office-tab-btn" onclick="showOfficeTab('loop')" id="office-tab-loop-btn">Loop Board</button>
+    <button class="office-tab-btn" onclick="showOfficeTab('tracker')" id="office-tab-tracker-btn">📍 Tracker</button>
   </div>
 
   <div class="office-content">
@@ -1472,6 +1473,28 @@
 
     <div class="office-tab-content" id="office-tab-loop">
       <div class="loop-board" id="loop-board-list"><p style="color:var(--muted);padding:20px;text-align:center;">Loading...</p></div>
+    </div>
+
+    <div class="office-tab-content" id="office-tab-tracker">
+      <div style="padding:16px;">
+        <!-- Toggle row -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <span style="font-size:15px;font-weight:700;color:var(--text);">Pilot Tracker</span>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <button onclick="loadTrackerTab()" style="padding:6px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;">↻ Refresh</button>
+            <label class="notif-switch" title="Enable/disable pilot tracker">
+              <input type="checkbox" id="tracker-tab-toggle" onchange="setTrackerEnabled(this.checked)">
+              <span class="notif-slider"></span>
+            </label>
+          </div>
+        </div>
+        <div id="tracker-tab-disabled-banner" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px;font-size:13px;color:var(--muted);text-align:center;">
+          🚫 Pilot tracker is disabled — pilots' locations are not being recorded.
+        </div>
+        <div id="tracker-tab-map-el" style="width:100%;height:360px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--surface);margin-bottom:12px;"></div>
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--muted);margin-bottom:8px;">Currently tracking</div>
+        <div id="tracker-tab-pilot-list"></div>
+      </div>
     </div>
 
 
@@ -6324,6 +6347,7 @@ if (name === 'pilots') { renderAwayTab(); renderGroupsTab(); renderTodayFlights(
   if (name === 'loop') loadLoopBoard();
   if (name === 'today') renderTodayTab();
   if (name === 'flights') renderFlightsTab();
+  if (name === 'tracker') { loadTrackerTab(); }
   if (name === 'settings') { populateOfficeResetPilots(); populateOfficeDeletePilots(); loadOfficeSettings(); loadTrackerEnabledState(); }
 }
 
@@ -6449,6 +6473,8 @@ function setNotifPref(key, enabled) {
 const QUEENSTOWN = [-45.0312, 168.6626];
 let _tMap = null;
 let _tMarkers = {};
+let _tTabMap = null;
+let _tTabMarkers = {};
 
 let _trackerEnabled = true;
 
@@ -6504,16 +6530,18 @@ async function loadTrackerEnabledState() {
     if (!res.ok) return;
     const data = await res.json();
     _trackerEnabled = !!data.enabled;
-    const toggle = document.getElementById('tracker-master-toggle');
-    if (toggle) toggle.checked = _trackerEnabled;
+    ['tracker-master-toggle', 'tracker-tab-toggle'].forEach(id => {
+      const t = document.getElementById(id); if (t) t.checked = _trackerEnabled;
+    });
     renderTrackerEnabledBanner();
   } catch (_) {}
 }
 
 function renderTrackerEnabledBanner() {
-  const el = document.getElementById('tracker-disabled-banner');
-  if (!el) return;
-  el.style.display = _trackerEnabled ? 'none' : 'block';
+  ['tracker-disabled-banner', 'tracker-tab-disabled-banner'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = _trackerEnabled ? 'none' : 'block';
+  });
 }
 
 async function setTrackerEnabled(enabled) {
@@ -6608,6 +6636,88 @@ async function loadTrackerLocations() {
   } catch (_) {}
 }
 
+// ─── Tracker Tab (main dashboard) ────────────────────────────────────────────
+async function loadTrackerTab() {
+  await loadTrackerEnabledState();
+  initTrackerTabMap();
+  await loadTrackerTabLocations();
+}
+
+function initTrackerTabMap() {
+  if (_tTabMap) { _tTabMap.invalidateSize(); return; }
+  const loadMap = () => {
+    const el = document.getElementById('tracker-tab-map-el');
+    if (!el) return;
+    _tTabMap = L.map(el, { zoomControl: true }).setView(QUEENSTOWN, 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors', maxZoom: 19
+    }).addTo(_tTabMap);
+    loadTrackerTabLocations();
+  };
+  if (!document.getElementById('leaflet-css')) {
+    const link = document.createElement('link');
+    link.id = 'leaflet-css'; link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+  }
+  if (window.L) { loadMap(); return; }
+  if (!document.getElementById('leaflet-js')) {
+    const s = document.createElement('script');
+    s.id = 'leaflet-js';
+    s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    s.onload = loadMap;
+    document.head.appendChild(s);
+  } else {
+    const wait = setInterval(() => { if (window.L) { clearInterval(wait); loadMap(); } }, 100);
+  }
+}
+
+async function loadTrackerTabLocations() {
+  try {
+    const res = await officeFetch('/api/office/pilot-locations');
+    if (!res.ok) return;
+    const locs = await res.json();
+    const listEl = document.getElementById('tracker-tab-pilot-list');
+    if (!locs.length) {
+      if (listEl) listEl.innerHTML = '<div style="font-size:13px;color:var(--muted);">No pilots tracking yet.</div>';
+      return;
+    }
+    locs.forEach(l => {
+      if (!_tTabMap || l.lat == null || l.lng == null) return;
+      const staleMs = Date.now() - new Date(l.updated_at).getTime();
+      const colour = staleMs > 5 * 60 * 1000 ? '#9ca3af' : '#F37329';
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="display:flex;align-items:center;gap:5px;">
+          <div style="background:${colour};border:2px solid #fff;border-radius:50%;width:14px;height:14px;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,0.35);"></div>
+          <span style="font-size:11px;font-weight:700;color:#1a1a1a;background:rgba(255,255,255,0.85);padding:1px 5px;border-radius:4px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.2);">${esc(l.pilot_name)}</span>
+        </div>`,
+        iconSize: [null, 14], iconAnchor: [7, 7]
+      });
+      const mins = Math.floor(staleMs / 60000);
+      const age = staleMs < 60000 ? 'just now' : `${mins}m ago`;
+      const popup = `<b>${esc(l.pilot_name)}</b><br>${age}${l.accuracy ? `<br>±${Math.round(l.accuracy)}m` : ''}`;
+      if (_tTabMarkers[l.pilot_id]) {
+        _tTabMarkers[l.pilot_id].setLatLng([l.lat, l.lng]).setIcon(icon).setPopupContent(popup);
+      } else {
+        _tTabMarkers[l.pilot_id] = L.marker([l.lat, l.lng], { icon }).addTo(_tTabMap).bindPopup(popup);
+      }
+    });
+    if (listEl) {
+      listEl.innerHTML = locs.map(l => {
+        const staleMs = Date.now() - new Date(l.updated_at).getTime();
+        const colour = staleMs > 5 * 60 * 1000 ? '#9ca3af' : '#F37329';
+        const mins = Math.floor(staleMs / 60000);
+        const age = staleMs < 60000 ? 'just now' : `${mins}m ago`;
+        return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+          <div style="background:${colour};border-radius:50%;width:10px;height:10px;flex-shrink:0;"></div>
+          <div style="font-size:14px;font-weight:600;color:var(--text);flex:1;">${esc(l.pilot_name)}</div>
+          <div style="font-size:12px;color:var(--muted);">${age}</div>
+        </div>`;
+      }).join('');
+    }
+  } catch (_) {}
+}
 
 function toggleNotifPanel() {
   const panel = document.getElementById('notif-panel');

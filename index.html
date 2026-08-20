@@ -6476,7 +6476,7 @@ let _tMarkers = {};
 let _tTabMap = null;
 let _tTabMarkers = {};
 
-let _trackerEnabled = true;
+let _trackerEnabled = false;
 
 function toggleTrackerCard() {
   const body = document.getElementById('tracker-card-body');
@@ -6546,15 +6546,21 @@ function renderTrackerEnabledBanner() {
 
 async function setTrackerEnabled(enabled) {
   try {
-    await officeFetch('/api/office/tracker-enabled', {
+    const res = await officeFetch('/api/office/tracker-enabled', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled })
     });
-    _trackerEnabled = enabled;
+    if (!res || !res.ok) { toast('Could not save tracker setting', 'err'); await loadTrackerEnabledState(); return; }
+    const data = await res.json();
+    _trackerEnabled = !!data.enabled;
+    // Sync both toggles to confirmed server state
+    ['tracker-master-toggle', 'tracker-tab-toggle'].forEach(id => {
+      const t = document.getElementById(id); if (t) t.checked = _trackerEnabled;
+    });
     renderTrackerEnabledBanner();
-    toast(enabled ? '📍 Pilot tracker enabled' : 'Pilot tracker disabled');
-  } catch (_) { toast('Could not save setting', 'err'); }
+    toast(_trackerEnabled ? '📍 Pilot tracker enabled for today' : 'Pilot tracker disabled');
+  } catch (_) { toast('Could not save tracker setting', 'err'); await loadTrackerEnabledState(); }
 }
 
 function initTrackerMap() {
@@ -6587,7 +6593,7 @@ function initTrackerMap() {
 async function loadTrackerLocations() {
   try {
     const res = await officeFetch('/api/office/pilot-locations');
-    if (!res.ok) return;
+    if (!res || !res.ok) return;
     const locs = await res.json();
     const listEl = document.getElementById('tracker-pilot-list');
 
@@ -6675,7 +6681,7 @@ function initTrackerTabMap() {
 async function loadTrackerTabLocations() {
   try {
     const res = await officeFetch('/api/office/pilot-locations');
-    if (!res.ok) return;
+    if (!res || !res.ok) return;
     const locs = await res.json();
     const listEl = document.getElementById('tracker-tab-pilot-list');
     if (!locs.length) {

@@ -1501,34 +1501,38 @@
     <div class="office-tab-content" id="office-tab-coronet">
       <div style="padding:16px 16px 32px;">
 
-        <!-- Van selector -->
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-          <span style="font-size:15px;font-weight:700;color:var(--text);">🏔 Coronet Peak Manifest</span>
-        </div>
-        <div style="display:flex;gap:8px;margin-bottom:18px;">
-          <button id="coronet-van-btn-1" onclick="selectCoronetVan(1)"
-            style="flex:1;padding:11px;border-radius:10px;border:2px solid var(--accent);background:var(--accent);color:#fff;font-size:14px;font-weight:700;cursor:pointer;">
-            🚐 Gforce 1
-          </button>
-          <button id="coronet-van-btn-2" onclick="selectCoronetVan(2)"
-            style="flex:1;padding:11px;border-radius:10px;border:2px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">
-            🚐 Gforce 2
-          </button>
+        <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:14px;">🏔 Coronet Peak — Trip Manifests</div>
+
+        <!-- Gforce 1 -->
+        <div class="card stat-section" style="margin-bottom:16px;padding:0;overflow:visible;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;">
+            <span style="font-size:15px;font-weight:700;color:var(--text);">🚐 Gforce 1</span>
+            <button onclick="clearCoronetManifest(1)"
+              style="padding:6px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;">✕ Clear</button>
+          </div>
+          <div style="padding:0 16px 4px;" id="coronet-form-van1"></div>
+          <div style="padding:12px 16px 16px;">
+            <button onclick="printCoronetManifest(1)"
+              style="width:100%;padding:12px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
+              🖨 Print Gforce 1 Manifest
+            </button>
+          </div>
         </div>
 
-        <!-- Manifest form renders here -->
-        <div id="coronet-manifest-form"></div>
-
-        <!-- Action buttons -->
-        <div style="display:flex;gap:10px;margin-top:16px;">
-          <button onclick="printCoronetManifest()"
-            style="flex:1;padding:14px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
-            🖨 Print Manifest
-          </button>
-          <button onclick="clearCoronetManifest()"
-            style="padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;">
-            ✕ Clear
-          </button>
+        <!-- Gforce 2 -->
+        <div class="card stat-section" style="padding:0;overflow:visible;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;">
+            <span style="font-size:15px;font-weight:700;color:var(--text);">🚐 Gforce 2</span>
+            <button onclick="clearCoronetManifest(2)"
+              style="padding:6px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;">✕ Clear</button>
+          </div>
+          <div style="padding:0 16px 4px;" id="coronet-form-van2"></div>
+          <div style="padding:12px 16px 16px;">
+            <button onclick="printCoronetManifest(2)"
+              style="width:100%;padding:12px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
+              🖨 Print Gforce 2 Manifest
+            </button>
+          </div>
         </div>
 
       </div>
@@ -6313,7 +6317,7 @@ if (name === 'pilots') { renderAwayTab(); renderGroupsTab(); renderTodayFlights(
   if (name === 'today') renderTodayTab();
   if (name === 'flights') renderFlightsTab();
   if (name === 'tracker') { loadTrackerTab(); }
-  if (name === 'coronet') { selectCoronetVan(_coronetActiveVan); }
+  if (name === 'coronet') { initCoronetTab(); }
   if (name === 'settings') { populateOfficeResetPilots(); populateOfficeDeletePilots(); loadOfficeSettings(); loadTrackerEnabledState(); }
 }
 
@@ -6492,8 +6496,6 @@ function copyOwnTracksUrl(btn, url) {
 
 // ─── Coronet Peak Manifests ──────────────────────────────────────────────────
 
-let _coronetActiveVan = 1;
-
 // Default manifest state for one van
 function _coronetDefault() {
   return {
@@ -6524,32 +6526,20 @@ function _coronetSave(van, data) {
   try { localStorage.setItem('coronet_van' + van, JSON.stringify(data)); } catch (_) {}
 }
 
-function clearCoronetManifest() {
-  if (!confirm('Clear this manifest and start fresh?')) return;
-  _coronetSave(_coronetActiveVan, _coronetDefault());
-  renderCoronetForm(_coronetActiveVan);
+function clearCoronetManifest(van) {
+  if (!confirm('Clear Gforce ' + van + ' manifest and start fresh?')) return;
+  _coronetSave(van, _coronetDefault());
+  renderCoronetForm(van);
 }
 
-function selectCoronetVan(van) {
-  _coronetActiveVan = van;
-  // Update tab buttons
-  [1, 2].forEach(v => {
-    const btn = document.getElementById('coronet-van-btn-' + v);
-    if (!btn) return;
-    if (v === van) {
-      btn.style.background = 'var(--accent)'; btn.style.color = '#fff';
-      btn.style.border = '2px solid var(--accent)'; btn.style.fontWeight = '700';
-    } else {
-      btn.style.background = 'var(--surface)'; btn.style.color = 'var(--text)';
-      btn.style.border = '2px solid var(--border)'; btn.style.fontWeight = '600';
-    }
-  });
-  renderCoronetForm(van);
+function initCoronetTab() {
+  renderCoronetForm(1);
+  renderCoronetForm(2);
 }
 
 function renderCoronetForm(van) {
   const data = _coronetLoad(van);
-  const el = document.getElementById('coronet-manifest-form');
+  const el = document.getElementById('coronet-form-van' + van);
   if (!el) return;
 
   // Build pilot options from officePilots
@@ -6665,8 +6655,7 @@ function coronetHeaderChange(van, field, value) {
   _coronetSave(van, data);
 }
 
-function printCoronetManifest() {
-  const van = _coronetActiveVan;
+function printCoronetManifest(van) {
   const data = _coronetLoad(van);
 
   const vanLabel = van === 1 ? 'Gforce 1' : 'Gforce 2';

@@ -1362,7 +1362,7 @@
 
       <section class="settings-card">
         <p class="settings-card-title">My Location</p>
-        <p class="settings-card-desc" style="margin-bottom:12px;">Your last known position as seen by the office. Only visible to you.</p>
+        <p class="settings-card-desc" style="margin-bottom:12px;">Turn on at the start of each day to share your location with the office. Resets to off automatically overnight.</p>
         <div id="pilot-self-map-el" style="width:100%;height:260px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--surface);margin-bottom:8px;"></div>
         <div id="pilot-self-map-status" style="font-size:12px;color:var(--muted);margin-bottom:14px;">Loading…</div>
         <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border);">
@@ -1665,6 +1665,37 @@
           </label>
           <div id="office-delete-error" style="color:var(--danger);font-size:13px;margin-bottom:8px;min-height:16px;"></div>
           <button onclick="officeDeletePilot()" style="width:100%;padding:13px;background:rgba(239,68,68,0.08);border:1px solid var(--danger);border-radius:9999px;color:var(--danger);font-size:14px;font-weight:600;cursor:pointer;">Remove Pilot</button>
+        </div>
+
+        <!-- Coronet Peak Manifests -->
+        <div class="card stat-section" style="margin-bottom:12px;padding:0;overflow:hidden;">
+          <button onclick="toggleCoronetCard()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:16px;background:none;border:none;cursor:pointer;text-align:left;">
+            <span style="font-size:15px;font-weight:700;color:var(--text);">🏔 Coronet Peak Manifests</span>
+            <span id="coronet-card-chevron" style="font-size:18px;color:var(--muted);transition:transform 0.2s;">›</span>
+          </button>
+          <div id="coronet-card-body" style="display:none;padding:0 16px 16px;">
+
+            <!-- Van selector -->
+            <div style="display:flex;gap:8px;margin-bottom:14px;">
+              <button id="coronet-van-btn-1" onclick="selectCoronetVan(1)"
+                style="flex:1;padding:10px;border-radius:10px;border:2px solid var(--accent);background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer;">
+                🚐 Gforce 1
+              </button>
+              <button id="coronet-van-btn-2" onclick="selectCoronetVan(2)"
+                style="flex:1;padding:10px;border-radius:10px;border:2px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">
+                🚐 Gforce 2
+              </button>
+            </div>
+
+            <!-- Manifest form -->
+            <div id="coronet-manifest-form"></div>
+
+            <!-- Print button -->
+            <button onclick="printCoronetManifest()"
+              style="width:100%;padding:13px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;margin-top:12px;">
+              🖨 Print Manifest
+            </button>
+          </div>
         </div>
 
         <!-- Account -->
@@ -2418,12 +2449,9 @@ async function loadPilotConsentToggle() {
     const data = await res.json();
     const toggle = document.getElementById('pilot-consent-toggle');
     const desc = document.getElementById('pilot-consent-desc');
-    if (toggle) toggle.checked = !!(data.answered && data.consented);
-    if (desc) {
-      if (!data.answered) desc.textContent = 'Not set for today — toggle to enable';
-      else if (data.consented) desc.textContent = 'On — office can see your location today';
-      else desc.textContent = 'Off — your location is hidden today';
-    }
+    const on = !!(data.answered && data.consented);
+    if (toggle) toggle.checked = on;
+    if (desc) desc.textContent = on ? 'On — office can see your location today' : 'Off — resets automatically each morning';
   } catch (_) {}
 }
 
@@ -2436,11 +2464,8 @@ async function setPilotLocationSharing(enabled) {
       body: JSON.stringify({ consented: enabled })
     });
     if (!res || !res.ok) { toast('Could not save', 'err'); return; }
-    if (desc) desc.textContent = enabled ? 'On — office can see your location today' : 'Off — your location is hidden today';
-    // Also dismiss the modal if it's showing
-    const modal = document.getElementById('location-consent-modal');
-    if (modal) modal.style.display = 'none';
-    toast(enabled ? '📍 Location sharing enabled for today' : 'Location sharing disabled for today');
+    if (desc) desc.textContent = enabled ? 'On — office can see your location today' : 'Off — resets automatically each morning';
+    toast(enabled ? '📍 Location sharing on for today' : 'Location sharing off');
   } catch (_) { toast('Could not save', 'err'); }
 }
 
@@ -2474,71 +2499,6 @@ async function loadPilotSelfLocation() {
   } catch (_) { if (statusEl) statusEl.textContent = 'Could not load location.'; }
 }
 
-// ─── Daily Location Consent ───────────────────────────────────────────────────
-let _consentChecked = false;
-let _consentTimer = null;
-
-function nzHour() {
-  return parseInt(new Date().toLocaleString('en-US', { timeZone: 'Pacific/Auckland', hour: 'numeric', hour12: false }));
-}
-
-function msUntil8amNZ() {
-  const nzNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Pacific/Auckland' }));
-  const nz8am = new Date(nzNow);
-  nz8am.setHours(8, 0, 0, 0);
-  return Math.max(0, nz8am - nzNow);
-}
-
-async function checkLocationConsent() {
-  if (!pilotToken) return;
-  try {
-    const res = await apiFetch('/api/pilot/location-consent');
-    if (!res || !res.ok) return;
-    const data = await res.json();
-    if (data.answered) { _consentChecked = true; return; } // already answered today
-    if (nzHour() >= 8) {
-      showLocationConsentPrompt();
-    } else {
-      // Wait until 8am NZ then ask
-      clearTimeout(_consentTimer);
-      _consentTimer = setTimeout(checkLocationConsent, msUntil8amNZ() + 1000);
-    }
-  } catch (_) {}
-}
-
-function showLocationConsentPrompt() {
-  let el = document.getElementById('location-consent-modal');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'location-consent-modal';
-    el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;';
-    document.body.appendChild(el);
-  }
-  el.innerHTML = `
-    <div style="background:var(--surface);border-radius:18px;padding:32px 24px;max-width:340px;width:100%;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,0.35);">
-      <div style="font-size:40px;margin-bottom:14px;">📍</div>
-      <div style="font-size:19px;font-weight:800;color:var(--text);margin-bottom:10px;">Location sharing</div>
-      <div style="font-size:14px;color:var(--muted);line-height:1.55;margin-bottom:26px;">Allow the office to see your location on the map today?<br><br>Your location is only visible while you are active on the loop board.</div>
-      <button onclick="submitLocationConsent(true)" style="width:100%;padding:15px;background:var(--accent);border:none;border-radius:11px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px;">✅ Yes, share my location</button>
-      <button onclick="submitLocationConsent(false)" style="width:100%;padding:14px;background:transparent;border:1px solid var(--border);border-radius:11px;color:var(--muted);font-size:15px;font-weight:600;cursor:pointer;">No thanks</button>
-    </div>`;
-  el.style.display = 'flex';
-}
-
-async function submitLocationConsent(consented) {
-  try {
-    const res = await apiFetch('/api/pilot/location-consent', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ consented })
-    });
-    if (!res || !res.ok) { toast('Could not save preference', 'err'); return; }
-    _consentChecked = true;
-    const el = document.getElementById('location-consent-modal');
-    if (el) el.style.display = 'none';
-    toast(consented ? '📍 Location sharing enabled for today' : 'Location sharing declined for today');
-  } catch (_) { toast('Could not save preference', 'err'); }
-}
 
 let _pilotClockInterval;
 function startPilotClock() {
@@ -2572,7 +2532,6 @@ function showApp(name) {
   startStatusPoll();
   startPilotClock();
   connectWS();
-  checkLocationConsent();
 }
 
 function startStatusPoll() {
@@ -6522,6 +6481,291 @@ function copyOwnTracksUrl(btn, url) {
     document.body.removeChild(ta);
     btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 1800);
   }
+}
+
+// ─── Coronet Peak Manifests ──────────────────────────────────────────────────
+
+let _coronetActiveVan = 1;
+
+// Default manifest state for one van
+function _coronetDefault() {
+  return {
+    date: new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ }),
+    time: '10:00',
+    aPilot: false,
+    driver: '',
+    passengers: [
+      { ref: '', name: '', checkin: false, paid: false, pilot: '' },
+      { ref: '', name: '', checkin: false, paid: false, pilot: '' },
+      { ref: '', name: '', checkin: false, paid: false, pilot: '' },
+      { ref: '', name: '', checkin: false, paid: false, pilot: '' },
+      { ref: '', name: '', checkin: false, paid: false, pilot: '' }
+    ],
+    extraPilots: ['', '', '', '', '']
+  };
+}
+
+function _coronetLoad(van) {
+  try {
+    const raw = localStorage.getItem('coronet_van' + van);
+    if (raw) return Object.assign(_coronetDefault(), JSON.parse(raw));
+  } catch (_) {}
+  return _coronetDefault();
+}
+
+function _coronetSave(van, data) {
+  try { localStorage.setItem('coronet_van' + van, JSON.stringify(data)); } catch (_) {}
+}
+
+function toggleCoronetCard() {
+  const body = document.getElementById('coronet-card-body');
+  const chev = document.getElementById('coronet-card-chevron');
+  const open = body.style.display === 'none';
+  body.style.display = open ? 'block' : 'none';
+  chev.style.transform = open ? 'rotate(90deg)' : '';
+  if (open) { selectCoronetVan(_coronetActiveVan); }
+}
+
+function selectCoronetVan(van) {
+  _coronetActiveVan = van;
+  // Update tab buttons
+  [1, 2].forEach(v => {
+    const btn = document.getElementById('coronet-van-btn-' + v);
+    if (!btn) return;
+    if (v === van) {
+      btn.style.background = 'var(--accent)'; btn.style.color = '#fff';
+      btn.style.border = '2px solid var(--accent)'; btn.style.fontWeight = '700';
+    } else {
+      btn.style.background = 'var(--surface)'; btn.style.color = 'var(--text)';
+      btn.style.border = '2px solid var(--border)'; btn.style.fontWeight = '600';
+    }
+  });
+  renderCoronetForm(van);
+}
+
+function renderCoronetForm(van) {
+  const data = _coronetLoad(van);
+  const el = document.getElementById('coronet-manifest-form');
+  if (!el) return;
+
+  // Build pilot options from officePilots
+  const pilotOpts = ['', ...officePilots.map(p => p.name)]
+    .map(n => `<option value="${esc(n)}"${n ? '' : ''}>${n ? esc(n) : '— None —'}</option>`).join('');
+
+  const paxRows = data.passengers.map((p, i) => `
+    <tr>
+      <td style="padding:6px 4px;border:1px solid var(--border);text-align:center;font-size:11px;color:var(--muted);">${i + 1}</td>
+      <td style="padding:4px;border:1px solid var(--border);">
+        <input value="${esc(p.ref)}" placeholder="GFXXXXX"
+          oninput="coronetFieldChange(${van},${i},'ref',this.value)"
+          style="width:100%;border:none;background:transparent;color:var(--text);font-size:12px;font-family:monospace;padding:2px 4px;outline:none;min-width:0;">
+      </td>
+      <td style="padding:4px;border:1px solid var(--border);">
+        <input value="${esc(p.name)}" placeholder="Customer name"
+          oninput="coronetFieldChange(${van},${i},'name',this.value)"
+          style="width:100%;border:none;background:transparent;color:var(--text);font-size:12px;padding:2px 4px;outline:none;min-width:0;">
+      </td>
+      <td style="padding:4px;border:1px solid var(--border);text-align:center;">
+        <input type="checkbox" ${p.checkin ? 'checked' : ''}
+          onchange="coronetFieldChange(${van},${i},'checkin',this.checked)"
+          style="width:18px;height:18px;cursor:pointer;">
+      </td>
+      <td style="padding:4px;border:1px solid var(--border);text-align:center;">
+        <input type="checkbox" ${p.paid ? 'checked' : ''}
+          onchange="coronetFieldChange(${van},${i},'paid',this.checked)"
+          style="width:18px;height:18px;cursor:pointer;">
+      </td>
+      <td style="padding:4px;border:1px solid var(--border);">
+        <select onchange="coronetFieldChange(${van},${i},'pilot',this.value)"
+          style="width:100%;border:none;background:transparent;color:var(--text);font-size:12px;padding:2px 2px;outline:none;cursor:pointer;">
+          ${pilotOpts.replace(`value="${esc(p.pilot)}"`, `value="${esc(p.pilot)}" selected`)}
+        </select>
+      </td>
+    </tr>`).join('');
+
+  const extraPilotRows = data.extraPilots.map((name, i) => `
+    <tr>
+      <td style="padding:6px 4px;border:1px solid var(--border);text-align:center;font-size:11px;color:var(--muted);"></td>
+      <td colspan="4" style="padding:4px;border:1px solid var(--border);font-size:12px;color:var(--muted);">Extra pilot</td>
+      <td style="padding:4px;border:1px solid var(--border);">
+        <select onchange="coronetExtraPilotChange(${van},${i},this.value)"
+          style="width:100%;border:none;background:transparent;color:var(--text);font-size:12px;padding:2px 2px;outline:none;cursor:pointer;">
+          ${pilotOpts.replace(`value="${esc(name)}"`, `value="${esc(name)}" selected`)}
+        </select>
+      </td>
+    </tr>`).join('');
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--muted);margin-bottom:5px;">Date</div>
+        <input type="date" value="${esc(data.date)}"
+          onchange="coronetHeaderChange(${van},'date',this.value)"
+          style="width:100%;padding:9px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box;">
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--muted);margin-bottom:5px;">Departure Time</div>
+        <input type="time" value="${esc(data.time)}"
+          onchange="coronetHeaderChange(${van},'time',this.value)"
+          style="width:100%;padding:9px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box;">
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;">
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--text);">
+        <input type="checkbox" ${data.aPilot ? 'checked' : ''}
+          onchange="coronetHeaderChange(${van},'aPilot',this.checked)"
+          style="width:18px;height:18px;"> A Pilot
+      </label>
+      <div style="flex:1;"></div>
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--text);">P Driver:</label>
+      <select onchange="coronetHeaderChange(${van},'driver',this.value)"
+        style="flex:1;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;max-width:160px;">
+        ${pilotOpts.replace(`value="${esc(data.driver)}"`, `value="${esc(data.driver)}" selected`)}
+      </select>
+    </div>
+    <div style="overflow-x:auto;border-radius:8px;border:1px solid var(--border);">
+      <table style="width:100%;border-collapse:collapse;min-width:480px;">
+        <thead>
+          <tr style="background:var(--surface);">
+            <th style="padding:8px 4px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;width:28px;">#</th>
+            <th style="padding:8px 6px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;width:90px;">Ref</th>
+            <th style="padding:8px 6px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Customer</th>
+            <th style="padding:8px 4px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;width:44px;">Chk</th>
+            <th style="padding:8px 4px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;width:44px;">Paid</th>
+            <th style="padding:8px 6px;border:1px solid var(--border);font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;width:110px;">Pilot</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${paxRows}
+          ${extraPilotRows}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function coronetFieldChange(van, rowIdx, field, value) {
+  const data = _coronetLoad(van);
+  data.passengers[rowIdx][field] = value;
+  _coronetSave(van, data);
+}
+
+function coronetExtraPilotChange(van, idx, value) {
+  const data = _coronetLoad(van);
+  data.extraPilots[idx] = value;
+  _coronetSave(van, data);
+}
+
+function coronetHeaderChange(van, field, value) {
+  const data = _coronetLoad(van);
+  data[field] = value;
+  _coronetSave(van, data);
+}
+
+function printCoronetManifest() {
+  const van = _coronetActiveVan;
+  const data = _coronetLoad(van);
+
+  const vanLabel = van === 1 ? 'Gforce 1' : 'Gforce 2';
+
+  // Format date nicely
+  let dateLabel = data.date;
+  try {
+    const d = new Date(data.date + 'T12:00:00');
+    dateLabel = d.toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  } catch (_) {}
+
+  const paxRows = data.passengers.map((p, i) => `
+    <tr>
+      <td class="num">${i + 1}</td>
+      <td class="ref">${p.ref || ''}</td>
+      <td class="name">${p.name || ''}</td>
+      <td class="cb"><input type="checkbox" ${p.checkin ? 'checked' : ''} onclick="return false;"></td>
+      <td class="cb"><input type="checkbox" ${p.paid ? 'checked' : ''} onclick="return false;"></td>
+      <td class="pilot">${p.pilot || ''}</td>
+    </tr>`).join('');
+
+  const extraRows = data.extraPilots.filter(n => n).map(n => `
+    <tr>
+      <td class="num"></td>
+      <td class="ref"></td>
+      <td class="name"></td>
+      <td class="cb"></td>
+      <td class="cb"></td>
+      <td class="pilot">${n}</td>
+    </tr>`).join('');
+
+  const win = window.open('', '_blank', 'width=800,height=600');
+  win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Coronet Peak Manifest — ${vanLabel}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #000; background: #fff; padding: 20px; }
+  h1 { font-size: 20px; font-weight: 700; text-align: center; border: 2px solid #000; padding: 10px; margin-bottom: 16px; letter-spacing: 0.5px; }
+  .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px; }
+  .meta-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #555; margin-bottom: 3px; }
+  .meta-value { font-size: 16px; font-weight: 700; border: 2px solid #000; padding: 8px 12px; text-align: center; letter-spacing: 1px; }
+  .info-row { display: flex; align-items: center; gap: 20px; margin-bottom: 14px; }
+  .info-item { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+  .check-box { width: 22px; height: 22px; border: 2px solid #000; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  th { background: #d0d8e4; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 7px 8px; border: 1px solid #000; text-align: center; }
+  td { border: 1px solid #000; padding: 7px 8px; vertical-align: middle; }
+  td.num { text-align: center; width: 30px; color: #555; font-size: 11px; }
+  td.ref { font-family: monospace; font-size: 11px; width: 90px; }
+  td.name { }
+  td.cb { text-align: center; width: 46px; }
+  td.pilot { width: 120px; }
+  td input[type=checkbox] { width: 18px; height: 18px; cursor: default; }
+  tr:nth-child(even) { background: #f0f0f0; }
+  .footer { margin-top: 16px; font-size: 11px; color: #888; text-align: right; }
+  @media print { body { padding: 0; } @page { margin: 15mm; } }
+</style>
+</head>
+<body>
+<h1>Coronet Peak Manifest — ${vanLabel}</h1>
+<div class="meta">
+  <div>
+    <div class="meta-label">Date</div>
+    <div class="meta-value">${dateLabel}</div>
+  </div>
+  <div>
+    <div class="meta-label">Departure Time</div>
+    <div class="meta-value">${data.time || ''}</div>
+  </div>
+</div>
+<div class="info-row">
+  <div class="info-item">
+    A Pilot: <span class="check-box">${data.aPilot ? '✓' : ''}</span>
+  </div>
+  <div style="flex:1;"></div>
+  <div class="info-item">
+    P Driver: <span style="font-size:14px;font-weight:700;border:2px solid #000;padding:4px 14px;">${data.driver || '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'}</span>
+  </div>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Ref</th>
+      <th>Customer</th>
+      <th>Chk-In</th>
+      <th>Paid</th>
+      <th>Pilot</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${paxRows}
+    ${extraRows}
+  </tbody>
+</table>
+<div class="footer">GForce Paragliding · Coronet Peak · Printed ${new Date().toLocaleString('en-NZ')}</div>
+<script>window.onload = function(){ window.print(); };<\/script>
+</body>
+</html>`);
+  win.document.close();
 }
 
 async function loadTrackerEnabledState() {

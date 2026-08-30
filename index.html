@@ -6510,7 +6510,7 @@ function _coronetDefault() {
       { ref: '', name: '', checkin: false, paid: false, pilot: '' },
       { ref: '', name: '', checkin: false, paid: false, pilot: '' }
     ],
-    extraPilots: ['', '', '', '', '']
+    extraPilot: ''
   };
 }
 
@@ -6577,17 +6577,20 @@ function renderCoronetForm(van) {
       </td>
     </tr>`).join('');
 
-  const extraPilotRows = data.extraPilots.map((name, i) => `
+  const extraPilotRow = `
     <tr>
-      <td style="padding:6px 4px;border:1px solid var(--border);text-align:center;font-size:11px;color:var(--muted);"></td>
-      <td colspan="4" style="padding:4px;border:1px solid var(--border);font-size:12px;color:var(--muted);">Extra pilot</td>
+      <td style="padding:6px 4px;border:1px solid var(--border);text-align:center;font-size:11px;color:var(--muted);">6</td>
+      <td style="padding:4px;border:1px solid var(--border);"></td>
+      <td style="padding:6px 8px;border:1px solid var(--border);font-size:12px;color:var(--muted);font-style:italic;">Extra pilot / pilot</td>
+      <td style="padding:4px;border:1px solid var(--border);"></td>
+      <td style="padding:4px;border:1px solid var(--border);"></td>
       <td style="padding:4px;border:1px solid var(--border);">
-        <select onchange="coronetExtraPilotChange(${van},${i},this.value)"
+        <select onchange="coronetExtraPilotChange(${van},this.value)"
           style="width:100%;border:none;background:transparent;color:var(--text);font-size:12px;padding:2px 2px;outline:none;cursor:pointer;">
-          ${pilotOpts.replace(`value="${esc(name)}"`, `value="${esc(name)}" selected`)}
+          ${pilotOpts.replace(`value="${esc(data.extraPilot)}"`, `value="${esc(data.extraPilot)}" selected`)}
         </select>
       </td>
-    </tr>`).join('');
+    </tr>`;
 
   el.innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
@@ -6631,7 +6634,7 @@ function renderCoronetForm(van) {
         </thead>
         <tbody>
           ${paxRows}
-          ${extraPilotRows}
+          ${extraPilotRow}
         </tbody>
       </table>
     </div>`;
@@ -6643,9 +6646,9 @@ function coronetFieldChange(van, rowIdx, field, value) {
   _coronetSave(van, data);
 }
 
-function coronetExtraPilotChange(van, idx, value) {
+function coronetExtraPilotChange(van, value) {
   const data = _coronetLoad(van);
-  data.extraPilots[idx] = value;
+  data.extraPilot = value;
   _coronetSave(van, data);
 }
 
@@ -6677,15 +6680,15 @@ function printCoronetManifest(van) {
       <td class="pilot">${p.pilot || ''}</td>
     </tr>`).join('');
 
-  const extraRows = data.extraPilots.filter(n => n).map(n => `
+  const extraRows = `
     <tr>
-      <td class="num"></td>
+      <td class="num">6</td>
       <td class="ref"></td>
-      <td class="name"></td>
+      <td class="name" style="color:#888;font-style:italic;">Extra pilot / pilot</td>
       <td class="cb"></td>
       <td class="cb"></td>
-      <td class="pilot">${n}</td>
-    </tr>`).join('');
+      <td class="pilot">${data.extraPilot || ''}</td>
+    </tr>`;
 
   const win = window.open('', '_blank', 'width=800,height=600');
   win.document.write(`<!DOCTYPE html>

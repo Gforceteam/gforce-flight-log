@@ -1462,6 +1462,7 @@
     <button class="office-tab-btn active" onclick="showOfficeTab('pilots')" id="office-tab-pilots-btn">Flight Following</button>
     <button class="office-tab-btn" onclick="showOfficeTab('loop')" id="office-tab-loop-btn">Loop Board</button>
     <button class="office-tab-btn" onclick="showOfficeTab('tracker')" id="office-tab-tracker-btn">📍 Tracker</button>
+    <button class="office-tab-btn" onclick="showOfficeTab('coronet')" id="office-tab-coronet-btn">🏔 Coronet</button>
   </div>
 
   <div class="office-content">
@@ -1494,6 +1495,42 @@
         <div id="tracker-tab-map-el" style="width:100%;height:360px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--surface);margin-bottom:12px;"></div>
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--muted);margin-bottom:8px;">Currently tracking</div>
         <div id="tracker-tab-pilot-list"></div>
+      </div>
+    </div>
+
+    <div class="office-tab-content" id="office-tab-coronet">
+      <div style="padding:16px 16px 32px;">
+
+        <!-- Van selector -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <span style="font-size:15px;font-weight:700;color:var(--text);">🏔 Coronet Peak Manifest</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:18px;">
+          <button id="coronet-van-btn-1" onclick="selectCoronetVan(1)"
+            style="flex:1;padding:11px;border-radius:10px;border:2px solid var(--accent);background:var(--accent);color:#fff;font-size:14px;font-weight:700;cursor:pointer;">
+            🚐 Gforce 1
+          </button>
+          <button id="coronet-van-btn-2" onclick="selectCoronetVan(2)"
+            style="flex:1;padding:11px;border-radius:10px;border:2px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">
+            🚐 Gforce 2
+          </button>
+        </div>
+
+        <!-- Manifest form renders here -->
+        <div id="coronet-manifest-form"></div>
+
+        <!-- Action buttons -->
+        <div style="display:flex;gap:10px;margin-top:16px;">
+          <button onclick="printCoronetManifest()"
+            style="flex:1;padding:14px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">
+            🖨 Print Manifest
+          </button>
+          <button onclick="clearCoronetManifest()"
+            style="padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;">
+            ✕ Clear
+          </button>
+        </div>
+
       </div>
     </div>
 
@@ -1665,37 +1702,6 @@
           </label>
           <div id="office-delete-error" style="color:var(--danger);font-size:13px;margin-bottom:8px;min-height:16px;"></div>
           <button onclick="officeDeletePilot()" style="width:100%;padding:13px;background:rgba(239,68,68,0.08);border:1px solid var(--danger);border-radius:9999px;color:var(--danger);font-size:14px;font-weight:600;cursor:pointer;">Remove Pilot</button>
-        </div>
-
-        <!-- Coronet Peak Manifests -->
-        <div class="card stat-section" style="margin-bottom:12px;padding:0;overflow:hidden;">
-          <button onclick="toggleCoronetCard()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:16px;background:none;border:none;cursor:pointer;text-align:left;">
-            <span style="font-size:15px;font-weight:700;color:var(--text);">🏔 Coronet Peak Manifests</span>
-            <span id="coronet-card-chevron" style="font-size:18px;color:var(--muted);transition:transform 0.2s;">›</span>
-          </button>
-          <div id="coronet-card-body" style="display:none;padding:0 16px 16px;">
-
-            <!-- Van selector -->
-            <div style="display:flex;gap:8px;margin-bottom:14px;">
-              <button id="coronet-van-btn-1" onclick="selectCoronetVan(1)"
-                style="flex:1;padding:10px;border-radius:10px;border:2px solid var(--accent);background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer;">
-                🚐 Gforce 1
-              </button>
-              <button id="coronet-van-btn-2" onclick="selectCoronetVan(2)"
-                style="flex:1;padding:10px;border-radius:10px;border:2px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">
-                🚐 Gforce 2
-              </button>
-            </div>
-
-            <!-- Manifest form -->
-            <div id="coronet-manifest-form"></div>
-
-            <!-- Print button -->
-            <button onclick="printCoronetManifest()"
-              style="width:100%;padding:13px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;margin-top:12px;">
-              🖨 Print Manifest
-            </button>
-          </div>
         </div>
 
         <!-- Account -->
@@ -6307,6 +6313,7 @@ if (name === 'pilots') { renderAwayTab(); renderGroupsTab(); renderTodayFlights(
   if (name === 'today') renderTodayTab();
   if (name === 'flights') renderFlightsTab();
   if (name === 'tracker') { loadTrackerTab(); }
+  if (name === 'coronet') { selectCoronetVan(_coronetActiveVan); }
   if (name === 'settings') { populateOfficeResetPilots(); populateOfficeDeletePilots(); loadOfficeSettings(); loadTrackerEnabledState(); }
 }
 
@@ -6517,13 +6524,10 @@ function _coronetSave(van, data) {
   try { localStorage.setItem('coronet_van' + van, JSON.stringify(data)); } catch (_) {}
 }
 
-function toggleCoronetCard() {
-  const body = document.getElementById('coronet-card-body');
-  const chev = document.getElementById('coronet-card-chevron');
-  const open = body.style.display === 'none';
-  body.style.display = open ? 'block' : 'none';
-  chev.style.transform = open ? 'rotate(90deg)' : '';
-  if (open) { selectCoronetVan(_coronetActiveVan); }
+function clearCoronetManifest() {
+  if (!confirm('Clear this manifest and start fresh?')) return;
+  _coronetSave(_coronetActiveVan, _coronetDefault());
+  renderCoronetForm(_coronetActiveVan);
 }
 
 function selectCoronetVan(van) {

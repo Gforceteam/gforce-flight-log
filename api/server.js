@@ -2303,6 +2303,31 @@ app.post('/api/owntracks', async (req, res) => {
   }
 });
 
+// ─── Coronet Peak Trip Notifications ────────────────────────────────────────
+app.post('/api/office/coronet-notify', verifyOffice, async (req, res) => {
+  try {
+    const { vanLabel, time, assignments } = req.body;
+    // assignments: [{ pilotName, role ('pilot'|'driver'), rowNum }]
+    if (!Array.isArray(assignments) || !assignments.length) {
+      return res.json({ ok: true, results: [] });
+    }
+    const results = [];
+    for (const a of assignments) {
+      if (!a.pilotName) continue;
+      const pilot = await queryOne('SELECT id FROM pilots WHERE name = ?', [a.pilotName]);
+      if (!pilot) { results.push({ name: a.pilotName, sent: false, reason: 'pilot not found' }); continue; }
+      const body = a.role === 'driver'
+        ? `You are driving on the ${time} CP trip (${vanLabel})`
+        : `You are pilot #${a.rowNum} on the ${time} CP trip (${vanLabel})`;
+      await sendPushToPilot(pilot.id, { title: '🏔 Coronet Peak Trip', body, tag: 'coronet-trip' });
+      results.push({ name: a.pilotName, sent: true });
+    }
+    res.json({ ok: true, results });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Tracker master switch — enabled state is per-day (NZ time), auto-resets at midnight
 app.get('/api/office/tracker-enabled', verifyOffice, (req, res) => {
   res.json({ enabled: isTrackerActive() });

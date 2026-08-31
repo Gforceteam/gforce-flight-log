@@ -1509,9 +1509,21 @@
     </div>
 
     <div class="office-tab-content" id="office-tab-coronet">
-      <div style="padding:16px 16px 32px;">
 
-        <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:14px;">🏔 Coronet Peak — Trip Manifests</div>
+      <!-- Inner sub-tab toggle -->
+      <div style="display:flex;gap:8px;padding:14px 16px 0;">
+        <button id="coronet-sub-builder-btn" onclick="showCoronetSubTab('builder')"
+          style="flex:1;padding:9px;border-radius:9999px;border:2px solid var(--accent);background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.15s;">
+          📋 Manifest Builder
+        </button>
+        <button id="coronet-sub-trips-btn" onclick="showCoronetSubTab('trips')"
+          style="flex:1;padding:9px;border-radius:9999px;border:2px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s;">
+          🗓 Today's Trips
+        </button>
+      </div>
+
+      <!-- Sub-tab: Manifest Builder -->
+      <div id="coronet-sub-builder" style="padding:16px 16px 32px;">
 
         <!-- Gforce 1 -->
         <div class="card stat-section" style="margin-bottom:16px;padding:0;overflow:visible;">
@@ -1546,6 +1558,14 @@
         </div>
 
       </div>
+
+      <!-- Sub-tab: Today's Trips -->
+      <div id="coronet-sub-trips" style="display:none;padding:16px 16px 32px;">
+        <div id="coronet-trips-list">
+          <div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0;">Loading…</div>
+        </div>
+      </div>
+
     </div>
 
 
@@ -6624,6 +6644,7 @@ function clearCoronetManifest(van) {
 }
 
 function initCoronetTab() {
+  showCoronetSubTab('builder');
   renderCoronetForm(1);
   renderCoronetForm(2);
 }
@@ -6751,6 +6772,77 @@ function coronetHeaderChange(van, field, value) {
   _coronetSave(van, data);
 }
 
+function showCoronetSubTab(name) {
+  const isBuilder = name === 'builder';
+  document.getElementById('coronet-sub-builder').style.display = isBuilder ? '' : 'none';
+  document.getElementById('coronet-sub-trips').style.display = isBuilder ? 'none' : '';
+  const bb = document.getElementById('coronet-sub-builder-btn');
+  const tb = document.getElementById('coronet-sub-trips-btn');
+  if (bb) {
+    bb.style.background = isBuilder ? 'var(--accent)' : 'var(--surface)';
+    bb.style.color = isBuilder ? '#fff' : 'var(--text)';
+    bb.style.borderColor = isBuilder ? 'var(--accent)' : 'var(--border)';
+    bb.style.fontWeight = isBuilder ? '700' : '600';
+  }
+  if (tb) {
+    tb.style.background = isBuilder ? 'var(--surface)' : 'var(--accent)';
+    tb.style.color = isBuilder ? 'var(--text)' : '#fff';
+    tb.style.borderColor = isBuilder ? 'var(--border)' : 'var(--accent)';
+    tb.style.fontWeight = isBuilder ? '600' : '700';
+  }
+  if (!isBuilder) loadCoronetTrips();
+}
+
+async function loadCoronetTrips() {
+  const el = document.getElementById('coronet-trips-list');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0;">Loading…</div>';
+  try {
+    const res = await officeFetch('/api/office/coronet-trips');
+    if (!res || !res.ok) throw new Error();
+    const trips = await res.json();
+    if (!trips.length) {
+      el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0;">No trips sent today yet.</div>';
+      return;
+    }
+    el.innerHTML = trips.map(t => {
+      const manifest = t.manifest || {};
+      const sentTime = new Date(t.sent_at).toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', timeZone: NZ_TZ });
+      const rows = (manifest.passengers || []).filter(p => p.name || p.pilot).map((p, i) => `
+        <div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
+          <span style="color:var(--muted);font-weight:700;min-width:18px;">${i + 1}</span>
+          <span style="flex:1;color:var(--text);">${esc(p.name || '')}</span>
+          <span style="color:var(--accent);font-weight:600;">${esc(p.pilot || '')}</span>
+        </div>`).join('');
+      const extraRow = manifest.extraPilot ? `
+        <div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
+          <span style="color:var(--muted);font-weight:700;min-width:18px;">6</span>
+          <span style="flex:1;color:var(--text);">${esc(manifest.extraPilotName || '')}</span>
+          <span style="color:var(--accent);font-weight:600;">${esc(manifest.extraPilot)}</span>
+        </div>` : '';
+      const driverRow = manifest.driver ? `
+        <div style="display:flex;gap:8px;padding:6px 0;font-size:13px;">
+          <span style="color:var(--muted);font-weight:700;min-width:18px;">🚐</span>
+          <span style="flex:1;color:var(--muted);">Driver</span>
+          <span style="color:var(--text);font-weight:600;">${esc(manifest.driver)}</span>
+        </div>` : '';
+      return `
+        <div class="card stat-section" style="margin-bottom:14px;padding:14px 16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div>
+              <span style="font-size:15px;font-weight:700;color:var(--text);">🚐 ${esc(t.van_label)}</span>
+              <span style="margin-left:10px;font-size:18px;font-weight:800;color:var(--accent);font-family:'Montserrat',sans-serif;">${esc(manifest.time || '')}</span>
+            </div>
+            <span style="font-size:11px;color:var(--muted);">Sent ${sentTime}</span>
+          </div>
+          ${rows}${extraRow}${driverRow}
+        </div>`;
+    }).join('');
+  } catch (_) {
+    el.innerHTML = '<div style="color:var(--danger);font-size:13px;text-align:center;padding:40px 0;">Could not load trips.</div>';
+  }
+}
+
 async function sendCoronetTrip(van) {
   const data = _coronetLoad(van);
   const vanLabel = 'Gforce ' + van;
@@ -6773,7 +6865,7 @@ async function sendCoronetTrip(van) {
     const res = await officeFetch('/api/office/coronet-notify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ vanLabel, time, assignments })
+      body: JSON.stringify({ vanLabel, time, assignments, manifest: data })
     });
     if (!res || !res.ok) { toast('Could not send notifications', 'err'); return; }
     const result = await res.json();
@@ -6784,6 +6876,8 @@ async function sendCoronetTrip(van) {
     } else {
       toast(`📲 Trip sent to ${sent} pilot${sent !== 1 ? 's' : ''}`);
     }
+    // Switch to Today's Trips to show the logged entry
+    showCoronetSubTab('trips');
   } catch (_) { toast('Could not send notifications', 'err'); }
 }
 

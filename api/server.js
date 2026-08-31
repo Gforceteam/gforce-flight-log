@@ -236,6 +236,15 @@ async function createTables() {
   await run("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('push_notifications_enabled', 'false')");
   try { await db.execute('ALTER TABLE loop_board ADD COLUMN tallies TEXT'); } catch (_) {}
   // Date-aware loop board table
+  await db.execute(`CREATE TABLE IF NOT EXISTS coronet_trips (
+    id TEXT PRIMARY KEY,
+    van INTEGER NOT NULL,
+    van_label TEXT NOT NULL,
+    date TEXT NOT NULL,
+    manifest_json TEXT NOT NULL,
+    sent_at TEXT NOT NULL
+  )`);
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_coronet_trips_date ON coronet_trips(date)');
   await db.execute(`CREATE TABLE IF NOT EXISTS loop_board_v2 (
     date TEXT NOT NULL,
     slot INTEGER NOT NULL,
@@ -2331,7 +2340,7 @@ app.get('/api/pilot/coronet-manifests', verifyPilotOrOffice, async (req, res) =>
 // ─── Coronet Peak Trip Notifications ────────────────────────────────────────
 app.post('/api/office/coronet-notify', verifyOffice, async (req, res) => {
   try {
-    const { vanLabel, time, assignments } = req.body;
+    const { vanLabel, time, assignments, manifest } = req.body;
     // assignments: [{ pilotName, role ('pilot'|'driver'), rowNum }]
     if (!Array.isArray(assignments) || !assignments.length) {
       return res.json({ ok: true, results: [] });
@@ -2347,10 +2356,27 @@ app.post('/api/office/coronet-notify', verifyOffice, async (req, res) => {
       await sendPushToPilot(pilot.id, { title: '🏔 Coronet Peak Trip', body, tag: 'coronet-trip' });
       results.push({ name: a.pilotName, sent: true });
     }
+    // Log the trip
+    const van = vanLabel === 'Gforce 1' ? 1 : 2;
+    await run(
+      'INSERT INTO coronet_trips (id, van, van_label, date, manifest_json, sent_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [uuidv4(), van, vanLabel, nzToday(), JSON.stringify(manifest || {}), new Date().toISOString()]
+    );
     res.json({ ok: true, results });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+app.get('/api/office/coronet-trips', verifyOffice, async (req, res) => {
+  try {
+    const date = req.query.date || nzToday();
+    const rows = await queryAll(
+      'SELECT id, van, van_label, manifest_json, sent_at FROM coronet_trips WHERE date = ? ORDER BY sent_at ASC',
+      [date]
+    );
+    res.json(rows.map(r => ({ ...r, manifest: JSON.parse(r.manifest_json || '{}') })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // Tracker master switch — enabled state is per-day (NZ time), auto-resets at midnight

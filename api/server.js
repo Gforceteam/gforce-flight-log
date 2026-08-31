@@ -2310,6 +2310,7 @@ app.put('/api/office/coronet-manifest', verifyOffice, async (req, res) => {
     if (van !== 1 && van !== 2) return res.status(400).json({ error: 'invalid van' });
     await run("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)",
       ['coronet_manifest_van' + van, JSON.stringify(data)]);
+    broadcast({ type: 'CORONET_MANIFEST_UPDATE', van, data });
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

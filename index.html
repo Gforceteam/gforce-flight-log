@@ -7488,6 +7488,10 @@ function connectWS() {
         }
         break;
       }
+      case 'CORONET_MANIFEST_UPDATE':
+        // Live-update pilot Coronet tab if open
+        if (pilotActiveTab === 'coronet') loadPilotCoronetManifests();
+        break;
       case 'PILOT_DELETED':
         toast(`${data.pilot_name} removed`);
         loadOfficeData();

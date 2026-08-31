@@ -6510,7 +6510,9 @@ function _coronetDefault() {
       { ref: '', name: '', checkin: false, paid: false, pilot: '' },
       { ref: '', name: '', checkin: false, paid: false, pilot: '' }
     ],
-    extraPilot: ''
+    extraPilot: '',
+    extraPilotRef: '',
+    extraPilotName: ''
   };
 }
 
@@ -6575,8 +6577,16 @@ function renderCoronetForm(van) {
   const extraPilotRow = `
     <tr>
       <td style="padding:6px 4px;border:1px solid var(--border);text-align:center;font-size:11px;color:var(--muted);">6</td>
-      <td style="padding:4px;border:1px solid var(--border);"></td>
-      <td style="padding:6px 8px;border:1px solid var(--border);font-size:12px;color:var(--muted);font-style:italic;">Extra pilot / pilot</td>
+      <td style="padding:4px;border:1px solid var(--border);">
+        <input value="${esc(data.extraPilotRef)}" placeholder="Ref"
+          oninput="coronetHeaderChange(${van},'extraPilotRef',this.value)"
+          style="width:100%;border:none;background:transparent;color:var(--text);font-size:12px;font-family:monospace;padding:2px 4px;outline:none;min-width:0;">
+      </td>
+      <td style="padding:4px;border:1px solid var(--border);">
+        <input value="${esc(data.extraPilotName)}" placeholder="Customer name"
+          oninput="coronetHeaderChange(${van},'extraPilotName',this.value)"
+          style="width:100%;border:none;background:transparent;color:var(--text);font-size:12px;padding:2px 4px;outline:none;min-width:0;">
+      </td>
       <td style="padding:4px;border:1px solid var(--border);"></td>
       <td style="padding:4px;border:1px solid var(--border);">
         <select onchange="coronetExtraPilotChange(${van},this.value)"

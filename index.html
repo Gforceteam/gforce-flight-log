@@ -1262,6 +1262,7 @@
   <div class="pilot-tab-bar" id="pilot-tab-bar">
     <button class="pilot-tab-btn active" onclick="showPilotTab('ff')" id="pilot-tab-ff-btn">Flight Following</button>
     <button class="pilot-tab-btn" onclick="showPilotTab('loop')" id="pilot-tab-loop-btn">Loop Board</button>
+    <button class="pilot-tab-btn" onclick="showPilotTab('coronet')" id="pilot-tab-coronet-btn">🏔 Coronet</button>
   </div>
 
   <!-- Tab: Flight Following -->
@@ -1277,6 +1278,15 @@
   <div class="pilot-tab-content" id="pilot-tab-loop">
     <div class="pilot-tab-date" id="pilot-date-loop"></div>
     <div id="pilot-loop-board-wrap"><p style="color:var(--muted);padding:20px;text-align:center;">Loading…</p></div>
+  </div>
+
+  <!-- Tab: Coronet Peak -->
+  <div class="pilot-tab-content" id="pilot-tab-coronet">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);">🏔 Coronet Peak</div>
+      <button onclick="loadPilotCoronetManifests()" style="padding:6px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;">↻ Refresh</button>
+    </div>
+    <div id="pilot-coronet-content"><div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0;">Loading…</div></div>
   </div>
 
   <!-- Tab: Settings (opened via menu) -->
@@ -3960,6 +3970,7 @@ function showPilotTab(name) {
   if (btn) btn.classList.add('active');
   window.scrollTo({ top: 0, behavior: 'instant' });
   if (name === 'loop') loadPilotLoopBoard();
+  if (name === 'coronet') loadPilotCoronetManifests();
   if (name === 'settings') {
     // Move settings HTML into the settings tab on first open
     const src = document.getElementById('page-settings-source');
@@ -3990,6 +4001,70 @@ function showPage(name) {
   if (name === 'dashboard') { showPilotTab('ff'); return; }
   if (name === 'settings') { showPilotTab('settings'); return; }
   showSubPage(name);
+}
+
+// ─── Pilot Coronet Manifest (read-only live view) ────────────────────────────
+async function loadPilotCoronetManifests() {
+  const el = document.getElementById('pilot-coronet-content');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0;">Loading…</div>';
+  try {
+    const res = await apiFetch('/api/pilot/coronet-manifests');
+    if (!res || !res.ok) throw new Error();
+    const { van1, van2 } = await res.json();
+    if (!van1 && !van2) {
+      el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0;">No trip manifests set yet.</div>';
+      return;
+    }
+    el.innerHTML = [1, 2].map(v => {
+      const d = v === 1 ? van1 : van2;
+      if (!d) return '';
+      const vanLabel = 'Gforce ' + v;
+      // Format date
+      let dateLabel = d.date || '';
+      try { dateLabel = new Date(d.date + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' }); } catch (_) {}
+      // Build rows
+      const rows = (d.passengers || []).map((p, i) => `
+        <tr>
+          <td style="padding:7px 6px;border-bottom:1px solid var(--border);text-align:center;font-size:12px;color:var(--muted);font-weight:700;">${i + 1}</td>
+          <td style="padding:7px 8px;border-bottom:1px solid var(--border);font-size:12px;font-family:monospace;color:var(--muted);">${esc(p.ref || '')}</td>
+          <td style="padding:7px 8px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text);">${esc(p.name || '')}</td>
+          <td style="padding:7px 8px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text);font-weight:600;">${esc(p.pilot || '')}</td>
+        </tr>`).join('');
+      const extraRow = `
+        <tr>
+          <td style="padding:7px 6px;border-bottom:1px solid var(--border);text-align:center;font-size:12px;color:var(--muted);font-weight:700;">6</td>
+          <td style="padding:7px 8px;border-bottom:1px solid var(--border);font-size:12px;font-family:monospace;color:var(--muted);">${esc(d.extraPilotRef || '')}</td>
+          <td style="padding:7px 8px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text);">${esc(d.extraPilotName || '')}</td>
+          <td style="padding:7px 8px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text);font-weight:600;">${esc(d.extraPilot || '')}</td>
+        </tr>`;
+      return `
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px;">
+          <div style="background:var(--surface);padding:12px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);">
+            <span style="font-size:15px;font-weight:700;color:var(--text);">🚐 ${vanLabel}</span>
+            <span style="font-size:13px;color:var(--muted);">${dateLabel}</span>
+          </div>
+          ${d.time ? `<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
+            <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);">Departure</span>
+            <span style="font-size:18px;font-weight:800;color:var(--accent);font-family:'Montserrat',sans-serif;">${esc(d.time)}</span>
+            ${d.driver ? `<span style="margin-left:auto;font-size:12px;color:var(--muted);">Driver: <strong style="color:var(--text);">${esc(d.driver)}</strong></span>` : ''}
+          </div>` : ''}
+          <table style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr style="background:var(--surface);">
+                <th style="padding:7px 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);text-align:center;border-bottom:1px solid var(--border);">#</th>
+                <th style="padding:7px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);">Ref</th>
+                <th style="padding:7px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);">Customer</th>
+                <th style="padding:7px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);">Pilot</th>
+              </tr>
+            </thead>
+            <tbody>${rows}${extraRow}</tbody>
+          </table>
+        </div>`;
+    }).join('');
+  } catch (_) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0;">Could not load manifests.</div>';
+  }
 }
 
 // ─── Pilot Loop Board (read-only) ────────────────────────────────────────────
@@ -6524,8 +6599,22 @@ function _coronetLoad(van) {
   return _coronetDefault();
 }
 
+const _coronetSyncTimer = {};
 function _coronetSave(van, data) {
   try { localStorage.setItem('coronet_van' + van, JSON.stringify(data)); } catch (_) {}
+  // Debounce server sync (1.5 s after last change)
+  clearTimeout(_coronetSyncTimer[van]);
+  _coronetSyncTimer[van] = setTimeout(() => _coronetServerSync(van, data), 1500);
+}
+
+async function _coronetServerSync(van, data) {
+  try {
+    await officeFetch('/api/office/coronet-manifest', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ van, data })
+    });
+  } catch (_) {}
 }
 
 function clearCoronetManifest(van) {

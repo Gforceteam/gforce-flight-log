@@ -2303,6 +2303,30 @@ app.post('/api/owntracks', async (req, res) => {
   }
 });
 
+// ─── Coronet Peak Manifests (server-side storage for pilot live view) ────────
+app.put('/api/office/coronet-manifest', verifyOffice, async (req, res) => {
+  try {
+    const { van, data } = req.body;
+    if (van !== 1 && van !== 2) return res.status(400).json({ error: 'invalid van' });
+    await run("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)",
+      ['coronet_manifest_van' + van, JSON.stringify(data)]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/pilot/coronet-manifests', verifyPilotOrOffice, async (req, res) => {
+  try {
+    const [r1, r2] = await Promise.all([
+      queryOne("SELECT value FROM app_settings WHERE key = 'coronet_manifest_van1'"),
+      queryOne("SELECT value FROM app_settings WHERE key = 'coronet_manifest_van2'")
+    ]);
+    res.json({
+      van1: r1 ? JSON.parse(r1.value) : null,
+      van2: r2 ? JSON.parse(r2.value) : null
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── Coronet Peak Trip Notifications ────────────────────────────────────────
 app.post('/api/office/coronet-notify', verifyOffice, async (req, res) => {
   try {

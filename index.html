@@ -6719,7 +6719,7 @@ function renderCoronetForm(van) {
       <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--text);">
         <input type="checkbox" ${data.aPilot ? 'checked' : ''}
           onchange="coronetHeaderChange(${van},'aPilot',this.checked)"
-          style="width:18px;height:18px;"> A Pilot
+          style="width:18px;height:18px;"> A Pilot & P Licence
       </label>
       <div style="flex:1;"></div>
       <label style="font-size:13px;color:var(--text);">Driver:</label>
@@ -6957,7 +6957,7 @@ function printCoronetManifest(van) {
 </div>
 <div class="info-row">
   <div class="info-item">
-    A Pilot: <span class="check-box">${data.aPilot ? '✓' : ''}</span>
+    A Pilot & P Licence: <span class="check-box">${data.aPilot ? '✓' : ''}</span>
   </div>
   <div style="flex:1;"></div>
   <div class="info-item">

@@ -6716,10 +6716,18 @@ function renderCoronetForm(van) {
       </div>
       <div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--muted);margin-bottom:5px;">Departure Time</div>
-        <select onchange="coronetHeaderChange(${van},'time',this.value)"
-          style="width:100%;padding:9px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box;cursor:pointer;">
-          ${(()=>{const opts=[];for(let h=6;h<=20;h++)for(let m=0;m<60;m+=5){const t=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');opts.push(`<option value="${t}"${data.time===t?' selected':''}>${t}</option>`);}return opts.join('');})()}
-        </select>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <select onchange="coronetTimePartChange(${van},'hr',this.value)"
+            style="flex:1;padding:9px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-weight:700;box-sizing:border-box;cursor:pointer;text-align:center;">
+            ${(()=>{const h=(data.time||'10:00').split(':')[0];const opts=[];for(let i=9;i<=18;i++){const v=String(i).padStart(2,'0');opts.push(`<option value="${v}"${h===v?' selected':''}>${v}</option>`);}return opts.join('');})()}
+          </select>
+          <span style="font-size:12px;font-weight:700;color:var(--muted);">hr</span>
+          <select onchange="coronetTimePartChange(${van},'min',this.value)"
+            style="flex:1;padding:9px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-weight:700;box-sizing:border-box;cursor:pointer;text-align:center;">
+            ${(()=>{const m=(data.time||'10:00').split(':')[1]||'00';const opts=[];for(let i=0;i<60;i+=5){const v=String(i).padStart(2,'0');opts.push(`<option value="${v}"${m===v?' selected':''}>${v}</option>`);}return opts.join('');})()}
+          </select>
+          <span style="font-size:12px;font-weight:700;color:var(--muted);">min</span>
+        </div>
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;">
@@ -6763,6 +6771,15 @@ function coronetFieldChange(van, rowIdx, field, value) {
 function coronetExtraPilotChange(van, value) {
   const data = _coronetLoad(van);
   data.extraPilot = value;
+  _coronetSave(van, data);
+}
+
+function coronetTimePartChange(van, part, value) {
+  const data = _coronetLoad(van);
+  const parts = (data.time || '10:00').split(':');
+  if (part === 'hr') parts[0] = value;
+  else parts[1] = value;
+  data.time = parts[0] + ':' + (parts[1] || '00');
   _coronetSave(van, data);
 }
 

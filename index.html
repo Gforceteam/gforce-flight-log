@@ -1527,11 +1527,6 @@
 
         <!-- CP Gforce 1 -->
         <div class="card stat-section" style="margin-bottom:16px;padding:0;overflow:visible;">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;">
-            <span style="font-size:15px;font-weight:700;color:var(--text);">CP Gforce 1</span>
-            <button onclick="clearCoronetManifest(1)"
-              style="padding:6px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;">✕ Clear</button>
-          </div>
           <div style="padding:0 16px 4px;" id="coronet-form-van1"></div>
           <div style="padding:12px 16px 16px;">
             <button onclick="sendCoronetTrip(1)"
@@ -1543,11 +1538,6 @@
 
         <!-- CP Gforce 2 -->
         <div class="card stat-section" style="padding:0;overflow:visible;">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;">
-            <span style="font-size:15px;font-weight:700;color:var(--text);">CP Gforce 2</span>
-            <button onclick="clearCoronetManifest(2)"
-              style="padding:6px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;">✕ Clear</button>
-          </div>
           <div style="padding:0 16px 4px;" id="coronet-form-van2"></div>
           <div style="padding:12px 16px 16px;">
             <button onclick="sendCoronetTrip(2)"
@@ -6707,20 +6697,23 @@ function renderCoronetForm(van) {
     </tr>`;
 
   el.innerHTML = `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
-      <span style="font-size:15px;font-weight:700;color:var(--text);flex:1;min-width:0;">${new Date().toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',timeZone:NZ_TZ})}</span>
-      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 0 10px;flex-wrap:wrap;">
+      <span style="font-size:14px;font-weight:800;color:var(--text);white-space:nowrap;">CP Gforce ${van}</span>
+      <span style="font-size:13px;color:var(--muted);flex:1;min-width:0;">${new Date().toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',timeZone:NZ_TZ})}</span>
+      <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">
         <select onchange="coronetTimePartChange(${van},'hr',this.value)"
-          style="padding:7px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-weight:700;cursor:pointer;text-align:center;">
+          style="padding:6px 6px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;text-align:center;">
           ${(()=>{const h=(data.time||'10:00').split(':')[0];const opts=[];for(let i=9;i<=18;i++){const v=String(i).padStart(2,'0');opts.push(`<option value="${v}"${h===v?' selected':''}>${v}</option>`);}return opts.join('');})()}
         </select>
-        <span style="font-size:12px;font-weight:700;color:var(--muted);">hr</span>
+        <span style="font-size:11px;font-weight:700;color:var(--muted);">hr</span>
         <select onchange="coronetTimePartChange(${van},'min',this.value)"
-          style="padding:7px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-weight:700;cursor:pointer;text-align:center;">
+          style="padding:6px 6px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;text-align:center;">
           ${(()=>{const m=(data.time||'10:00').split(':')[1]||'00';const opts=[];for(let i=0;i<60;i+=5){const v=String(i).padStart(2,'0');opts.push(`<option value="${v}"${m===v?' selected':''}>${v}</option>`);}return opts.join('');})()}
         </select>
-        <span style="font-size:12px;font-weight:700;color:var(--muted);">min</span>
+        <span style="font-size:11px;font-weight:700;color:var(--muted);">min</span>
       </div>
+      <button onclick="clearCoronetManifest(${van})"
+        style="padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;">✕</button>
     </div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
       <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--text);">

@@ -2357,7 +2357,7 @@ app.post('/api/office/coronet-notify', verifyOffice, async (req, res) => {
       results.push({ name: a.pilotName, sent: true });
     }
     // Log the trip
-    const van = vanLabel === 'Gforce 1' ? 1 : 2;
+    const van = vanLabel === 'CP Gforce 1' ? 1 : 2;
     await run(
       'INSERT INTO coronet_trips (id, van, van_label, date, manifest_json, sent_at) VALUES (?, ?, ?, ?, ?, ?)',
       [uuidv4(), van, vanLabel, nzToday(), JSON.stringify(manifest || {}), new Date().toISOString()]

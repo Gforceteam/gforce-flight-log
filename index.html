@@ -1525,10 +1525,10 @@
       <!-- Sub-tab: Manifest Builder -->
       <div id="coronet-sub-builder" style="padding:16px 16px 32px;">
 
-        <!-- Gforce 1 -->
+        <!-- CP Gforce 1 -->
         <div class="card stat-section" style="margin-bottom:16px;padding:0;overflow:visible;">
           <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;">
-            <span style="font-size:15px;font-weight:700;color:var(--text);">Gforce 1</span>
+            <span style="font-size:15px;font-weight:700;color:var(--text);">CP Gforce 1</span>
             <button onclick="clearCoronetManifest(1)"
               style="padding:6px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;">✕ Clear</button>
           </div>
@@ -1541,10 +1541,10 @@
           </div>
         </div>
 
-        <!-- Gforce 2 -->
+        <!-- CP Gforce 2 -->
         <div class="card stat-section" style="padding:0;overflow:visible;">
           <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;">
-            <span style="font-size:15px;font-weight:700;color:var(--text);">Gforce 2</span>
+            <span style="font-size:15px;font-weight:700;color:var(--text);">CP Gforce 2</span>
             <button onclick="clearCoronetManifest(2)"
               style="padding:6px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;">✕ Clear</button>
           </div>
@@ -6895,7 +6895,7 @@ async function sendCoronetTrip(van) {
 function printCoronetManifest(van) {
   const data = _coronetLoad(van);
 
-  const vanLabel = van === 1 ? 'Gforce 1' : 'Gforce 2';
+  const vanLabel = van === 1 ? 'CP Gforce 1' : 'CP Gforce 2';
 
   // Format date nicely
   let dateLabel = data.date;

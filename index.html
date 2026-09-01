@@ -1528,7 +1528,7 @@
         <!-- Gforce 1 -->
         <div class="card stat-section" style="margin-bottom:16px;padding:0;overflow:visible;">
           <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;">
-            <span style="font-size:15px;font-weight:700;color:var(--text);">🚐 Gforce 1</span>
+            <span style="font-size:15px;font-weight:700;color:var(--text);">Gforce 1</span>
             <button onclick="clearCoronetManifest(1)"
               style="padding:6px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;">✕ Clear</button>
           </div>
@@ -1544,7 +1544,7 @@
         <!-- Gforce 2 -->
         <div class="card stat-section" style="padding:0;overflow:visible;">
           <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;">
-            <span style="font-size:15px;font-weight:700;color:var(--text);">🚐 Gforce 2</span>
+            <span style="font-size:15px;font-weight:700;color:var(--text);">Gforce 2</span>
             <button onclick="clearCoronetManifest(2)"
               style="padding:6px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;">✕ Clear</button>
           </div>
@@ -4061,7 +4061,7 @@ async function loadPilotCoronetManifests() {
       return `
         <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px;">
           <div style="background:var(--surface);padding:12px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);">
-            <span style="font-size:15px;font-weight:700;color:var(--text);">🚐 ${vanLabel}</span>
+            <span style="font-size:15px;font-weight:700;color:var(--text);">${vanLabel}</span>
             <span style="font-size:13px;color:var(--muted);">${dateLabel}</span>
           </div>
           ${d.time ? `<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
@@ -6847,7 +6847,7 @@ async function loadCoronetTrips() {
         <div class="card stat-section" style="margin-bottom:14px;padding:14px 16px;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
             <div>
-              <span style="font-size:15px;font-weight:700;color:var(--text);">🚐 ${esc(t.van_label)}</span>
+              <span style="font-size:15px;font-weight:700;color:var(--text);">${esc(t.van_label)}</span>
               <span style="margin-left:10px;font-size:18px;font-weight:800;color:var(--accent);font-family:'Montserrat',sans-serif;">${esc(manifest.time || '')}</span>
             </div>
             <span style="font-size:11px;color:var(--muted);">Sent ${sentTime}</span>

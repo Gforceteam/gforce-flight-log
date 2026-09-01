@@ -6707,15 +6707,9 @@ function renderCoronetForm(van) {
     </tr>`;
 
   el.innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-      <div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--muted);margin-bottom:5px;">Date</div>
-        <input type="date" value="${esc(data.date)}"
-          onchange="coronetHeaderChange(${van},'date',this.value)"
-          style="width:100%;padding:9px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;box-sizing:border-box;">
-      </div>
-      <div>
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--muted);margin-bottom:5px;">Departure Time</div>
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:12px;">${new Date().toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',timeZone:NZ_TZ})}</div>
+    <div style="margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--muted);margin-bottom:5px;">Departure Time</div>
         <div style="display:flex;gap:6px;align-items:center;">
           <select onchange="coronetTimePartChange(${van},'hr',this.value)"
             style="flex:1;padding:9px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-weight:700;box-sizing:border-box;cursor:pointer;text-align:center;">

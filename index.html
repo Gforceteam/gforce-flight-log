@@ -6698,7 +6698,7 @@ function renderCoronetForm(van) {
 
   el.innerHTML = `
     <div style="display:flex;align-items:center;gap:10px;padding:14px 0 10px;flex-wrap:wrap;">
-      <span style="font-size:14px;font-weight:800;color:var(--text);white-space:nowrap;">CP Gforce ${van}</span>
+      <span style="font-size:20px;font-weight:800;color:var(--text);white-space:nowrap;">🏔 Gforce ${van}</span>
       <span style="font-size:13px;color:var(--muted);flex:1;min-width:0;">${new Date().toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',timeZone:NZ_TZ})}</span>
       <div style="display:flex;gap:5px;align-items:center;flex-shrink:0;">
         <select onchange="coronetTimePartChange(${van},'hr',this.value)"

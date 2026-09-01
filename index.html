@@ -5938,6 +5938,8 @@ async function loadLoopBoard() {
     const maxPopulated = loopBoard.reduce((max, s) => s.pilot_id ? Math.max(max, s.slot) : max, 0);
     if (maxPopulated > loopBoardRows) _setLoopRows(loopBoardDate, maxPopulated);
     if (officeActiveTab === 'loop') renderLoopBoard();
+    // Refresh Coronet pilot dropdowns if that tab is open (they filter by Loop Board)
+    if (officeActiveTab === 'coronet') { renderCoronetForm(1); renderCoronetForm(2); }
     reconcileLoopBoardTallies();
   } catch (_) {}
 }
@@ -6644,9 +6646,13 @@ function renderCoronetForm(van) {
   const el = document.getElementById('coronet-form-van' + van);
   if (!el) return;
 
-  // Build pilot options from officePilots
-  const pilotOpts = ['', ...officePilots.map(p => p.name)]
-    .map(n => `<option value="${esc(n)}"${n ? '' : ''}>${n ? esc(n) : '— None —'}</option>`).join('');
+  // Build pilot options from Loop Board (mirrors Send Away behaviour)
+  const _loopPilotIds = new Set(loopBoard.filter(s => s.pilot_id).map(s => String(s.pilot_id)));
+  const _availPilots = officePilots
+    .filter(p => p.status !== 'airborne' && (_loopPilotIds.size === 0 || _loopPilotIds.has(String(p.id))))
+    .sort(pilotSort);
+  const pilotOpts = '<option value="">— None —</option>' +
+    _availPilots.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join('');
 
   const paxRows = data.passengers.map((p, i) => `
     <tr>

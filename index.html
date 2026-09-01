@@ -6707,33 +6707,31 @@ function renderCoronetForm(van) {
     </tr>`;
 
   el.innerHTML = `
-    <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:12px;">${new Date().toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',timeZone:NZ_TZ})}</div>
-    <div style="margin-bottom:12px;">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--muted);margin-bottom:5px;">Departure Time</div>
-        <div style="display:flex;gap:6px;align-items:center;">
-          <select onchange="coronetTimePartChange(${van},'hr',this.value)"
-            style="flex:1;padding:9px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-weight:700;box-sizing:border-box;cursor:pointer;text-align:center;">
-            ${(()=>{const h=(data.time||'10:00').split(':')[0];const opts=[];for(let i=9;i<=18;i++){const v=String(i).padStart(2,'0');opts.push(`<option value="${v}"${h===v?' selected':''}>${v}</option>`);}return opts.join('');})()}
-          </select>
-          <span style="font-size:12px;font-weight:700;color:var(--muted);">hr</span>
-          <select onchange="coronetTimePartChange(${van},'min',this.value)"
-            style="flex:1;padding:9px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-weight:700;box-sizing:border-box;cursor:pointer;text-align:center;">
-            ${(()=>{const m=(data.time||'10:00').split(':')[1]||'00';const opts=[];for(let i=0;i<60;i+=5){const v=String(i).padStart(2,'0');opts.push(`<option value="${v}"${m===v?' selected':''}>${v}</option>`);}return opts.join('');})()}
-          </select>
-          <span style="font-size:12px;font-weight:700;color:var(--muted);">min</span>
-        </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+      <span style="font-size:15px;font-weight:700;color:var(--text);flex:1;min-width:0;">${new Date().toLocaleDateString('en-NZ',{weekday:'long',day:'numeric',month:'long',timeZone:NZ_TZ})}</span>
+      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+        <select onchange="coronetTimePartChange(${van},'hr',this.value)"
+          style="padding:7px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-weight:700;cursor:pointer;text-align:center;">
+          ${(()=>{const h=(data.time||'10:00').split(':')[0];const opts=[];for(let i=9;i<=18;i++){const v=String(i).padStart(2,'0');opts.push(`<option value="${v}"${h===v?' selected':''}>${v}</option>`);}return opts.join('');})()}
+        </select>
+        <span style="font-size:12px;font-weight:700;color:var(--muted);">hr</span>
+        <select onchange="coronetTimePartChange(${van},'min',this.value)"
+          style="padding:7px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-weight:700;cursor:pointer;text-align:center;">
+          ${(()=>{const m=(data.time||'10:00').split(':')[1]||'00';const opts=[];for(let i=0;i<60;i+=5){const v=String(i).padStart(2,'0');opts.push(`<option value="${v}"${m===v?' selected':''}>${v}</option>`);}return opts.join('');})()}
+        </select>
+        <span style="font-size:12px;font-weight:700;color:var(--muted);">min</span>
       </div>
     </div>
-    <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
       <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--text);">
         <input type="checkbox" ${data.aPilot ? 'checked' : ''}
           onchange="coronetHeaderChange(${van},'aPilot',this.checked)"
           style="width:18px;height:18px;"> A Pilot
       </label>
       <div style="flex:1;"></div>
-      <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--text);">P Driver:</label>
+      <label style="font-size:13px;color:var(--text);">Driver:</label>
       <select onchange="coronetHeaderChange(${van},'driver',this.value)"
-        style="flex:1;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;max-width:160px;">
+        style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;max-width:160px;cursor:pointer;">
         ${pilotOpts.replace(`value="${esc(data.driver)}"`, `value="${esc(data.driver)}" selected`)}
       </select>
     </div>

@@ -7258,22 +7258,32 @@ async function loadCoronetTrips() {
     const active    = trips.filter(t =>  t.van_left_at && !t.van_returned_at);
     const completed = trips.filter(t =>  t.van_returned_at);
 
-    function section(title, colour, list) {
+    function fullSection(title, colour, list) {
+      if (!list.length) return '';
+      const cards = list.map(t => _renderTripCard(t)).join('');
+      return `
+        <div style="margin-bottom:20px;">
+          <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:${colour};margin-bottom:8px;padding:0 2px;">${title}</div>
+          ${cards}
+        </div>`;
+    }
+
+    function gridSection(title, colour, list) {
       if (!list.length) return '';
       const cards = list.map(t =>
-        `<div style="flex-shrink:0;width:300px;">${_renderTripCard(t)}</div>`
+        `<div style="flex:0 0 calc(50% - 6px);min-width:0;">${_renderTripCard(t)}</div>`
       ).join('');
       return `
         <div style="margin-bottom:20px;">
           <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:${colour};margin-bottom:8px;padding:0 2px;">${title}</div>
-          <div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:6px;">${cards}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;">${cards}</div>
         </div>`;
     }
 
     el.innerHTML =
-      section('Active Trips',    '#16a34a', active)    +
-      section('Upcoming Trips',  'var(--accent)', upcoming)  +
-      section('Completed Trips', 'var(--muted)',  completed);
+      fullSection('Active Trips',    '#16a34a',       active)    +
+      fullSection('Upcoming Trips',  'var(--accent)', upcoming)  +
+      gridSection('Completed Trips', 'var(--muted)',  completed);
 
     if (trips.some(t => t.status === 'all_flying')) _startCoronetTimerEngine();
   } catch (_) {

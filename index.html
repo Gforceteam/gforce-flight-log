@@ -7092,11 +7092,10 @@ const CORONET_STATUS_LABELS = {
   van_returned:'Van Returned'
 };
 
-function _tripCardBg(status) {
-  if (status === 'van_left' || status === 'all_flying' || status === 'all_landed')
-    return 'background:rgba(34,197,94,0.10);border-color:rgba(34,197,94,0.35);';
-  if (status === 'van_returned')
-    return 'background:rgba(120,120,120,0.10);border-color:rgba(120,120,120,0.3);';
+function _tripCardBorderLeft(sectionType) {
+  if (sectionType === 'active')    return 'border-left:3px solid #16a34a;';
+  if (sectionType === 'upcoming')  return 'border-left:3px solid var(--accent);';
+  if (sectionType === 'completed') return 'border-left:3px solid var(--border);';
   return '';
 }
 
@@ -7130,111 +7129,80 @@ async function _setCoronetTripStatus(tripId, status) {
   loadCoronetTrips(); // will be superseded by WS broadcast in most cases
 }
 
-function _renderTripCard(t) {
+function _renderTripCard(t, sectionType) {
   const manifest = t.manifest || {};
   const status = t.status || null;
   const sentTime = new Date(t.sent_at).toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', timeZone: NZ_TZ });
+  const fmt = iso => new Date(iso).toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', timeZone: NZ_TZ });
 
-  // Timer / landed display
+  // Flying timer or landed duration line
   let timerHtml = '';
   if (status === 'all_flying' && t.flying_started_at) {
     const start = new Date(t.flying_started_at).getTime();
-    const elapsed = _fmtElapsed(Date.now() - start);
-    timerHtml = `<div style="font-size:22px;font-weight:800;font-family:'Montserrat',sans-serif;color:#16a34a;letter-spacing:1px;margin-bottom:8px;">
-      ✈ <span class="coronet-flight-timer" data-start="${start}">${elapsed}</span>
-    </div>`;
+    timerHtml = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 10px;border-radius:8px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);">
+        <span style="width:7px;height:7px;border-radius:50%;background:#16a34a;flex-shrink:0;animation:pulse 1.4s ease-in-out infinite;"></span>
+        <span style="font-size:13px;font-weight:700;color:#16a34a;">In flight</span>
+        <span class="coronet-flight-timer" data-start="${start}" style="font-size:13px;font-weight:600;color:#16a34a;font-family:'Montserrat',sans-serif;margin-left:auto;">${_fmtElapsed(Date.now() - start)}</span>
+      </div>`;
     _startCoronetTimerEngine();
   } else if (status === 'all_landed' && t.landed_at) {
-    const landedTime = new Date(t.landed_at).toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', timeZone: NZ_TZ });
-    let dur = '';
-    if (t.flying_started_at) dur = ' · ' + _fmtElapsed(new Date(t.landed_at) - new Date(t.flying_started_at));
-    timerHtml = `<div style="font-size:14px;font-weight:700;color:#16a34a;margin-bottom:8px;">Landed ${landedTime}${dur}</div>`;
+    const dur = t.flying_started_at ? ' · ' + _fmtElapsed(new Date(t.landed_at) - new Date(t.flying_started_at)) : '';
+    timerHtml = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 10px;border-radius:8px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.15);">
+        <span style="font-size:13px;font-weight:600;color:#16a34a;">Landed ${fmt(t.landed_at)}${dur}</span>
+      </div>`;
   }
 
   const rows = (manifest.passengers || []).filter(p => p.name || p.pilot).map((p, i) => `
-    <div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
-      <span style="color:var(--muted);font-weight:700;min-width:18px;">${i + 1}</span>
+    <div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px;">
+      <span style="color:var(--muted);font-weight:600;min-width:16px;font-size:11px;padding-top:1px;">${i + 1}</span>
       <span style="flex:1;color:var(--text);">${esc(p.name || '')}</span>
-      <span style="color:var(--accent);font-weight:600;">${esc(p.pilot || '')}</span>
+      <span style="color:var(--accent);font-weight:600;font-size:12px;">${esc(p.pilot || '')}</span>
     </div>`).join('');
   const extraRow = manifest.extraPilot ? `
-    <div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
-      <span style="color:var(--muted);font-weight:700;min-width:18px;">6</span>
+    <div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px;">
+      <span style="color:var(--muted);font-weight:600;min-width:16px;font-size:11px;padding-top:1px;">6</span>
       <span style="flex:1;color:var(--text);">${esc(manifest.extraPilotName || '')}</span>
-      <span style="color:var(--accent);font-weight:600;">${esc(manifest.extraPilot)}</span>
+      <span style="color:var(--accent);font-weight:600;font-size:12px;">${esc(manifest.extraPilot)}</span>
     </div>` : '';
   const driverRow = manifest.driver ? `
-    <div style="display:flex;gap:8px;padding:6px 0;font-size:13px;">
-      <span style="color:var(--muted);font-weight:700;min-width:18px;">D</span>
-      <span style="flex:1;color:var(--muted);">Driver</span>
-      <span style="color:var(--text);font-weight:600;">${esc(manifest.driver)}</span>
+    <div style="display:flex;gap:8px;padding:5px 0;font-size:13px;">
+      <span style="color:var(--muted);font-weight:600;min-width:16px;font-size:11px;padding-top:1px;">D</span>
+      <span style="flex:1;color:var(--muted);font-size:12px;">Driver</span>
+      <span style="color:var(--text);font-weight:600;font-size:12px;">${esc(manifest.driver)}</span>
     </div>` : '';
 
+  // Stamp = timestamp chip; Btn = ghost action button
+  const stamp = (label, colour) =>
+    `<div style="padding:7px 0;border-radius:7px;border:1px solid ${colour}20;background:${colour}10;font-size:11px;font-weight:700;color:${colour};text-align:center;flex:1;">${label}</div>`;
+  const btn = (label, key) =>
+    `<button onclick="_setCoronetTripStatus('${t.id}','${key}')"
+      style="flex:1;padding:7px 0;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;transition:color 0.15s,border-color 0.15s;"
+      onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+      onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">${label}</button>`;
 
-  // Van Left: show timestamp label instead of a button once set
-  const vanLeftLabel = t.van_left_at
-    ? new Date(t.van_left_at).toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', timeZone: NZ_TZ })
-    : null;
-  const vanLeftEl = vanLeftLabel
-    ? `<div style="flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid rgba(34,197,94,0.5);background:rgba(34,197,94,0.12);font-size:11px;font-weight:700;color:#16a34a;text-align:center;">Van Left ${vanLeftLabel}</div>`
-    : `<button onclick="_setCoronetTripStatus('${t.id}','van_left')"
-        style="flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;transition:all 0.15s;">
-        Van Left
-      </button>`;
-
-  // Van Returned: same pattern — replace button with timestamp once set
-  const vanReturnedLabel = t.van_returned_at
-    ? new Date(t.van_returned_at).toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', timeZone: NZ_TZ })
-    : null;
-  const vanReturnedEl = vanReturnedLabel
-    ? `<div style="flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid rgba(120,120,120,0.4);background:rgba(120,120,120,0.1);font-size:11px;font-weight:700;color:var(--muted);text-align:center;">Van Returned ${vanReturnedLabel}</div>`
-    : `<button onclick="_setCoronetTripStatus('${t.id}','van_returned')"
-        style="flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;transition:all 0.15s;">
-        Van Returned
-      </button>`;
-
-  // All Flying: replace with timestamp once set
-  const allFlyingLabel = t.flying_started_at
-    ? new Date(t.flying_started_at).toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', timeZone: NZ_TZ })
-    : null;
-  const allFlyingEl = allFlyingLabel
-    ? `<div style="flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid rgba(34,197,94,0.5);background:rgba(34,197,94,0.12);font-size:11px;font-weight:700;color:#16a34a;text-align:center;">All Flying ${allFlyingLabel}</div>`
-    : `<button onclick="_setCoronetTripStatus('${t.id}','all_flying')"
-        style="flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;transition:all 0.15s;">
-        All Flying
-      </button>`;
-
-  // All Landed: replace with timestamp once set
-  const allLandedLabel = t.landed_at
-    ? new Date(t.landed_at).toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', timeZone: NZ_TZ })
-    : null;
-  const allLandedEl = allLandedLabel
-    ? `<div style="flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid rgba(34,197,94,0.5);background:rgba(34,197,94,0.12);font-size:11px;font-weight:700;color:#16a34a;text-align:center;">All Landed ${allLandedLabel}</div>`
-    : `<button onclick="_setCoronetTripStatus('${t.id}','all_landed')"
-        style="flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;transition:all 0.15s;">
-        All Landed
-      </button>`;
-
-  const statusBtns = vanLeftEl + allFlyingEl + allLandedEl + vanReturnedEl;
+  const vanLeftEl     = t.van_left_at     ? stamp(`Van Left ${fmt(t.van_left_at)}`,         '#16a34a') : btn('Van Left',     'van_left');
+  const allFlyingEl   = t.flying_started_at ? stamp(`All Flying ${fmt(t.flying_started_at)}`, '#16a34a') : btn('All Flying',   'all_flying');
+  const allLandedEl   = t.landed_at        ? stamp(`All Landed ${fmt(t.landed_at)}`,          '#16a34a') : btn('All Landed',   'all_landed');
+  const vanReturnedEl = t.van_returned_at  ? stamp(`Van Returned ${fmt(t.van_returned_at)}`,  'var(--muted)') : btn('Van Returned','van_returned');
 
   return `
-    <div class="card stat-section" style="margin-bottom:14px;padding:14px 16px;transition:background 0.3s,border-color 0.3s;${_tripCardBg(status)}">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-        <div>
-          <span style="font-size:15px;font-weight:700;color:var(--text);">${esc(t.van_label)}</span>
-          <span style="margin-left:10px;font-size:18px;font-weight:800;color:var(--accent);font-family:'Montserrat',sans-serif;">${esc(manifest.time || '')}</span>
+    <div class="card stat-section" style="margin-bottom:12px;padding:14px 16px 14px 13px;${_tripCardBorderLeft(sectionType)}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="display:flex;align-items:baseline;gap:8px;">
+          <span style="font-size:16px;font-weight:800;color:var(--text);letter-spacing:0.3px;">${esc(t.van_label)}</span>
+          <span style="font-size:18px;font-weight:800;color:var(--accent);font-family:'Montserrat',sans-serif;">${esc(manifest.time || '')}</span>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:11px;color:var(--muted);">Sent ${sentTime}</span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:11px;color:var(--muted);">${sentTime}</span>
           <button onclick="editCoronetTrip('${t.id}')"
-            style="padding:5px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;">Edit</button>
+            style="padding:4px 10px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;">Edit</button>
         </div>
       </div>
       ${timerHtml}
-      ${rows}${extraRow}${driverRow}
-      <div style="display:flex;gap:6px;margin-top:12px;">
-        ${statusBtns}
-      </div>
+      <div style="margin-bottom:10px;">${rows}${extraRow}${driverRow}</div>
+      <div style="display:flex;gap:5px;">${vanLeftEl}${allFlyingEl}${allLandedEl}${vanReturnedEl}</div>
     </div>`;
 }
 
@@ -7258,32 +7226,40 @@ async function loadCoronetTrips() {
     const active    = trips.filter(t =>  t.van_left_at && !t.van_returned_at);
     const completed = trips.filter(t =>  t.van_returned_at);
 
-    function fullSection(title, colour, list) {
-      if (!list.length) return '';
-      const cards = list.map(t => _renderTripCard(t)).join('');
+    function sectionHeader(title, dot, count) {
       return `
-        <div style="margin-bottom:20px;">
-          <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:${colour};margin-bottom:8px;padding:0 2px;">${title}</div>
-          ${cards}
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${dot};flex-shrink:0;"></span>
+          <span style="font-size:13px;font-weight:700;color:var(--text);">${title}</span>
+          <span style="padding:2px 7px;border-radius:100px;background:${dot}18;color:${dot};font-size:11px;font-weight:700;">${count}</span>
         </div>`;
     }
 
-    function gridSection(title, colour, list) {
+    function fullSection(title, dot, list, type) {
+      if (!list.length) return '';
+      return `
+        <div style="margin-bottom:22px;">
+          ${sectionHeader(title, dot, list.length)}
+          ${list.map(t => _renderTripCard(t, type)).join('')}
+        </div>`;
+    }
+
+    function gridSection(title, dot, list, type) {
       if (!list.length) return '';
       const cards = list.map(t =>
-        `<div style="flex:0 0 calc(50% - 6px);min-width:0;">${_renderTripCard(t)}</div>`
+        `<div style="flex:0 0 calc(50% - 6px);min-width:0;">${_renderTripCard(t, type)}</div>`
       ).join('');
       return `
-        <div style="margin-bottom:20px;">
-          <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:${colour};margin-bottom:8px;padding:0 2px;">${title}</div>
-          <div style="display:flex;flex-wrap:wrap;gap:12px;">${cards}</div>
+        <div style="margin-bottom:22px;">
+          ${sectionHeader(title, dot, list.length)}
+          <div style="display:flex;flex-wrap:wrap;gap:10px;">${cards}</div>
         </div>`;
     }
 
     el.innerHTML =
-      fullSection('Active Trips',    '#16a34a',       active)    +
-      fullSection('Upcoming Trips',  'var(--accent)', upcoming)  +
-      gridSection('Completed Trips', 'var(--muted)',  completed);
+      fullSection('Active Trips',    '#16a34a',       active,    'active')    +
+      fullSection('Upcoming Trips',  'var(--accent)', upcoming,  'upcoming')  +
+      gridSection('Completed Trips', 'var(--muted)',  completed, 'completed');
 
     if (trips.some(t => t.status === 'all_flying')) _startCoronetTimerEngine();
   } catch (_) {

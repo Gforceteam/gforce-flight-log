@@ -279,6 +279,14 @@ async function createTables() {
     consented_at TEXT,
     PRIMARY KEY (pilot_id, date)
   )`);
+  // Roster: per-pilot, per-day availability status ('available' | 'late' | 'off')
+  await db.execute(`CREATE TABLE IF NOT EXISTS pilot_roster (
+    pilot_id   TEXT NOT NULL,
+    date       TEXT NOT NULL,
+    status     TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (pilot_id, date)
+  )`);
   // Pilot location tracker
   try { await db.execute('ALTER TABLE pilots ADD COLUMN owntracks_key TEXT'); } catch (_) {}
   const pilotsMissingKey = await queryAll('SELECT id FROM pilots WHERE owntracks_key IS NULL');
@@ -1156,6 +1164,72 @@ app.put('/api/pilot/available', verifyToken, async (req, res) => {
     broadcast({ type: available ? 'PILOT_SIGNED_IN' : 'PILOT_SIGNED_OUT', pilot_id: req.pilot.id });
     broadcast({ type: 'PRESENCE_UPDATED', pilot_id: req.pilot.id, presence: p });
     res.json({ message: 'Availability updated', available: !!available, presence: p });
+  } catch (e) {
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/** Roster: which pilots are available/late/off on a given day. Pilots and office can both view. */
+app.get('/api/roster', verifyPilotOrOffice, async (req, res) => {
+  try {
+    const date = req.query.date || nzToday();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+    }
+    const rows = await queryAll(
+      `SELECT p.id AS pilot_id, p.name, r.status
+       FROM pilots p
+       LEFT JOIN pilot_roster r ON r.pilot_id = p.id AND r.date = ?
+       ORDER BY p.name`,
+      [date]
+    );
+    res.json(rows);
+  } catch (e) {
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/** A pilot sets their own roster status for a given day. */
+app.put('/api/roster', verifyToken, async (req, res) => {
+  try {
+    const { date, status } = req.body;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) {
+      return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+    }
+    if (!['available', 'late', 'off'].includes(status)) {
+      return res.status(400).json({ error: "status must be 'available', 'late' or 'off'" });
+    }
+    await run(
+      'INSERT OR REPLACE INTO pilot_roster (pilot_id, date, status, updated_at) VALUES (?, ?, ?, ?)',
+      [req.pilot.id, date, status, new Date().toISOString()]
+    );
+    broadcast({ type: 'ROSTER_UPDATED', pilot_id: req.pilot.id, date, status });
+    res.json({ message: 'Roster updated', date, status });
+  } catch (e) {
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/** Office: master access — set (or clear) any pilot's roster status for a given day. */
+app.put('/api/office/roster', verifyOffice, async (req, res) => {
+  try {
+    const { pilot_id, date, status } = req.body;
+    if (!pilot_id) return res.status(400).json({ error: 'pilot_id required' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) {
+      return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+    }
+    if (status === null) {
+      await run('DELETE FROM pilot_roster WHERE pilot_id = ? AND date = ?', [String(pilot_id), date]);
+    } else if (['available', 'late', 'off'].includes(status)) {
+      await run(
+        'INSERT OR REPLACE INTO pilot_roster (pilot_id, date, status, updated_at) VALUES (?, ?, ?, ?)',
+        [String(pilot_id), date, status, new Date().toISOString()]
+      );
+    } else {
+      return res.status(400).json({ error: "status must be 'available', 'late', 'off' or null" });
+    }
+    broadcast({ type: 'ROSTER_UPDATED', pilot_id: String(pilot_id), date, status });
+    res.json({ message: 'Roster updated', pilot_id, date, status });
   } catch (e) {
     console.error(e); res.status(500).json({ error: 'Internal server error' });
   }

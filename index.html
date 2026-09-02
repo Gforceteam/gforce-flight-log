@@ -853,6 +853,43 @@
       background: var(--surface); color: var(--danger); border: 1px solid var(--danger-dim); font-weight: 600;
     }
 
+    /* Roster page */
+    .roster-day-nav {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 18px;
+    }
+    .roster-day-nav button {
+      background: var(--surface); border: 1px solid var(--border-hi); color: var(--text);
+      border-radius: 9999px; width: 36px; height: 36px; font-size: 18px; cursor: pointer; flex-shrink: 0;
+    }
+    .roster-day-label {
+      font-size: 15px; font-weight: 700; color: var(--text); font-family: 'Montserrat', sans-serif;
+      text-align: center; flex: 1;
+    }
+    .roster-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 14px 16px; background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); margin-bottom: 10px;
+    }
+    .roster-row.self { border-color: var(--accent); }
+    .roster-pilot-name { font-size: 14px; font-weight: 700; color: var(--text); }
+    .roster-status-pill {
+      font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 5px 14px; border-radius: 9999px; flex-shrink: 0;
+    }
+    .roster-status-pill.available { background: rgba(34,197,94,0.15); color: var(--success); }
+    .roster-status-pill.late { background: rgba(245,166,35,0.18); color: var(--warning); }
+    .roster-status-pill.off { background: rgba(139,146,159,0.18); color: var(--muted); }
+    .roster-status-pill.unset { background: var(--surface); color: var(--muted); border: 1px dashed var(--border-hi); }
+    .roster-seg { display: flex; gap: 6px; flex-shrink: 0; }
+    .roster-seg button {
+      padding: 8px 12px; border-radius: 9999px; border: 1px solid var(--border-hi); background: var(--surface);
+      color: var(--text-2); font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+      cursor: pointer; font-family: 'Montserrat', sans-serif;
+    }
+    .roster-seg button.active.available { background: var(--success); border-color: var(--success); color: #06280f; }
+    .roster-seg button.active.late { background: var(--warning); border-color: var(--warning); color: #3a2600; }
+    .roster-seg button.active.off { background: var(--muted); border-color: var(--muted); color: #fff; }
+
     .glider-compact {
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
       padding: 12px 14px; border-radius: 12px; background: var(--surface);
@@ -1329,6 +1366,19 @@
     </div>
   </div>
 
+  <div class="page" id="page-roster">
+    <button class="pilot-back-btn" onclick="showPilotTab('settings')">← Back</button>
+    <div class="stats-page-header">
+      <h2>Roster</h2>
+    </div>
+    <div class="roster-day-nav">
+      <button onclick="changeRosterDay(-1)">‹</button>
+      <span class="roster-day-label" id="roster-date-label"></span>
+      <button onclick="changeRosterDay(1)">›</button>
+    </div>
+    <div id="roster-list"><div class="empty-state">Loading…</div></div>
+  </div>
+
 
   <!-- Settings inner content (moved into pilot-settings-inner at runtime) -->
   <div id="page-settings-source" style="display:none">
@@ -1367,6 +1417,14 @@
           <span id="settings-full-name-display" class="settings-full-name-display"></span>
           <button type="button" class="settings-btn settings-btn-secondary settings-btn-inline" onclick="editPilotExportName()">Edit</button>
         </div>
+      </section>
+
+      <!-- Roster -->
+      <section class="settings-card">
+        <p class="settings-card-title">Team</p>
+        <h2 style="margin:0 0 8px;font-size:17px;font-weight:700;">Roster</h2>
+        <p class="settings-card-desc">See who's available each day and mark yourself Available, Late or Off.</p>
+        <button type="button" class="settings-btn settings-btn-secondary" onclick="showPage('roster')">Open roster</button>
       </section>
 
 
@@ -1473,6 +1531,7 @@
     <button class="office-tab-btn" onclick="showOfficeTab('loop')" id="office-tab-loop-btn">Loop Board</button>
     <button class="office-tab-btn" onclick="showOfficeTab('tracker')" id="office-tab-tracker-btn">📍 Tracker</button>
     <button class="office-tab-btn" onclick="showOfficeTab('coronet')" id="office-tab-coronet-btn">🏔 Coronet</button>
+    <button class="office-tab-btn" onclick="showOfficeTab('roster')" id="office-tab-roster-btn">📋 Roster</button>
   </div>
 
   <div class="office-content">
@@ -1505,6 +1564,18 @@
         <div id="tracker-tab-map-el" style="width:100%;height:360px;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--surface);margin-bottom:12px;"></div>
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--muted);margin-bottom:8px;">Currently tracking</div>
         <div id="tracker-tab-pilot-list"></div>
+      </div>
+    </div>
+
+    <div class="office-tab-content" id="office-tab-roster">
+      <div style="padding:16px;max-width:640px;margin:0 auto;">
+        <div class="roster-day-nav">
+          <button onclick="changeOfficeRosterDay(-1)">‹</button>
+          <span class="roster-day-label" id="office-roster-date-label"></span>
+          <button onclick="changeOfficeRosterDay(1)">›</button>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin:-8px 0 16px;">Office has master access — tap any pilot's status to override it.</p>
+        <div id="office-roster-list"><div class="empty-state">Loading…</div></div>
       </div>
     </div>
 
@@ -4048,6 +4119,7 @@ function showSubPage(name) {
   window.scrollTo({ top: 0, behavior: 'instant' });
   if (name === 'stats') { statsMonthOffset = 0; renderStats(); }
   if (name === 'ff') renderPilotFF();
+  if (name === 'roster') { rosterDate = nzTodayStr(); loadRoster(); }
 }
 
 function showPage(name) {
@@ -6448,6 +6520,7 @@ if (name === 'pilots') { renderAwayTab(); renderGroupsTab(); renderTodayFlights(
   if (name === 'flights') renderFlightsTab();
   if (name === 'tracker') { loadTrackerTab(); }
   if (name === 'coronet') { initCoronetTab(); }
+  if (name === 'roster') { officeRosterDate = nzTodayStr(); loadOfficeRoster(); }
   if (name === 'settings') { populateOfficeResetPilots(); populateOfficeDeletePilots(); populateOfficeRenamePilots(); loadOfficeSettings(); loadTrackerEnabledState(); }
 }
 
@@ -8426,6 +8499,138 @@ async function updateApp() {
     setTimeout(() => window.location.reload(), 400);
   } catch {
     window.location.reload();
+  }
+}
+
+// ─── Roster ───────────────────────────────────────────────────────────────────
+let rosterDate = null; // YYYY-MM-DD, NZ-local calendar day currently shown
+const ROSTER_STATUSES = ['available', 'late', 'off'];
+const ROSTER_LABELS = { available: 'Available', late: 'Late', off: 'Off' };
+
+function nzTodayStr() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' });
+}
+
+function shiftDateStr(dateStr, days) {
+  const d = new Date(dateStr + 'T12:00:00'); // noon avoids DST edge cases
+  d.setDate(d.getDate() + days);
+  return d.toLocaleDateString('en-CA');
+}
+
+function formatRosterDateLabel(dateStr) {
+  const today = nzTodayStr();
+  if (dateStr === today) return 'Today';
+  const diffDays = Math.round((new Date(dateStr + 'T12:00:00') - new Date(today + 'T12:00:00')) / 86400000);
+  const prefix = diffDays === 1 ? 'Tomorrow · ' : diffDays === -1 ? 'Yesterday · ' : '';
+  return prefix + new Date(dateStr + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+function changeRosterDay(delta) {
+  rosterDate = shiftDateStr(rosterDate || nzTodayStr(), delta);
+  loadRoster();
+}
+
+async function loadRoster() {
+  if (!rosterDate) rosterDate = nzTodayStr();
+  const labelEl = document.getElementById('roster-date-label');
+  if (labelEl) labelEl.textContent = formatRosterDateLabel(rosterDate);
+  const listEl = document.getElementById('roster-list');
+  if (listEl) listEl.innerHTML = '<div class="empty-state">Loading…</div>';
+  try {
+    const res = await apiFetch(`/api/roster?date=${rosterDate}`);
+    if (!res || !res.ok) throw new Error();
+    renderRosterList(await res.json());
+  } catch {
+    if (listEl) listEl.innerHTML = '<div class="empty-state">Could not load roster.</div>';
+  }
+}
+
+function renderRosterList(rows) {
+  const listEl = document.getElementById('roster-list');
+  if (!listEl) return;
+  if (!rows || !rows.length) { listEl.innerHTML = '<div class="empty-state">No pilots found.</div>'; return; }
+  listEl.innerHTML = rows.map(r => {
+    if (r.pilot_id === pilotId) {
+      const seg = ROSTER_STATUSES.map(s =>
+        `<button class="${r.status === s ? 'active ' + s : ''}" onclick="setRosterStatus('${s}')">${ROSTER_LABELS[s]}</button>`
+      ).join('');
+      return `<div class="roster-row self">
+        <div class="roster-pilot-name">${esc(r.name)} <span style="color:var(--accent);font-weight:700;font-size:11px;">(you)</span></div>
+        <div class="roster-seg">${seg}</div>
+      </div>`;
+    }
+    const pillClass = r.status || 'unset';
+    const pillLabel = r.status ? ROSTER_LABELS[r.status] : 'Not set';
+    return `<div class="roster-row">
+      <div class="roster-pilot-name">${esc(r.name)}</div>
+      <span class="roster-status-pill ${pillClass}">${pillLabel}</span>
+    </div>`;
+  }).join('');
+}
+
+async function setRosterStatus(status) {
+  if (!rosterDate) rosterDate = nzTodayStr();
+  try {
+    const res = await apiFetch('/api/roster', {
+      method: 'PUT',
+      body: JSON.stringify({ date: rosterDate, status })
+    });
+    if (!res || !res.ok) throw new Error();
+    loadRoster();
+  } catch {
+    toast('Could not update roster', 'err');
+  }
+}
+
+// ─── Office Roster (master access — can set any pilot's status) ──────────────
+let officeRosterDate = null;
+
+function changeOfficeRosterDay(delta) {
+  officeRosterDate = shiftDateStr(officeRosterDate || nzTodayStr(), delta);
+  loadOfficeRoster();
+}
+
+async function loadOfficeRoster() {
+  if (!officeRosterDate) officeRosterDate = nzTodayStr();
+  const labelEl = document.getElementById('office-roster-date-label');
+  if (labelEl) labelEl.textContent = formatRosterDateLabel(officeRosterDate);
+  const listEl = document.getElementById('office-roster-list');
+  if (listEl) listEl.innerHTML = '<div class="empty-state">Loading…</div>';
+  try {
+    const res = await officeFetch(`/api/roster?date=${officeRosterDate}`);
+    if (!res || !res.ok) throw new Error();
+    renderOfficeRosterList(await res.json());
+  } catch {
+    if (listEl) listEl.innerHTML = '<div class="empty-state">Could not load roster.</div>';
+  }
+}
+
+function renderOfficeRosterList(rows) {
+  const listEl = document.getElementById('office-roster-list');
+  if (!listEl) return;
+  if (!rows || !rows.length) { listEl.innerHTML = '<div class="empty-state">No pilots found.</div>'; return; }
+  listEl.innerHTML = rows.map(r => {
+    const seg = ROSTER_STATUSES.map(s =>
+      `<button class="${r.status === s ? 'active ' + s : ''}" onclick="officeSetRosterStatus('${r.pilot_id}','${s}')">${ROSTER_LABELS[s]}</button>`
+    ).join('');
+    return `<div class="roster-row">
+      <div class="roster-pilot-name">${esc(r.name)}</div>
+      <div class="roster-seg">${seg}</div>
+    </div>`;
+  }).join('');
+}
+
+async function officeSetRosterStatus(pilotId, status) {
+  if (!officeRosterDate) officeRosterDate = nzTodayStr();
+  try {
+    const res = await officeFetch('/api/office/roster', {
+      method: 'PUT',
+      body: JSON.stringify({ pilot_id: pilotId, date: officeRosterDate, status })
+    });
+    if (!res || !res.ok) throw new Error();
+    loadOfficeRoster();
+  } catch {
+    toast('Could not update roster', 'err');
   }
 }
 

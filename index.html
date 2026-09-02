@@ -7246,13 +7246,10 @@ async function loadCoronetTrips() {
 
     function gridSection(title, dot, list, type) {
       if (!list.length) return '';
-      const cards = list.map(t =>
-        `<div style="flex:0 0 calc(50% - 6px);min-width:0;">${_renderTripCard(t, type)}</div>`
-      ).join('');
       return `
         <div style="margin-bottom:22px;">
           ${sectionHeader(title, dot, list.length)}
-          <div style="display:flex;flex-wrap:wrap;gap:10px;">${cards}</div>
+          ${list.map(t => _renderTripCard(t, type)).join('')}
         </div>`;
     }
 

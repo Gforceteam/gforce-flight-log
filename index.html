@@ -6900,8 +6900,11 @@ async function sendCoronetTrip(van) {
     if (failed.length) {
       toast(`Sent ${sent}, not found: ${failed.map(f => f.name).join(', ')}`, 'err');
     } else {
-      toast(`📲 Trip sent to ${sent} pilot${sent !== 1 ? 's' : ''}`);
+      toast(`Trip sent to ${sent} pilot${sent !== 1 ? 's' : ''}`);
     }
+    // Reset this van's manifest ready for the next trip
+    _coronetSave(van, _coronetDefault());
+    renderCoronetForm(van);
     // Switch to Today's Trips to show the logged entry
     showCoronetSubTab('trips');
   } catch (_) { toast('Could not send notifications', 'err'); }

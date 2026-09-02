@@ -25,8 +25,8 @@ jobs:
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Deploy gforce-api
+      - name: Deploy gforce-flight-log
         working-directory: api
-        run: flyctl deploy --remote-only
+        run: flyctl deploy --remote-only --app gforce-flight-log --yes
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

@@ -7138,8 +7138,19 @@ function _renderTripCard(t) {
 
   const manifestJson = JSON.stringify(manifest).replace(/'/g, '\\x27');
 
-  // Status buttons — highlight the active one
-  const statusBtns = ['van_left','all_flying','all_landed','van_returned'].map(s => {
+  // Van Left: show timestamp label instead of a button once set
+  const vanLeftLabel = t.van_left_at
+    ? new Date(t.van_left_at).toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', timeZone: NZ_TZ })
+    : null;
+  const vanLeftEl = vanLeftLabel
+    ? `<div style="flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid rgba(34,197,94,0.5);background:rgba(34,197,94,0.12);font-size:11px;font-weight:700;color:#16a34a;text-align:center;">Van Left ${vanLeftLabel}</div>`
+    : `<button onclick="_setCoronetTripStatus('${t.id}','van_left')"
+        style="flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;transition:all 0.15s;">
+        Van Left
+      </button>`;
+
+  // Remaining status buttons — highlight the active one
+  const statusBtns = vanLeftEl + ['all_flying','all_landed','van_returned'].map(s => {
     const active = s === status;
     const activeStyles = active
       ? 'background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700;'

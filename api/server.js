@@ -247,6 +247,7 @@ async function createTables() {
   await db.execute('CREATE INDEX IF NOT EXISTS idx_coronet_trips_date ON coronet_trips(date)');
   // Add status columns to existing table (safe no-op if already present)
   try { await db.execute("ALTER TABLE coronet_trips ADD COLUMN status TEXT DEFAULT NULL"); } catch (_) {}
+  try { await db.execute("ALTER TABLE coronet_trips ADD COLUMN van_left_at TEXT DEFAULT NULL"); } catch (_) {}
   try { await db.execute("ALTER TABLE coronet_trips ADD COLUMN flying_started_at TEXT DEFAULT NULL"); } catch (_) {}
   try { await db.execute("ALTER TABLE coronet_trips ADD COLUMN landed_at TEXT DEFAULT NULL"); } catch (_) {}
 
@@ -2377,7 +2378,7 @@ app.get('/api/office/coronet-trips', verifyOffice, async (req, res) => {
   try {
     const date = req.query.date || nzToday();
     const rows = await queryAll(
-      'SELECT id, van, van_label, manifest_json, sent_at, status, flying_started_at, landed_at FROM coronet_trips WHERE date = ? ORDER BY sent_at ASC',
+      'SELECT id, van, van_label, manifest_json, sent_at, status, van_left_at, flying_started_at, landed_at FROM coronet_trips WHERE date = ? ORDER BY sent_at ASC',
       [date]
     );
     res.json(rows.map(r => ({ ...r, manifest: JSON.parse(r.manifest_json || '{}') })));
@@ -2392,17 +2393,18 @@ app.patch('/api/office/coronet-trips/:id/status', verifyPilotOrOffice, async (re
     if (!valid.includes(status)) return res.status(400).json({ error: 'invalid status' });
     const now = new Date().toISOString();
     const existing = await queryOne(
-      'SELECT flying_started_at FROM coronet_trips WHERE id = ?', [id]
+      'SELECT van_left_at, flying_started_at FROM coronet_trips WHERE id = ?', [id]
     );
     if (!existing) return res.status(404).json({ error: 'trip not found' });
+    const van_left_at     = status === 'van_left'    ? now : (existing.van_left_at     || null);
     const flying_started_at = status === 'all_flying' ? now : (existing.flying_started_at || null);
-    const landed_at = status === 'all_landed' ? now : null;
+    const landed_at       = status === 'all_landed'  ? now : null;
     await run(
-      'UPDATE coronet_trips SET status = ?, flying_started_at = ?, landed_at = ? WHERE id = ?',
-      [status, flying_started_at, landed_at, id]
+      'UPDATE coronet_trips SET status = ?, van_left_at = ?, flying_started_at = ?, landed_at = ? WHERE id = ?',
+      [status, van_left_at, flying_started_at, landed_at, id]
     );
-    broadcast({ type: 'CORONET_TRIP_STATUS', id, status, flying_started_at, landed_at });
-    res.json({ ok: true, id, status, flying_started_at, landed_at });
+    broadcast({ type: 'CORONET_TRIP_STATUS', id, status, van_left_at, flying_started_at, landed_at });
+    res.json({ ok: true, id, status, van_left_at, flying_started_at, landed_at });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

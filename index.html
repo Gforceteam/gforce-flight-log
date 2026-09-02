@@ -1695,6 +1695,22 @@
           <button onclick="showOfficeTab('ff')" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Open Duty Sheet</button>
         </div>
 
+        <!-- Coronet Flight Log -->
+        <div class="card stat-section" style="margin-bottom:12px;padding:0;overflow:hidden;">
+          <button onclick="toggleCoronetLog()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:16px;background:none;border:none;cursor:pointer;text-align:left;">
+            <span style="font-size:15px;font-weight:700;color:var(--text);">🏔 Coronet Flight Log</span>
+            <span id="coronet-log-chevron" style="font-size:18px;color:var(--muted);transition:transform 0.2s;">›</span>
+          </button>
+          <div id="coronet-log-panel" style="display:none;padding:0 16px 16px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+              <button onclick="coronetLogNavDate(-1)" style="padding:6px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:16px;cursor:pointer;">‹</button>
+              <span id="coronet-log-date-label" style="font-size:14px;font-weight:700;color:var(--text);"></span>
+              <button onclick="coronetLogNavDate(1)" id="coronet-log-next-btn" style="padding:6px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:16px;cursor:pointer;">›</button>
+            </div>
+            <div id="coronet-log-list"><div style="color:var(--muted);font-size:13px;text-align:center;padding:20px 0;">Loading…</div></div>
+          </div>
+        </div>
+
         <!-- App update -->
         <div class="card stat-section" style="margin-bottom:12px;">
           <div class="stat-section-title" style="margin-bottom:6px;">🔄 App Version</div>
@@ -6650,10 +6666,28 @@ function clearCoronetManifest(van) {
 }
 
 function initCoronetTab() {
+  _coronetCheckDateReset();
   showCoronetSubTab('builder');
   renderCoronetForm(1);
   renderCoronetForm(2);
   renderCoronetExtras();
+}
+
+// Auto-reset manifests at the start of a new NZ day
+function _coronetCheckDateReset() {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+  [1, 2].forEach(van => {
+    const d = _coronetLoad(van);
+    if (d.date && d.date !== today) {
+      _coronetSave(van, _coronetDefault());
+    }
+  });
+  // Also clear stale extras from a previous day
+  try {
+    const extras = _coronetExtrasLoad();
+    const stale = extras.filter(e => e.date && e.date !== today);
+    if (stale.length) _coronetExtrasSave(extras.filter(e => !e.date || e.date === today));
+  } catch (_) {}
 }
 
 // ─── Extra (planned) manifests ────────────────────────────────────────────────
@@ -7212,13 +7246,35 @@ async function loadCoronetTrips() {
     const res = await officeFetch('/api/office/coronet-trips');
     if (!res || !res.ok) throw new Error();
     const trips = await res.json();
+    _coronetTodaysTrips = trips;
+
     if (!trips.length) {
       el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0;">No trips sent today yet.</div>';
       return;
     }
-    _coronetTodaysTrips = trips;
-    el.innerHTML = trips.map(_renderTripCard).join('');
-    // Kick off the timer engine if any trip is in-flight
+
+    // Partition trips into three buckets
+    const upcoming  = trips.filter(t => !t.van_left_at && !t.van_returned_at);
+    const active    = trips.filter(t =>  t.van_left_at && !t.van_returned_at);
+    const completed = trips.filter(t =>  t.van_returned_at);
+
+    function section(title, colour, list) {
+      if (!list.length) return '';
+      const cards = list.map(t =>
+        `<div style="flex-shrink:0;width:300px;">${_renderTripCard(t)}</div>`
+      ).join('');
+      return `
+        <div style="margin-bottom:20px;">
+          <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:${colour};margin-bottom:8px;padding:0 2px;">${title}</div>
+          <div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:6px;">${cards}</div>
+        </div>`;
+    }
+
+    el.innerHTML =
+      section('Active Trips',    '#16a34a', active)    +
+      section('Upcoming Trips',  'var(--accent)', upcoming)  +
+      section('Completed Trips', 'var(--muted)',  completed);
+
     if (trips.some(t => t.status === 'all_flying')) _startCoronetTimerEngine();
   } catch (_) {
     el.innerHTML = '<div style="color:var(--danger);font-size:13px;text-align:center;padding:40px 0;">Could not load trips.</div>';
@@ -7226,6 +7282,75 @@ async function loadCoronetTrips() {
 }
 
 let _coronetTodaysTrips = [];
+
+// ─── Coronet Flight Log (Settings) ───────────────────────────────────────────
+let _coronetLogDate = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+
+function toggleCoronetLog() {
+  const panel = document.getElementById('coronet-log-panel');
+  const chevron = document.getElementById('coronet-log-chevron');
+  const open = panel.style.display === 'none';
+  panel.style.display = open ? '' : 'none';
+  chevron.style.transform = open ? 'rotate(90deg)' : '';
+  if (open) loadCoronetLogForDate(_coronetLogDate);
+}
+
+function coronetLogNavDate(delta) {
+  const d = new Date(_coronetLogDate + 'T12:00:00');
+  d.setDate(d.getDate() + delta);
+  _coronetLogDate = d.toLocaleDateString('en-CA');
+  // Disable "next" button if already on today
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+  const nextBtn = document.getElementById('coronet-log-next-btn');
+  if (nextBtn) nextBtn.disabled = _coronetLogDate >= today;
+  loadCoronetLogForDate(_coronetLogDate);
+}
+
+async function loadCoronetLogForDate(dateStr) {
+  const label = document.getElementById('coronet-log-date-label');
+  const list  = document.getElementById('coronet-log-list');
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+  if (label) label.textContent = dateStr === today
+    ? 'Today'
+    : new Date(dateStr + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' });
+  const nextBtn = document.getElementById('coronet-log-next-btn');
+  if (nextBtn) nextBtn.disabled = dateStr >= today;
+  if (!list) return;
+  list.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px 0;">Loading…</div>';
+  try {
+    const res = await officeFetch(`/api/office/coronet-trips?date=${encodeURIComponent(dateStr)}`);
+    if (!res || !res.ok) throw new Error();
+    const trips = await res.json();
+    if (!trips.length) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px 0;">No trips recorded for this day.</div>';
+      return;
+    }
+    list.innerHTML = trips.map(t => {
+      const manifest = t.manifest || {};
+      const fmt = iso => iso ? new Date(iso).toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', timeZone: NZ_TZ }) : '—';
+      const pilots = (manifest.passengers || []).filter(p => p.pilot).map(p => p.pilot);
+      if (manifest.extraPilot) pilots.push(manifest.extraPilot);
+      const stamps = [
+        t.van_left_at     ? `Van Left ${fmt(t.van_left_at)}`       : null,
+        t.flying_started_at ? `All Flying ${fmt(t.flying_started_at)}` : null,
+        t.landed_at       ? `All Landed ${fmt(t.landed_at)}`       : null,
+        t.van_returned_at ? `Van Returned ${fmt(t.van_returned_at)}` : null,
+      ].filter(Boolean);
+      return `
+        <div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--surface);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-size:14px;font-weight:700;color:var(--text);">${esc(t.van_label)}</span>
+            <span style="font-size:15px;font-weight:800;color:var(--accent);font-family:'Montserrat',sans-serif;">${esc(manifest.time || '—')}</span>
+          </div>
+          ${pilots.length ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">${pilots.map(esc).join(' · ')}</div>` : ''}
+          ${manifest.driver ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Driver: ${esc(manifest.driver)}</div>` : ''}
+          ${stamps.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">${stamps.map(s => `<span style="font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px;background:rgba(34,197,94,0.1);color:#16a34a;border:1px solid rgba(34,197,94,0.3);">${esc(s)}</span>`).join('')}</div>` : ''}
+        </div>`;
+    }).join('');
+  } catch (_) {
+    list.innerHTML = '<div style="color:var(--danger);font-size:13px;text-align:center;padding:20px 0;">Could not load log.</div>';
+  }
+}
 
 function editCoronetTrip(tripId) {
   const t = _coronetTodaysTrips.find(x => x.id === tripId);

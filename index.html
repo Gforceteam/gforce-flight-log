@@ -7148,8 +7148,19 @@ function _renderTripCard(t) {
         Van Left
       </button>`;
 
-  // Remaining status buttons — highlight the active one
-  const statusBtns = vanLeftEl + ['all_flying','all_landed','van_returned'].map(s => {
+  // Van Returned: same pattern — replace button with timestamp once set
+  const vanReturnedLabel = t.van_returned_at
+    ? new Date(t.van_returned_at).toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', timeZone: NZ_TZ })
+    : null;
+  const vanReturnedEl = vanReturnedLabel
+    ? `<div style="flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid rgba(120,120,120,0.4);background:rgba(120,120,120,0.1);font-size:11px;font-weight:700;color:var(--muted);text-align:center;">Van Returned ${vanReturnedLabel}</div>`
+    : `<button onclick="_setCoronetTripStatus('${t.id}','van_returned')"
+        style="flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;transition:all 0.15s;">
+        Van Returned
+      </button>`;
+
+  // Middle status buttons — highlight the active one
+  const statusBtns = vanLeftEl + ['all_flying','all_landed'].map(s => {
     const active = s === status;
     const activeStyles = active
       ? 'background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700;'
@@ -7158,7 +7169,7 @@ function _renderTripCard(t) {
       style="flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid;font-size:11px;cursor:pointer;transition:all 0.15s;${activeStyles}">
       ${CORONET_STATUS_LABELS[s]}
     </button>`;
-  }).join('');
+  }).join('') + vanReturnedEl;
 
   return `
     <div class="card stat-section" style="margin-bottom:14px;padding:14px 16px;transition:background 0.3s,border-color 0.3s;${_tripCardBg(status)}">

@@ -245,6 +245,11 @@ async function createTables() {
     sent_at TEXT NOT NULL
   )`);
   await db.execute('CREATE INDEX IF NOT EXISTS idx_coronet_trips_date ON coronet_trips(date)');
+  // Add status columns to existing table (safe no-op if already present)
+  try { await db.execute("ALTER TABLE coronet_trips ADD COLUMN status TEXT DEFAULT NULL"); } catch (_) {}
+  try { await db.execute("ALTER TABLE coronet_trips ADD COLUMN flying_started_at TEXT DEFAULT NULL"); } catch (_) {}
+  try { await db.execute("ALTER TABLE coronet_trips ADD COLUMN landed_at TEXT DEFAULT NULL"); } catch (_) {}
+
   await db.execute(`CREATE TABLE IF NOT EXISTS loop_board_v2 (
     date TEXT NOT NULL,
     slot INTEGER NOT NULL,
@@ -2372,10 +2377,32 @@ app.get('/api/office/coronet-trips', verifyOffice, async (req, res) => {
   try {
     const date = req.query.date || nzToday();
     const rows = await queryAll(
-      'SELECT id, van, van_label, manifest_json, sent_at FROM coronet_trips WHERE date = ? ORDER BY sent_at ASC',
+      'SELECT id, van, van_label, manifest_json, sent_at, status, flying_started_at, landed_at FROM coronet_trips WHERE date = ? ORDER BY sent_at ASC',
       [date]
     );
     res.json(rows.map(r => ({ ...r, manifest: JSON.parse(r.manifest_json || '{}') })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/office/coronet-trips/:id/status', verifyPilotOrOffice, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body; // van_left | all_flying | all_landed | van_returned
+    const valid = ['van_left', 'all_flying', 'all_landed', 'van_returned'];
+    if (!valid.includes(status)) return res.status(400).json({ error: 'invalid status' });
+    const now = new Date().toISOString();
+    const existing = await queryOne(
+      'SELECT flying_started_at FROM coronet_trips WHERE id = ?', [id]
+    );
+    if (!existing) return res.status(404).json({ error: 'trip not found' });
+    const flying_started_at = status === 'all_flying' ? now : (existing.flying_started_at || null);
+    const landed_at = status === 'all_landed' ? now : null;
+    await run(
+      'UPDATE coronet_trips SET status = ?, flying_started_at = ?, landed_at = ? WHERE id = ?',
+      [status, flying_started_at, landed_at, id]
+    );
+    broadcast({ type: 'CORONET_TRIP_STATUS', id, status, flying_started_at, landed_at });
+    res.json({ ok: true, id, status, flying_started_at, landed_at });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

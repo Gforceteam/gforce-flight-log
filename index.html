@@ -1550,10 +1550,13 @@
         <!-- Extra planned trip manifests -->
         <div id="coronet-extras-container"></div>
 
-        <!-- Add extra manifest button -->
-        <div style="margin-top:16px;text-align:center;">
+        <!-- Add / remove extra manifest buttons -->
+        <div style="margin-top:16px;display:flex;justify-content:center;gap:10px;">
+          <button id="coronet-extra-remove-btn" onclick="removeLastCoronetExtra()"
+            style="padding:10px 28px;background:var(--surface);border:2px dashed var(--border);border-radius:9999px;color:var(--muted);font-size:22px;font-weight:400;line-height:1;transition:border-color 0.15s,color 0.15s;"
+            disabled>−</button>
           <button onclick="addCoronetExtra()"
-            style="padding:10px 32px;background:var(--surface);border:2px dashed var(--border);border-radius:9999px;color:var(--muted);font-size:22px;font-weight:400;cursor:pointer;line-height:1;transition:border-color 0.15s,color 0.15s;"
+            style="padding:10px 28px;background:var(--surface);border:2px dashed var(--border);border-radius:9999px;color:var(--muted);font-size:22px;font-weight:400;cursor:pointer;line-height:1;transition:border-color 0.15s,color 0.15s;"
             onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
             onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">+</button>
         </div>
@@ -7047,6 +7050,127 @@ function showCoronetSubTab(name) {
   if (!isBuilder) loadCoronetTrips();
 }
 
+// ─── Trip status helpers ───────────────────────────────────────────────────────
+const CORONET_STATUS_LABELS = {
+  van_left:    'Van Left',
+  all_flying:  'All Flying',
+  all_landed:  'All Landed',
+  van_returned:'Van Returned'
+};
+
+function _tripCardBg(status) {
+  if (status === 'van_left' || status === 'all_flying' || status === 'all_landed')
+    return 'background:rgba(34,197,94,0.10);border-color:rgba(34,197,94,0.35);';
+  if (status === 'van_returned')
+    return 'background:rgba(120,120,120,0.10);border-color:rgba(120,120,120,0.3);';
+  return '';
+}
+
+function _fmtElapsed(ms) {
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return h > 0
+    ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+    : `${m}:${String(sec).padStart(2,'0')}`;
+}
+
+// Single interval that ticks all active flight timers
+let _coronetTimerInterval = null;
+function _startCoronetTimerEngine() {
+  if (_coronetTimerInterval) return;
+  _coronetTimerInterval = setInterval(() => {
+    document.querySelectorAll('.coronet-flight-timer[data-start]').forEach(el => {
+      const start = Number(el.dataset.start);
+      if (start) el.textContent = _fmtElapsed(Date.now() - start);
+    });
+  }, 1000);
+}
+
+async function _setCoronetTripStatus(tripId, status) {
+  const res = await officeFetch(`/api/office/coronet-trips/${encodeURIComponent(tripId)}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status })
+  });
+  if (!res || !res.ok) { toast('Could not update trip status', 'err'); return; }
+  loadCoronetTrips(); // will be superseded by WS broadcast in most cases
+}
+
+function _renderTripCard(t) {
+  const manifest = t.manifest || {};
+  const status = t.status || null;
+  const sentTime = new Date(t.sent_at).toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', timeZone: NZ_TZ });
+
+  // Timer / landed display
+  let timerHtml = '';
+  if (status === 'all_flying' && t.flying_started_at) {
+    const start = new Date(t.flying_started_at).getTime();
+    const elapsed = _fmtElapsed(Date.now() - start);
+    timerHtml = `<div style="font-size:22px;font-weight:800;font-family:'Montserrat',sans-serif;color:#16a34a;letter-spacing:1px;margin-bottom:8px;">
+      ✈ <span class="coronet-flight-timer" data-start="${start}">${elapsed}</span>
+    </div>`;
+    _startCoronetTimerEngine();
+  } else if (status === 'all_landed' && t.landed_at) {
+    const landedTime = new Date(t.landed_at).toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', timeZone: NZ_TZ });
+    let dur = '';
+    if (t.flying_started_at) dur = ' · ' + _fmtElapsed(new Date(t.landed_at) - new Date(t.flying_started_at));
+    timerHtml = `<div style="font-size:14px;font-weight:700;color:#16a34a;margin-bottom:8px;">Landed ${landedTime}${dur}</div>`;
+  }
+
+  const rows = (manifest.passengers || []).filter(p => p.name || p.pilot).map((p, i) => `
+    <div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
+      <span style="color:var(--muted);font-weight:700;min-width:18px;">${i + 1}</span>
+      <span style="flex:1;color:var(--text);">${esc(p.name || '')}</span>
+      <span style="color:var(--accent);font-weight:600;">${esc(p.pilot || '')}</span>
+    </div>`).join('');
+  const extraRow = manifest.extraPilot ? `
+    <div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
+      <span style="color:var(--muted);font-weight:700;min-width:18px;">6</span>
+      <span style="flex:1;color:var(--text);">${esc(manifest.extraPilotName || '')}</span>
+      <span style="color:var(--accent);font-weight:600;">${esc(manifest.extraPilot)}</span>
+    </div>` : '';
+  const driverRow = manifest.driver ? `
+    <div style="display:flex;gap:8px;padding:6px 0;font-size:13px;">
+      <span style="color:var(--muted);font-weight:700;min-width:18px;">D</span>
+      <span style="flex:1;color:var(--muted);">Driver</span>
+      <span style="color:var(--text);font-weight:600;">${esc(manifest.driver)}</span>
+    </div>` : '';
+
+  const manifestJson = JSON.stringify(manifest).replace(/'/g, '\\x27');
+
+  // Status buttons — highlight the active one
+  const statusBtns = ['van_left','all_flying','all_landed','van_returned'].map(s => {
+    const active = s === status;
+    const activeStyles = active
+      ? 'background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700;'
+      : 'background:var(--surface);color:var(--text);border-color:var(--border);font-weight:600;';
+    return `<button onclick="_setCoronetTripStatus('${t.id}','${s}')"
+      style="flex:1;padding:9px 4px;border-radius:8px;border:1.5px solid;font-size:11px;cursor:pointer;transition:all 0.15s;${activeStyles}">
+      ${CORONET_STATUS_LABELS[s]}
+    </button>`;
+  }).join('');
+
+  return `
+    <div class="card stat-section" style="margin-bottom:14px;padding:14px 16px;transition:background 0.3s,border-color 0.3s;${_tripCardBg(status)}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div>
+          <span style="font-size:15px;font-weight:700;color:var(--text);">${esc(t.van_label)}</span>
+          <span style="margin-left:10px;font-size:18px;font-weight:800;color:var(--accent);font-family:'Montserrat',sans-serif;">${esc(manifest.time || '')}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:11px;color:var(--muted);">Sent ${sentTime}</span>
+          <button onclick="editCoronetTrip(${t.van}, '${manifestJson}')"
+            style="padding:5px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;">Edit</button>
+        </div>
+      </div>
+      ${timerHtml}
+      ${rows}${extraRow}${driverRow}
+      <div style="display:flex;gap:6px;margin-top:12px;">
+        ${statusBtns}
+      </div>
+    </div>`;
+}
+
 async function loadCoronetTrips() {
   const el = document.getElementById('coronet-trips-list');
   if (!el) return;
@@ -7059,44 +7183,9 @@ async function loadCoronetTrips() {
       el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0;">No trips sent today yet.</div>';
       return;
     }
-    el.innerHTML = trips.map(t => {
-      const manifest = t.manifest || {};
-      const sentTime = new Date(t.sent_at).toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', timeZone: NZ_TZ });
-      const rows = (manifest.passengers || []).filter(p => p.name || p.pilot).map((p, i) => `
-        <div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
-          <span style="color:var(--muted);font-weight:700;min-width:18px;">${i + 1}</span>
-          <span style="flex:1;color:var(--text);">${esc(p.name || '')}</span>
-          <span style="color:var(--accent);font-weight:600;">${esc(p.pilot || '')}</span>
-        </div>`).join('');
-      const extraRow = manifest.extraPilot ? `
-        <div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
-          <span style="color:var(--muted);font-weight:700;min-width:18px;">6</span>
-          <span style="flex:1;color:var(--text);">${esc(manifest.extraPilotName || '')}</span>
-          <span style="color:var(--accent);font-weight:600;">${esc(manifest.extraPilot)}</span>
-        </div>` : '';
-      const driverRow = manifest.driver ? `
-        <div style="display:flex;gap:8px;padding:6px 0;font-size:13px;">
-          <span style="color:var(--muted);font-weight:700;min-width:18px;">D</span>
-          <span style="flex:1;color:var(--muted);">Driver</span>
-          <span style="color:var(--text);font-weight:600;">${esc(manifest.driver)}</span>
-        </div>` : '';
-      const manifestJson = JSON.stringify(manifest).replace(/'/g, '\\x27');
-      return `
-        <div class="card stat-section" style="margin-bottom:14px;padding:14px 16px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-            <div>
-              <span style="font-size:15px;font-weight:700;color:var(--text);">${esc(t.van_label)}</span>
-              <span style="margin-left:10px;font-size:18px;font-weight:800;color:var(--accent);font-family:'Montserrat',sans-serif;">${esc(manifest.time || '')}</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span style="font-size:11px;color:var(--muted);">Sent ${sentTime}</span>
-              <button onclick="editCoronetTrip(${t.van}, '${manifestJson}')"
-                style="padding:5px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;">Edit</button>
-            </div>
-          </div>
-          ${rows}${extraRow}${driverRow}
-        </div>`;
-    }).join('');
+    el.innerHTML = trips.map(_renderTripCard).join('');
+    // Kick off the timer engine if any trip is in-flight
+    if (trips.some(t => t.status === 'all_flying')) _startCoronetTimerEngine();
   } catch (_) {
     el.innerHTML = '<div style="color:var(--danger);font-size:13px;text-align:center;padding:40px 0;">Could not load trips.</div>';
   }
@@ -7860,6 +7949,13 @@ function connectWS() {
       case 'CORONET_MANIFEST_UPDATE':
         // Live-update pilot Coronet tab if open
         if (pilotActiveTab === 'coronet') loadPilotCoronetManifests();
+        break;
+      case 'CORONET_TRIP_STATUS':
+        // Refresh Today's Trips if it's visible (office or pilot)
+        if (officeActiveTab === 'coronet') {
+          const tripsEl = document.getElementById('coronet-sub-trips');
+          if (tripsEl && tripsEl.style.display !== 'none') loadCoronetTrips();
+        }
         break;
       case 'PILOT_DELETED':
         toast(`${data.pilot_name} removed`);

@@ -1255,6 +1255,29 @@ app.post('/api/office/pilots', verifyOffice, async (req, res) => {
   }
 });
 
+// ─── Office: rename a pilot ───────────────────────────────────────────────────
+app.patch('/api/office/pilots/:id/name', verifyOffice, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
+    if (name.length > 60) return res.status(400).json({ error: 'Name too long' });
+    const cleanName = sanitize(name.trim(), 60);
+    const pilot = await queryOne('SELECT id, name FROM pilots WHERE id = ?', [id]);
+    if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
+    const conflict = await queryOne('SELECT id FROM pilots WHERE name = ? AND id != ?', [cleanName, id]);
+    if (conflict) return res.status(409).json({ error: `A pilot named "${cleanName}" already exists` });
+    await run('UPDATE pilots SET name = ? WHERE id = ?', [cleanName, id]);
+    await run('UPDATE loop_board SET pilot_name = ? WHERE pilot_id = ?', [cleanName, id]);
+    await run('UPDATE loop_board_v2 SET pilot_name = ? WHERE pilot_id = ?', [cleanName, id]);
+    broadcast({ type: 'PILOT_RENAMED', pilot_id: id, old_name: pilot.name, new_name: cleanName });
+    res.json({ ok: true, pilot_id: id, name: cleanName });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Rename failed' });
+  }
+});
+
 // ─── Office: reset a pilot's password ────────────────────────────────────────
 app.put('/api/office/pilot-password', verifyOffice, async (req, res) => {
   try {

@@ -1743,6 +1743,19 @@
           <button onclick="officeResetPassword()" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Reset Password</button>
         </div>
 
+        <!-- Rename pilot -->
+        <div class="card stat-section" style="margin-bottom:12px;">
+          <div class="stat-section-title" style="margin-bottom:6px;">✏️ Rename Pilot</div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:14px;">Update a pilot's display name across the app.</div>
+          <select id="office-rename-pilot-sel" style="width:100%;padding:11px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;margin-bottom:10px;">
+            <option value="">Select pilot…</option>
+          </select>
+          <input type="text" id="office-rename-pilot-input" placeholder="New name" maxlength="60"
+            style="width:100%;padding:11px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:14px;margin-bottom:10px;" />
+          <div id="office-rename-error" style="color:var(--danger);font-size:13px;margin-bottom:8px;min-height:16px;"></div>
+          <button onclick="officeRenamePilot()" style="width:100%;padding:13px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">Rename Pilot</button>
+        </div>
+
         <!-- Remove pilot -->
         <div class="card stat-section" style="margin-bottom:12px;">
           <div class="stat-section-title" style="margin-bottom:6px;">🗑 Remove Pilot</div>
@@ -6435,7 +6448,7 @@ if (name === 'pilots') { renderAwayTab(); renderGroupsTab(); renderTodayFlights(
   if (name === 'flights') renderFlightsTab();
   if (name === 'tracker') { loadTrackerTab(); }
   if (name === 'coronet') { initCoronetTab(); }
-  if (name === 'settings') { populateOfficeResetPilots(); populateOfficeDeletePilots(); loadOfficeSettings(); loadTrackerEnabledState(); }
+  if (name === 'settings') { populateOfficeResetPilots(); populateOfficeDeletePilots(); populateOfficeRenamePilots(); loadOfficeSettings(); loadTrackerEnabledState(); }
 }
 
 let _officePushEnabled = false;
@@ -7806,6 +7819,51 @@ async function populateOfficeDeletePilots() {
       sel.appendChild(opt);
     });
   } catch {}
+}
+
+async function populateOfficeRenamePilots() {
+  const sel = document.getElementById('office-rename-pilot-sel');
+  if (!sel || sel.options.length > 1) return;
+  try {
+    const res = await officeFetch('/api/pilots');
+    if (!res.ok) return;
+    const pilots = await res.json();
+    pilots.sort(pilotSort).forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name;
+      sel.appendChild(opt);
+    });
+  } catch {}
+}
+
+async function officeRenamePilot() {
+  const sel = document.getElementById('office-rename-pilot-sel');
+  const input = document.getElementById('office-rename-pilot-input');
+  const errEl = document.getElementById('office-rename-error');
+  errEl.textContent = '';
+  const pilotId = sel.value;
+  const newName = input.value.trim();
+  if (!pilotId) { errEl.textContent = 'Select a pilot'; return; }
+  if (!newName) { errEl.textContent = 'Enter a new name'; return; }
+  try {
+    const res = await officeFetch(`/api/office/pilots/${pilotId}/name`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName })
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error || 'Failed'; return; }
+    toast(`Renamed to ${newName}`);
+    input.value = '';
+    sel.value = '';
+    // Reset all pilot dropdowns so they repopulate with new name
+    ['office-rename-pilot-sel', 'office-reset-pilot-sel', 'office-delete-pilot-sel'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = '<option value="">Select pilot…</option>';
+    });
+    loadOfficeData();
+  } catch { errEl.textContent = 'Network error'; }
 }
 
 async function officeDeletePilot() {

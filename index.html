@@ -1868,10 +1868,10 @@ function localApiHost() {
 }
 const API_BASE = IS_LOCAL
   ? `http://${localApiHost()}:${LOCAL_API_PORT}`
-  : 'https://gforce-api.fly.dev';
+  : 'https://gforce-flight-log.fly.dev';
 const WS_URL = IS_LOCAL
   ? `ws://${localApiHost()}:${LOCAL_API_PORT}`
-  : 'wss://gforce-api.fly.dev';
+  : 'wss://gforce-flight-log.fly.dev';
 const VAPID_PUBLIC_KEY = 'BGpwh5XQFo1PLmfcYqAwO3sFt8Y4JNMX89x594oX76yTW4cttHEgvcIndfNa-IM3RyjXW0-n_W3A2svCME2fySQ';
 
 // ─── HTML escaping ────────────────────────────────────────────────────────────

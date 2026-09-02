@@ -1,4 +1,4 @@
-app = 'gforce-api'
+app = 'gforce-flight-log'
 primary_region = 'nrt'
 
 [build]

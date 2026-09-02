@@ -6830,10 +6830,11 @@ async function loadCoronetTrips() {
         </div>` : '';
       const driverRow = manifest.driver ? `
         <div style="display:flex;gap:8px;padding:6px 0;font-size:13px;">
-          <span style="color:var(--muted);font-weight:700;min-width:18px;">🚐</span>
+          <span style="color:var(--muted);font-weight:700;min-width:18px;">D</span>
           <span style="flex:1;color:var(--muted);">Driver</span>
           <span style="color:var(--text);font-weight:600;">${esc(manifest.driver)}</span>
         </div>` : '';
+      const manifestJson = JSON.stringify(manifest).replace(/'/g, '\\x27');
       return `
         <div class="card stat-section" style="margin-bottom:14px;padding:14px 16px;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
@@ -6841,7 +6842,11 @@ async function loadCoronetTrips() {
               <span style="font-size:15px;font-weight:700;color:var(--text);">${esc(t.van_label)}</span>
               <span style="margin-left:10px;font-size:18px;font-weight:800;color:var(--accent);font-family:'Montserrat',sans-serif;">${esc(manifest.time || '')}</span>
             </div>
-            <span style="font-size:11px;color:var(--muted);">Sent ${sentTime}</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:11px;color:var(--muted);">Sent ${sentTime}</span>
+              <button onclick="editCoronetTrip(${t.van}, '${manifestJson}')"
+                style="padding:5px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;">Edit</button>
+            </div>
           </div>
           ${rows}${extraRow}${driverRow}
         </div>`;
@@ -6849,6 +6854,19 @@ async function loadCoronetTrips() {
   } catch (_) {
     el.innerHTML = '<div style="color:var(--danger);font-size:13px;text-align:center;padding:40px 0;">Could not load trips.</div>';
   }
+}
+
+function editCoronetTrip(van, manifestJson) {
+  try {
+    const manifest = typeof manifestJson === 'string' ? JSON.parse(manifestJson) : manifestJson;
+    _coronetSave(van, manifest);
+    showCoronetSubTab('builder');
+    renderCoronetForm(van);
+    // Scroll the correct van form into view
+    const el = document.getElementById('coronet-form-van' + van);
+    if (el) el.closest('.card') && el.closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    toast('Manifest loaded into builder — edit and resend when ready');
+  } catch (_) { toast('Could not load manifest for editing', 'err'); }
 }
 
 async function sendCoronetTrip(van) {

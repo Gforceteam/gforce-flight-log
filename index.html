@@ -7136,7 +7136,6 @@ function _renderTripCard(t) {
       <span style="color:var(--text);font-weight:600;">${esc(manifest.driver)}</span>
     </div>` : '';
 
-  const manifestJson = JSON.stringify(manifest).replace(/'/g, '\\x27');
 
   // Van Left: show timestamp label instead of a button once set
   const vanLeftLabel = t.van_left_at
@@ -7170,7 +7169,7 @@ function _renderTripCard(t) {
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="font-size:11px;color:var(--muted);">Sent ${sentTime}</span>
-          <button onclick="editCoronetTrip(${t.van}, '${manifestJson}')"
+          <button onclick="editCoronetTrip('${t.id}')"
             style="padding:5px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;">Edit</button>
         </div>
       </div>
@@ -7194,6 +7193,7 @@ async function loadCoronetTrips() {
       el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0;">No trips sent today yet.</div>';
       return;
     }
+    _coronetTodaysTrips = trips;
     el.innerHTML = trips.map(_renderTripCard).join('');
     // Kick off the timer engine if any trip is in-flight
     if (trips.some(t => t.status === 'all_flying')) _startCoronetTimerEngine();
@@ -7202,9 +7202,14 @@ async function loadCoronetTrips() {
   }
 }
 
-function editCoronetTrip(van, manifestJson) {
+let _coronetTodaysTrips = [];
+
+function editCoronetTrip(tripId) {
+  const t = _coronetTodaysTrips.find(x => x.id === tripId);
+  if (!t) { toast('Trip not found', 'err'); return; }
+  const van = t.van;
+  const manifest = t.manifest;
   try {
-    const manifest = typeof manifestJson === 'string' ? JSON.parse(manifestJson) : manifestJson;
     _coronetSave(van, manifest);
     showCoronetSubTab('builder');
     renderCoronetForm(van);

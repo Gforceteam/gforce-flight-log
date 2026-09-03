@@ -1192,30 +1192,39 @@ app.get('/api/roster', verifyPilotOrOffice, async (req, res) => {
 });
 
 /** Roster summary: per-day available/late/off counts across a date range, for the monthly calendar.
- *  Pilots default to 'available', so available = total pilots minus explicit late/off for that day. */
+ *  Respects each pilot's default_roster_status so pilots defaulting to 'off' don't inflate the available count. */
 app.get('/api/roster/summary', verifyPilotOrOffice, async (req, res) => {
   try {
     const { start, end } = req.query;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(start || '') || !/^\d{4}-\d{2}-\d{2}$/.test(end || '')) {
       return res.status(400).json({ error: 'start and end (YYYY-MM-DD) required' });
     }
-    const totalRow = await queryOne('SELECT COUNT(*) AS cnt FROM pilots');
-    const totalPilots = totalRow ? totalRow.cnt : 0;
-    const rows = await queryAll(
-      `SELECT date, status, COUNT(*) AS cnt FROM pilot_roster
-       WHERE date >= ? AND date <= ? AND status IN ('late', 'off') GROUP BY date, status`,
+    // Get all pilots with their defaults
+    const pilots = await queryAll("SELECT id, COALESCE(default_roster_status, 'available') AS default_status FROM pilots");
+    // Get all explicit overrides in the date range
+    const overrideRows = await queryAll(
+      'SELECT pilot_id, date, status FROM pilot_roster WHERE date >= ? AND date <= ?',
       [start, end]
     );
-    const overrides = {};
-    for (const r of rows) {
-      if (!overrides[r.date]) overrides[r.date] = { late: 0, off: 0 };
-      overrides[r.date][r.status] = r.cnt;
+    // Index overrides by date then pilot_id
+    const overrideMap = {};
+    for (const r of overrideRows) {
+      if (!overrideMap[r.date]) overrideMap[r.date] = {};
+      overrideMap[r.date][r.pilot_id] = r.status;
     }
+    // Build summary for each date
     const summary = {};
     for (let d = new Date(start + 'T12:00:00'), endD = new Date(end + 'T12:00:00'); d <= endD; d.setDate(d.getDate() + 1)) {
       const dateStr = d.toLocaleDateString('en-CA');
-      const ov = overrides[dateStr] || { late: 0, off: 0 };
-      summary[dateStr] = { available: Math.max(0, totalPilots - ov.late - ov.off), late: ov.late, off: ov.off };
+      const dayOverrides = overrideMap[dateStr] || {};
+      let available = 0, late = 0, off = 0;
+      for (const p of pilots) {
+        const status = dayOverrides[p.id] ?? p.default_status;
+        if (status === 'available') available++;
+        else if (status === 'late') late++;
+        else off++;
+      }
+      summary[dateStr] = { available, late, off };
     }
     res.json(summary);
   } catch (e) {

@@ -2567,7 +2567,7 @@ app.post('/api/office/coronet-notify', verifyOffice, async (req, res) => {
   }
 });
 
-app.get('/api/office/coronet-trips', verifyOffice, async (req, res) => {
+app.get('/api/office/coronet-trips', verifyPilotOrOffice, async (req, res) => {
   try {
     const date = req.query.date || nzToday();
     const rows = await queryAll(

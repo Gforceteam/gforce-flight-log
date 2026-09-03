@@ -4209,62 +4209,80 @@ async function loadPilotCoronetManifests() {
   if (!el) return;
   el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0;">Loading…</div>';
   try {
-    const res = await apiFetch('/api/pilot/coronet-manifests');
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+    const res = await apiFetch(`/api/office/coronet-trips?date=${today}`);
     if (!res || !res.ok) throw new Error();
-    const { van1, van2 } = await res.json();
-    if (!van1 && !van2) {
-      el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0;">No trip manifests set yet.</div>';
+    const trips = await res.json();
+    if (!trips.length) {
+      el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0;">No trips today.</div>';
       return;
     }
-    el.innerHTML = [1, 2].map(v => {
-      const d = v === 1 ? van1 : van2;
-      if (!d) return '';
-      const vanLabel = 'Gforce ' + v;
-      // Format date
-      let dateLabel = d.date || '';
-      try { dateLabel = new Date(d.date + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' }); } catch (_) {}
-      // Build rows
-      const rows = (d.passengers || []).map((p, i) => `
-        <tr>
-          <td style="padding:7px 6px;border-bottom:1px solid var(--border);text-align:center;font-size:12px;color:var(--muted);font-weight:700;">${i + 1}</td>
-          <td style="padding:7px 8px;border-bottom:1px solid var(--border);font-size:12px;font-family:monospace;color:var(--muted);">${esc(p.ref || '')}</td>
-          <td style="padding:7px 8px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text);">${esc(p.name || '')}</td>
-          <td style="padding:7px 8px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text);font-weight:600;">${esc(p.pilot || '')}</td>
-        </tr>`).join('');
-      const extraRow = `
-        <tr>
-          <td style="padding:7px 6px;border-bottom:1px solid var(--border);text-align:center;font-size:12px;color:var(--muted);font-weight:700;">6</td>
-          <td style="padding:7px 8px;border-bottom:1px solid var(--border);font-size:12px;font-family:monospace;color:var(--muted);">${esc(d.extraPilotRef || '')}</td>
-          <td style="padding:7px 8px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text);">${esc(d.extraPilotName || '')}</td>
-          <td style="padding:7px 8px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text);font-weight:600;">${esc(d.extraPilot || '')}</td>
-        </tr>`;
-      return `
-        <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:16px;">
-          <div style="background:var(--surface);padding:12px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);">
-            <span style="font-size:15px;font-weight:700;color:var(--text);">${vanLabel}</span>
-            <span style="font-size:13px;color:var(--muted);">${dateLabel}</span>
-          </div>
-          ${d.time ? `<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
-            <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);">Departure</span>
-            <span style="font-size:18px;font-weight:800;color:var(--accent);font-family:'Montserrat',sans-serif;">${esc(d.time)}</span>
-            ${d.driver ? `<span style="margin-left:auto;font-size:12px;color:var(--muted);">Driver: <strong style="color:var(--text);">${esc(d.driver)}</strong></span>` : ''}
-          </div>` : ''}
-          <table style="width:100%;border-collapse:collapse;">
-            <thead>
-              <tr style="background:var(--surface);">
-                <th style="padding:7px 6px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);text-align:center;border-bottom:1px solid var(--border);">#</th>
-                <th style="padding:7px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);">Ref</th>
-                <th style="padding:7px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);">Customer</th>
-                <th style="padding:7px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);text-align:left;border-bottom:1px solid var(--border);">Pilot</th>
-              </tr>
-            </thead>
-            <tbody>${rows}${extraRow}</tbody>
-          </table>
-        </div>`;
-    }).join('');
+    const fmt = iso => iso ? new Date(iso).toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', timeZone: NZ_TZ }) : '';
+    const stamp = (label, colour) =>
+      `<div style="padding:7px 0;border-radius:7px;border:1px solid ${colour}20;background:${colour}10;font-size:11px;font-weight:700;color:${colour};text-align:center;flex:1;">${label}</div>`;
+    const btn = (label, tripId, key) =>
+      `<button onclick="_pilotSetCoronetStatus('${tripId}','${key}')"
+        style="flex:1;padding:7px 0;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;"
+        onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+        onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">${label}</button>`;
+
+    const sectionBorder = t => {
+      if (t.van_left_at && !t.van_returned_at) return 'border-left:3px solid #16a34a;';
+      if (t.van_returned_at) return 'border-left:3px solid var(--border);';
+      return 'border-left:3px solid var(--accent);';
+    };
+
+    const upcoming = trips.filter(t => !t.van_left_at && !t.van_returned_at);
+    const active   = trips.filter(t =>  t.van_left_at && !t.van_returned_at);
+    const completed = trips.filter(t => t.van_returned_at);
+
+    const renderCard = t => {
+      const m = t.manifest || {};
+      const vanLeftEl     = t.van_left_at      ? stamp(`Van Left ${fmt(t.van_left_at)}`,          '#16a34a') : btn('Van Left',    t.id, 'van_left');
+      const allFlyingEl   = t.flying_started_at ? stamp(`All Flying ${fmt(t.flying_started_at)}`,  '#16a34a') : btn('All Flying',  t.id, 'all_flying');
+      const allLandedEl   = t.landed_at         ? stamp(`All Landed ${fmt(t.landed_at)}`,           '#16a34a') : btn('All Landed', t.id, 'all_landed');
+      const vanReturnedEl = t.van_returned_at   ? stamp(`Van Returned ${fmt(t.van_returned_at)}`,  'var(--muted)') : btn('Van Returned', t.id, 'van_returned');
+      return `<div style="margin-bottom:12px;padding:14px 16px 14px 13px;background:var(--card);border:1px solid var(--border);border-radius:14px;${sectionBorder(t)}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <span style="font-size:14px;font-weight:700;color:var(--text);">${esc(t.van_label || 'Gforce ' + t.van)}</span>
+          ${m.time ? `<span style="font-size:13px;font-weight:800;color:var(--accent);">${esc(m.time)}</span>` : ''}
+        </div>
+        ${m.driver ? `<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Driver: <strong style="color:var(--text);">${esc(m.driver)}</strong></div>` : ''}
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          ${vanLeftEl}${allFlyingEl}${allLandedEl}${vanReturnedEl}
+        </div>
+      </div>`;
+    };
+
+    const sectionHtml = (title, dot, list) => !list.length ? '' : `
+      <div style="margin-bottom:18px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${dot};flex-shrink:0;"></span>
+          <span style="font-size:13px;font-weight:700;color:var(--text);">${title}</span>
+          <span style="padding:2px 7px;border-radius:100px;background:${dot}18;color:${dot};font-size:11px;font-weight:700;">${list.length}</span>
+        </div>
+        ${list.map(renderCard).join('')}
+      </div>`;
+
+    el.innerHTML =
+      sectionHtml('Active Trips',    '#16a34a',       active) +
+      sectionHtml('Upcoming Trips',  'var(--accent)', upcoming) +
+      sectionHtml('Completed Trips', 'var(--muted)',  completed);
   } catch (_) {
-    el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0;">Could not load manifests.</div>';
+    el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0;">Could not load trips.</div>';
   }
+}
+
+async function _pilotSetCoronetStatus(tripId, status) {
+  try {
+    const res = await apiFetch(`/api/office/coronet-trips/${tripId}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+    if (!res || !res.ok) throw new Error();
+    loadPilotCoronetManifests();
+  } catch { toast('Could not update status', 'err'); }
 }
 
 // ─── Pilot Loop Board (read-only) ────────────────────────────────────────────

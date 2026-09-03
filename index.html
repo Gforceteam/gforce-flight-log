@@ -1356,14 +1356,15 @@
     <div class="pilot-menu-item" onclick="closePilotMenu(); showSubPage('flights')"><span class="pilot-menu-icon">📋</span>My Flights</div>
     <div class="pilot-menu-item" onclick="closePilotMenu(); showSubPage('stats')"><span class="pilot-menu-icon">📊</span>Stats</div>
     <div class="pilot-menu-item" onclick="closePilotMenu(); showSubPage('ff')"><span class="pilot-menu-icon">📅</span>Duty Sheet</div>
-<div class="pilot-menu-item" onclick="closePilotMenu(); showPilotTab('settings')"><span class="pilot-menu-icon">⚙️</span>Settings</div>
+    <div class="pilot-menu-item" onclick="closePilotMenu(); showSubPage('roster')"><span class="pilot-menu-icon">📋</span>Roster</div>
+    <div class="pilot-menu-item" onclick="closePilotMenu(); showSubPage('coronet')"><span class="pilot-menu-icon">🏔</span>Coronet</div>
+    <div class="pilot-menu-item" onclick="closePilotMenu(); showPilotTab('settings')"><span class="pilot-menu-icon">⚙️</span>Settings</div>
   </div>
 
   <!-- Main pilot tab bar -->
   <div class="pilot-tab-bar" id="pilot-tab-bar">
     <button class="pilot-tab-btn active" onclick="showPilotTab('ff')" id="pilot-tab-ff-btn">Flight Following</button>
     <button class="pilot-tab-btn" onclick="showPilotTab('loop')" id="pilot-tab-loop-btn">Loop Board</button>
-    <button class="pilot-tab-btn" onclick="showPilotTab('coronet')" id="pilot-tab-coronet-btn">🏔 Coronet</button>
   </div>
 
   <!-- Tab: Flight Following -->
@@ -1381,14 +1382,6 @@
     <div id="pilot-loop-board-wrap"><p style="color:var(--muted);padding:20px;text-align:center;">Loading…</p></div>
   </div>
 
-  <!-- Tab: Coronet Peak -->
-  <div class="pilot-tab-content" id="pilot-tab-coronet">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-      <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);">🏔 Coronet Peak</div>
-      <button onclick="loadPilotCoronetManifests()" style="padding:6px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;">↻ Refresh</button>
-    </div>
-    <div id="pilot-coronet-content"><div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0;">Loading…</div></div>
-  </div>
 
   <!-- Tab: Settings (opened via menu) -->
   <div class="pilot-tab-content" id="pilot-tab-settings">
@@ -1430,8 +1423,19 @@
     </div>
   </div>
 
+  <div class="page" id="page-coronet">
+    <button class="pilot-back-btn" onclick="showPilotTab('ff')">← Back</button>
+    <div style="padding:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);">🏔 Coronet Peak</div>
+        <button onclick="loadPilotCoronetManifests()" style="padding:6px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;">↻ Refresh</button>
+      </div>
+      <div id="pilot-coronet-content"><div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0;">Loading…</div></div>
+    </div>
+  </div>
+
   <div class="page" id="page-roster">
-    <button class="pilot-back-btn" onclick="showPilotTab('settings')">← Back</button>
+    <button class="pilot-back-btn" onclick="showPilotTab('ff')">← Back</button>
     <div class="stats-page-header">
       <h2>Roster</h2>
       <button type="button" onclick="showRosterBulkModal()" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:9999px;color:var(--text);font-size:12px;font-weight:700;padding:7px 14px;cursor:pointer;white-space:nowrap;">📅 Bulk update</button>
@@ -4190,6 +4194,7 @@ function showSubPage(name) {
   if (name === 'stats') { statsMonthOffset = 0; renderStats(); }
   if (name === 'ff') renderPilotFF();
   if (name === 'roster') { rosterCalMonth = null; rosterSelectedDate = null; loadRosterCalendar(); }
+  if (name === 'coronet') { loadPilotCoronetManifests(); }
 }
 
 function showPage(name) {
@@ -8296,7 +8301,7 @@ function connectWS() {
       }
       case 'CORONET_MANIFEST_UPDATE':
         // Live-update pilot Coronet tab if open
-        if (pilotActiveTab === 'coronet') loadPilotCoronetManifests();
+        if (document.getElementById('page-coronet')?.classList.contains('active')) loadPilotCoronetManifests();
         break;
       case 'CORONET_TRIP_STATUS':
         // Refresh Today's Trips if it's visible (office or pilot)

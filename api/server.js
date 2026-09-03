@@ -289,6 +289,7 @@ async function createTables() {
   )`);
   // Pilot location tracker
   try { await db.execute('ALTER TABLE pilots ADD COLUMN owntracks_key TEXT'); } catch (_) {}
+  try { await db.execute("ALTER TABLE pilots ADD COLUMN default_roster_status TEXT DEFAULT 'available'"); } catch (_) {}
   const pilotsMissingKey = await queryAll('SELECT id FROM pilots WHERE owntracks_key IS NULL');
   for (const p of pilotsMissingKey) {
     await run('UPDATE pilots SET owntracks_key = ? WHERE id = ?', [uuidv4(), p.id]);
@@ -1178,7 +1179,7 @@ app.get('/api/roster', verifyPilotOrOffice, async (req, res) => {
       return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
     }
     const rows = await queryAll(
-      `SELECT p.id AS pilot_id, p.name, COALESCE(r.status, 'available') AS status
+      `SELECT p.id AS pilot_id, p.name, COALESCE(r.status, COALESCE(p.default_roster_status, 'available')) AS status
        FROM pilots p
        LEFT JOIN pilot_roster r ON r.pilot_id = p.id AND r.date = ?
        ORDER BY p.name`,

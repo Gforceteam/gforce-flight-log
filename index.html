@@ -1645,7 +1645,6 @@
         </div>
         <div class="roster-cal-grid" id="office-roster-cal-grid"></div>
         <div class="roster-day-detail-label" id="office-roster-detail-label"></div>
-        <p style="font-size:12px;color:var(--muted);margin:-4px 0 12px;">Office has master access — tap any pilot's status to override it.</p>
         <div id="office-roster-list"><div class="empty-state">Loading…</div></div>
       </div>
     </div>
@@ -6591,7 +6590,7 @@ if (name === 'pilots') { renderAwayTab(); renderGroupsTab(); renderTodayFlights(
   if (name === 'flights') renderFlightsTab();
   if (name === 'tracker') { loadTrackerTab(); }
   if (name === 'coronet') { initCoronetTab(); }
-  if (name === 'roster') { officeRosterCalMonth = null; officeRosterSelectedDate = null; loadOfficeRosterCalendar(); }
+  if (name === 'roster') { _officeRosterEditMode = false; officeRosterCalMonth = null; officeRosterSelectedDate = null; loadOfficeRosterCalendar(); }
   if (name === 'settings') { populateOfficeResetPilots(); populateOfficeDeletePilots(); populateOfficeRenamePilots(); loadOfficeSettings(); loadTrackerEnabledState(); }
 }
 
@@ -8945,19 +8944,66 @@ async function loadOfficeRosterDayDetail() {
   }
 }
 
+let _officeRosterEditMode = false;
+let _officeRosterRows = [];
+
 function renderOfficeRosterList(rows) {
+  _officeRosterRows = rows || [];
   const listEl = document.getElementById('office-roster-list');
   if (!listEl) return;
   if (!rows || !rows.length) { listEl.innerHTML = '<div class="empty-state">No pilots found.</div>'; return; }
-  listEl.innerHTML = rows.map(r => {
-    const seg = ROSTER_STATUSES.map(s =>
-      `<button class="${r.status === s ? 'active ' + s : ''}" onclick="officeSetRosterStatus('${r.pilot_id}','${s}')">${ROSTER_LABELS[s]}</button>`
-    ).join('');
-    return `<div class="roster-row">
-      <div class="roster-pilot-name">${esc(r.name)}</div>
-      <div class="roster-seg">${seg}</div>
-    </div>`;
-  }).join('');
+
+  if (_officeRosterEditMode) {
+    // Edit mode: per-pilot status buttons
+    listEl.innerHTML = `
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+        <button onclick="_officeRosterEditMode=false;renderOfficeRosterList(_officeRosterRows)"
+          style="padding:8px 18px;border-radius:9999px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">
+          ✓ Done
+        </button>
+      </div>
+      ${rows.map(r => {
+        const seg = ROSTER_STATUSES.map(s =>
+          `<button class="${r.status === s ? 'active ' + s : ''}" onclick="officeSetRosterStatus('${r.pilot_id}','${s}')">${ROSTER_LABELS[s]}</button>`
+        ).join('');
+        return `<div class="roster-row">
+          <div class="roster-pilot-name">${esc(r.name)}</div>
+          <div class="roster-seg">${seg}</div>
+        </div>`;
+      }).join('')}`;
+  } else {
+    // View mode: grouped by status, like pilot view
+    const groups = ROSTER_STATUSES.map(s => ({
+      status: s,
+      label: ROSTER_LABELS[s],
+      pilots: rows.filter(r => r.status === s)
+    }));
+    const dotColor = { available: 'var(--success)', late: 'var(--warning)', off: 'var(--muted)' };
+    const pillClass = { available: 'available', late: 'late', off: 'off' };
+
+    const groupsHtml = groups.map(g => {
+      const names = g.pilots.length
+        ? g.pilots.map(r => `<span>${esc(r.name)}</span>`).join(', ')
+        : `<span class="roster-group-empty">None</span>`;
+      return `<div class="roster-group">
+        <div class="roster-group-head">
+          <span class="roster-group-dot ${g.status}"></span>
+          ${g.label}
+          <span class="roster-group-count">${g.pilots.length}</span>
+        </div>
+        <div class="roster-group-names">${names}</div>
+      </div>`;
+    }).join('');
+
+    listEl.innerHTML = `
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+        <button onclick="_officeRosterEditMode=true;renderOfficeRosterList(_officeRosterRows)"
+          style="padding:8px 18px;border-radius:9999px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">
+          ✏️ Edit
+        </button>
+      </div>
+      <div class="roster-groups">${groupsHtml}</div>`;
+  }
 }
 
 async function officeSetRosterStatus(pilotId, status) {

@@ -923,6 +923,35 @@
       font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase;
       letter-spacing: 0.06em; margin-bottom: 10px;
     }
+    .roster-day-summary { font-size: 13px; color: var(--text-2); margin: -4px 0 16px; }
+    .roster-day-summary-count { font-weight: 800; color: var(--success); font-size: 16px; }
+    .roster-self-card {
+      background: var(--card); border: 1px solid var(--accent); border-radius: var(--radius-sm);
+      padding: 14px 16px; margin-bottom: 18px;
+    }
+    .roster-self-label {
+      font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 10px;
+    }
+    .roster-seg-full { width: 100%; }
+    .roster-seg-full button { flex: 1; }
+    .roster-groups { display: flex; flex-direction: column; gap: 12px; margin-bottom: 8px; }
+    .roster-group {
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: 12px 14px;
+    }
+    .roster-group-head {
+      display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800;
+      text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-2); margin-bottom: 8px;
+    }
+    .roster-group-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+    .roster-group-dot.available { background: var(--success); }
+    .roster-group-dot.late { background: var(--warning); }
+    .roster-group-dot.off { background: var(--muted); }
+    .roster-group-count { color: var(--muted); font-weight: 700; }
+    .roster-group-names { font-size: 13px; color: var(--text); line-height: 1.6; }
+    .roster-group-empty { color: var(--muted); font-style: italic; }
+    .roster-group-you { color: var(--accent); font-weight: 700; }
 
     .glider-compact {
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -1412,7 +1441,9 @@
     </div>
     <div class="roster-cal-grid" id="roster-cal-grid"></div>
     <div class="roster-day-detail-label" id="roster-detail-label"></div>
-    <div id="roster-list"><div class="empty-state">Loading…</div></div>
+    <div class="roster-day-summary" id="roster-day-summary"></div>
+    <div class="roster-self-card" id="roster-self-card"></div>
+    <div class="roster-groups" id="roster-groups"><div class="empty-state">Loading…</div></div>
   </div>
 
 
@@ -8654,38 +8685,68 @@ async function selectRosterDay(dateStr) {
 async function loadRosterDayDetail() {
   const labelEl = document.getElementById('roster-detail-label');
   if (labelEl) labelEl.textContent = formatRosterDateLabel(rosterSelectedDate);
-  const listEl = document.getElementById('roster-list');
-  if (listEl) listEl.innerHTML = '<div class="empty-state">Loading…</div>';
+  const summaryEl = document.getElementById('roster-day-summary');
+  const selfEl = document.getElementById('roster-self-card');
+  const groupsEl = document.getElementById('roster-groups');
+  if (summaryEl) summaryEl.innerHTML = '';
+  if (selfEl) selfEl.innerHTML = '';
+  if (groupsEl) groupsEl.innerHTML = '<div class="empty-state">Loading…</div>';
   try {
     const res = await apiFetch(`/api/roster?date=${rosterSelectedDate}`);
     if (!res || !res.ok) throw new Error();
     renderRosterList(await res.json());
   } catch {
-    if (listEl) listEl.innerHTML = '<div class="empty-state">Could not load roster.</div>';
+    if (groupsEl) groupsEl.innerHTML = '<div class="empty-state">Could not load roster.</div>';
   }
 }
 
 function renderRosterList(rows) {
-  const listEl = document.getElementById('roster-list');
-  if (!listEl) return;
-  if (!rows || !rows.length) { listEl.innerHTML = '<div class="empty-state">No pilots found.</div>'; return; }
-  listEl.innerHTML = rows.map(r => {
-    if (r.pilot_id === pilotId) {
+  const summaryEl = document.getElementById('roster-day-summary');
+  const selfEl = document.getElementById('roster-self-card');
+  const groupsEl = document.getElementById('roster-groups');
+  rows = rows || [];
+
+  if (!rows.length) {
+    if (summaryEl) summaryEl.innerHTML = '';
+    if (selfEl) selfEl.innerHTML = '';
+    if (groupsEl) groupsEl.innerHTML = '<div class="empty-state">No pilots found.</div>';
+    return;
+  }
+
+  const availableRows = rows.filter(r => r.status === 'available');
+  const lateRows = rows.filter(r => r.status === 'late');
+  const offRows = rows.filter(r => r.status === 'off');
+  const me = rows.find(r => r.pilot_id === pilotId);
+
+  if (summaryEl) {
+    summaryEl.innerHTML = `<span class="roster-day-summary-count">${availableRows.length}</span> of ${rows.length} pilots available`;
+  }
+
+  if (selfEl) {
+    if (me) {
       const seg = ROSTER_STATUSES.map(s =>
-        `<button class="${r.status === s ? 'active ' + s : ''}" onclick="setRosterStatus('${s}')">${ROSTER_LABELS[s]}</button>`
+        `<button class="${me.status === s ? 'active ' + s : ''}" onclick="setRosterStatus('${s}')">${ROSTER_LABELS[s]}</button>`
       ).join('');
-      return `<div class="roster-row self">
-        <div class="roster-pilot-name">${esc(r.name)} <span style="color:var(--accent);font-weight:700;font-size:11px;">(you)</span></div>
-        <div class="roster-seg">${seg}</div>
-      </div>`;
+      selfEl.innerHTML = `<div class="roster-self-label">Your status</div><div class="roster-seg roster-seg-full">${seg}</div>`;
+    } else {
+      selfEl.innerHTML = '';
     }
-    const pillClass = r.status || 'unset';
-    const pillLabel = r.status ? ROSTER_LABELS[r.status] : 'Not set';
-    return `<div class="roster-row">
-      <div class="roster-pilot-name">${esc(r.name)}</div>
-      <span class="roster-status-pill ${pillClass}">${pillLabel}</span>
-    </div>`;
-  }).join('');
+  }
+
+  if (groupsEl) {
+    const nameList = list => list.length
+      ? list.map(r => r.pilot_id === pilotId ? `<span class="roster-group-you">${esc(r.name)} (you)</span>` : esc(r.name)).join(', ')
+      : '<span class="roster-group-empty">None</span>';
+    const group = (label, cls, list) => `
+      <div class="roster-group">
+        <div class="roster-group-head"><span class="roster-group-dot ${cls}"></span>${label} <span class="roster-group-count">${list.length}</span></div>
+        <div class="roster-group-names">${nameList(list)}</div>
+      </div>`;
+    groupsEl.innerHTML =
+      group('Available', 'available', availableRows) +
+      group('Late', 'late', lateRows) +
+      group('Off', 'off', offRows);
+  }
 }
 
 async function setRosterStatus(status) {

@@ -1169,7 +1169,8 @@ app.put('/api/pilot/available', verifyToken, async (req, res) => {
   }
 });
 
-/** Roster: which pilots are available/late/off on a given day. Pilots and office can both view. */
+/** Roster: which pilots are available/late/off on a given day. Pilots and office can both view.
+ *  Default status is 'available' — a pilot only shows as late/off once they (or office) say so. */
 app.get('/api/roster', verifyPilotOrOffice, async (req, res) => {
   try {
     const date = req.query.date || nzToday();
@@ -1177,7 +1178,7 @@ app.get('/api/roster', verifyPilotOrOffice, async (req, res) => {
       return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
     }
     const rows = await queryAll(
-      `SELECT p.id AS pilot_id, p.name, r.status
+      `SELECT p.id AS pilot_id, p.name, COALESCE(r.status, 'available') AS status
        FROM pilots p
        LEFT JOIN pilot_roster r ON r.pilot_id = p.id AND r.date = ?
        ORDER BY p.name`,
@@ -1189,21 +1190,31 @@ app.get('/api/roster', verifyPilotOrOffice, async (req, res) => {
   }
 });
 
-/** Roster summary: per-day available/late/off counts across a date range, for the monthly calendar. */
+/** Roster summary: per-day available/late/off counts across a date range, for the monthly calendar.
+ *  Pilots default to 'available', so available = total pilots minus explicit late/off for that day. */
 app.get('/api/roster/summary', verifyPilotOrOffice, async (req, res) => {
   try {
     const { start, end } = req.query;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(start || '') || !/^\d{4}-\d{2}-\d{2}$/.test(end || '')) {
       return res.status(400).json({ error: 'start and end (YYYY-MM-DD) required' });
     }
+    const totalRow = await queryOne('SELECT COUNT(*) AS cnt FROM pilots');
+    const totalPilots = totalRow ? totalRow.cnt : 0;
     const rows = await queryAll(
-      `SELECT date, status, COUNT(*) AS cnt FROM pilot_roster WHERE date >= ? AND date <= ? GROUP BY date, status`,
+      `SELECT date, status, COUNT(*) AS cnt FROM pilot_roster
+       WHERE date >= ? AND date <= ? AND status IN ('late', 'off') GROUP BY date, status`,
       [start, end]
     );
-    const summary = {};
+    const overrides = {};
     for (const r of rows) {
-      if (!summary[r.date]) summary[r.date] = { available: 0, late: 0, off: 0 };
-      if (r.status in summary[r.date]) summary[r.date][r.status] = r.cnt;
+      if (!overrides[r.date]) overrides[r.date] = { late: 0, off: 0 };
+      overrides[r.date][r.status] = r.cnt;
+    }
+    const summary = {};
+    for (let d = new Date(start + 'T12:00:00'), endD = new Date(end + 'T12:00:00'); d <= endD; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toLocaleDateString('en-CA');
+      const ov = overrides[dateStr] || { late: 0, off: 0 };
+      summary[dateStr] = { available: Math.max(0, totalPilots - ov.late - ov.off), late: ov.late, off: ov.off };
     }
     res.json(summary);
   } catch (e) {

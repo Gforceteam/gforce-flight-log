@@ -1398,6 +1398,23 @@ app.post('/api/office/pilots', verifyOffice, async (req, res) => {
   }
 });
 
+// ─── Office: set pilot default roster status ─────────────────────────────────
+app.patch('/api/office/pilots/:id/default-roster', verifyOffice, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const valid = ['available', 'late', 'off'];
+    if (!valid.includes(status)) return res.status(400).json({ error: 'status must be available, late, or off' });
+    const pilot = await queryOne('SELECT id FROM pilots WHERE id = ?', [id]);
+    if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
+    await run('UPDATE pilots SET default_roster_status = ? WHERE id = ?', [status, id]);
+    res.json({ ok: true, pilot_id: id, default_roster_status: status });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to update default roster status' });
+  }
+});
+
 // ─── Office: rename a pilot ───────────────────────────────────────────────────
 app.patch('/api/office/pilots/:id/name', verifyOffice, async (req, res) => {
   try {

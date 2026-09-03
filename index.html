@@ -915,6 +915,7 @@
     .roster-cal-cell:hover { border-color: var(--border-hi); }
     .roster-cal-cell.today { border-color: var(--accent); border-width: 2px; }
     .roster-cal-cell.selected { background: var(--accent-dim); border-color: var(--accent); }
+    .roster-cal-cell.in-range { background: var(--accent-dim); border-color: var(--accent-dim); }
     .roster-cal-cell.empty { visibility: hidden; cursor: default; }
     .roster-cal-daynum { font-size: 13px; font-weight: 700; color: var(--text); }
     .roster-cal-count { font-size: 11px; font-weight: 800; color: var(--success); }
@@ -1433,6 +1434,7 @@
     <button class="pilot-back-btn" onclick="showPilotTab('settings')">← Back</button>
     <div class="stats-page-header">
       <h2>Roster</h2>
+      <button type="button" onclick="showRosterBulkModal()" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:9999px;color:var(--text);font-size:12px;font-weight:700;padding:7px 14px;cursor:pointer;white-space:nowrap;">📅 Bulk update</button>
     </div>
     <div class="roster-cal-nav">
       <button onclick="changeRosterMonth(-1)">‹</button>
@@ -8765,6 +8767,124 @@ async function setRosterStatus(status) {
   }
 }
 
+// ─── Pilot Roster: Bulk Update (mark a date range Off/Late/Available in one go) ─
+let bulkCalMonth = null;
+let bulkRangeStart = null;
+let bulkRangeEnd = null;
+let bulkStatus = 'off';
+
+/** Calendar grid for range selection — no availability badges, just day numbers + range highlight. */
+function buildBulkCalendarGrid(monthStr, rangeStart, rangeEnd) {
+  const { y, m, daysCount } = monthDayRange(monthStr);
+  const today = nzTodayStr();
+  const firstDow = (new Date(y, m - 1, 1).getDay() + 6) % 7; // 0 = Monday
+  let html = ROSTER_WEEKDAYS.map(d => `<div class="roster-cal-weekday">${d}</div>`).join('');
+  for (let i = 0; i < firstDow; i++) html += `<div class="roster-cal-cell empty"></div>`;
+  for (let day = 1; day <= daysCount; day++) {
+    const dateStr = `${monthStr}-${pad2(day)}`;
+    const classes = ['roster-cal-cell'];
+    if (dateStr === today) classes.push('today');
+    if (dateStr === rangeStart || dateStr === rangeEnd) classes.push('selected');
+    else if (rangeStart && rangeEnd && dateStr > rangeStart && dateStr < rangeEnd) classes.push('in-range');
+    html += `<div class="${classes.join(' ')}" onclick="selectBulkDay('${dateStr}')"><span class="roster-cal-daynum">${day}</span></div>`;
+  }
+  return html;
+}
+
+function renderBulkCalendar() {
+  const labelEl = document.getElementById('roster-bulk-month-label');
+  if (labelEl) labelEl.textContent = monthLabel(bulkCalMonth);
+  const gridEl = document.getElementById('roster-bulk-cal-grid');
+  if (gridEl) gridEl.innerHTML = buildBulkCalendarGrid(bulkCalMonth, bulkRangeStart, bulkRangeEnd);
+}
+
+function updateBulkRangeLabel() {
+  const el = document.getElementById('roster-bulk-range-label');
+  if (!el) return;
+  if (!bulkRangeStart) { el.textContent = 'Tap a day to start'; return; }
+  if (!bulkRangeEnd) { el.textContent = `From ${formatRosterDateLabel(bulkRangeStart)} — tap an end day (or Apply for one day)`; return; }
+  const days = Math.round((new Date(bulkRangeEnd + 'T12:00:00') - new Date(bulkRangeStart + 'T12:00:00')) / 86400000) + 1;
+  el.textContent = `${formatRosterDateLabel(bulkRangeStart)} → ${formatRosterDateLabel(bulkRangeEnd)} (${days} day${days === 1 ? '' : 's'})`;
+}
+
+function renderBulkStatusSeg() {
+  const el = document.getElementById('roster-bulk-status-seg');
+  if (!el) return;
+  el.innerHTML = ROSTER_STATUSES.map(s =>
+    `<button class="${bulkStatus === s ? 'active ' + s : ''}" onclick="setBulkStatus('${s}')">${ROSTER_LABELS[s]}</button>`
+  ).join('');
+}
+
+function setBulkStatus(status) {
+  bulkStatus = status;
+  renderBulkStatusSeg();
+}
+
+/** Two-tap range select: first tap sets the start, next tap sets the end (or restarts if it's before the start). */
+function selectBulkDay(dateStr) {
+  if (!bulkRangeStart || bulkRangeEnd) {
+    bulkRangeStart = dateStr;
+    bulkRangeEnd = null;
+  } else if (dateStr < bulkRangeStart) {
+    bulkRangeStart = dateStr;
+    bulkRangeEnd = null;
+  } else {
+    bulkRangeEnd = dateStr;
+  }
+  renderBulkCalendar();
+  updateBulkRangeLabel();
+}
+
+function changeBulkMonth(delta) {
+  bulkCalMonth = shiftMonthStr(bulkCalMonth, delta);
+  renderBulkCalendar();
+}
+
+function showRosterBulkModal() {
+  bulkCalMonth = rosterCalMonth || ymStr(nzTodayStr());
+  bulkRangeStart = null;
+  bulkRangeEnd = null;
+  bulkStatus = 'off';
+  renderBulkCalendar();
+  updateBulkRangeLabel();
+  renderBulkStatusSeg();
+  const errEl = document.getElementById('roster-bulk-error');
+  if (errEl) errEl.textContent = '';
+  const modal = document.getElementById('roster-bulk-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function hideRosterBulkModal() {
+  const modal = document.getElementById('roster-bulk-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function submitRosterBulkUpdate() {
+  const errEl = document.getElementById('roster-bulk-error');
+  if (errEl) errEl.textContent = '';
+  if (!bulkRangeStart) { if (errEl) errEl.textContent = 'Select a start day'; return; }
+  const start = bulkRangeStart;
+  const end = bulkRangeEnd || bulkRangeStart;
+  const btn = document.getElementById('roster-bulk-apply-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    const res = await apiFetch('/api/roster/bulk', {
+      method: 'PUT',
+      body: JSON.stringify({ start, end, status: bulkStatus })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res || !res.ok) { if (errEl) errEl.textContent = data.error || 'Failed to update roster'; return; }
+    hideRosterBulkModal();
+    toast(`Marked ${ROSTER_LABELS[bulkStatus]} for ${data.days} day${data.days === 1 ? '' : 's'}`);
+    _rosterSummaryCache = {}; // the range may span months we've already cached
+    await loadRosterCalendar();
+  } catch {
+    if (errEl) errEl.textContent = 'Network error';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Apply'; }
+  }
+}
+
 // ─── Office Roster (master access — can set any pilot's status) ──────────────
 let officeRosterCalMonth = null;
 let officeRosterSelectedDate = null;
@@ -9038,6 +9158,28 @@ async function submitChangePassword() {
     <div style="display:flex;gap:10px;">
       <button onclick="hideChangePwModal()" style="flex:1;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
       <button id="cpw-submit" onclick="submitChangePassword()" style="flex:2;padding:12px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">Change Password</button>
+    </div>
+  </div>
+</div>
+
+<!-- Roster Bulk Update Modal -->
+<div id="roster-bulk-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:var(--card);border-radius:16px;padding:24px;width:100%;max-width:380px;border:1px solid var(--border);max-height:90vh;overflow-y:auto;">
+    <div style="font-size:17px;font-weight:700;margin-bottom:4px;">📅 Bulk Update</div>
+    <p style="font-size:13px;color:var(--text-2);margin:0 0 14px;">Tap a start day, then an end day, to select a range.</p>
+    <div class="roster-cal-nav">
+      <button onclick="changeBulkMonth(-1)">‹</button>
+      <span class="roster-cal-label" id="roster-bulk-month-label"></span>
+      <button onclick="changeBulkMonth(1)">›</button>
+    </div>
+    <div class="roster-cal-grid" id="roster-bulk-cal-grid"></div>
+    <div style="font-size:12px;color:var(--text-2);margin:10px 0 14px;" id="roster-bulk-range-label"></div>
+    <div class="roster-self-label">Mark selected days as</div>
+    <div class="roster-seg roster-seg-full" id="roster-bulk-status-seg" style="margin:8px 0 16px;"></div>
+    <div id="roster-bulk-error" style="color:var(--danger);font-size:13px;margin-bottom:10px;min-height:18px;"></div>
+    <div style="display:flex;gap:10px;">
+      <button onclick="hideRosterBulkModal()" style="flex:1;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>
+      <button id="roster-bulk-apply-btn" onclick="submitRosterBulkUpdate()" style="flex:2;padding:12px;background:var(--accent);border:none;border-radius:9999px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;">Apply</button>
     </div>
   </div>
 </div>

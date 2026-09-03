@@ -1243,6 +1243,41 @@ app.put('/api/roster', verifyToken, async (req, res) => {
   }
 });
 
+/** A pilot bulk-sets their own roster status across a date range (e.g. marking an extended trip as Off). */
+app.put('/api/roster/bulk', verifyToken, async (req, res) => {
+  try {
+    const { start, end, status } = req.body;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start || '') || !/^\d{4}-\d{2}-\d{2}$/.test(end || '')) {
+      return res.status(400).json({ error: 'start and end must be YYYY-MM-DD' });
+    }
+    if (!['available', 'late', 'off'].includes(status)) {
+      return res.status(400).json({ error: "status must be 'available', 'late' or 'off'" });
+    }
+    const startD = new Date(start + 'T12:00:00');
+    const endD = new Date(end + 'T12:00:00');
+    if (Number.isNaN(startD.getTime()) || Number.isNaN(endD.getTime()) || startD > endD) {
+      return res.status(400).json({ error: 'start must be on or before end' });
+    }
+    const dayCount = Math.round((endD - startD) / 86400000) + 1;
+    if (dayCount > 366) {
+      return res.status(400).json({ error: 'Range too long (max 366 days)' });
+    }
+    const now = new Date().toISOString();
+    const dates = [];
+    for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
+      dates.push(d.toLocaleDateString('en-CA'));
+    }
+    await Promise.all(dates.map(date => run(
+      'INSERT OR REPLACE INTO pilot_roster (pilot_id, date, status, updated_at) VALUES (?, ?, ?, ?)',
+      [req.pilot.id, date, status, now]
+    )));
+    broadcast({ type: 'ROSTER_BULK_UPDATED', pilot_id: req.pilot.id, start, end, status });
+    res.json({ message: 'Roster updated', start, end, status, days: dates.length });
+  } catch (e) {
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 /** Office: master access — set (or clear) any pilot's roster status for a given day. */
 app.put('/api/office/roster', verifyOffice, async (req, res) => {
   try {

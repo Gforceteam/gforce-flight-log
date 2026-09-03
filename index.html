@@ -908,9 +908,9 @@
       color: var(--muted); padding-bottom: 4px;
     }
     .roster-cal-cell {
-      aspect-ratio: 1; border-radius: 10px; border: 1px solid var(--border); background: var(--card);
+      min-height: 48px; border-radius: 10px; border: 1px solid var(--border); background: var(--card);
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-      cursor: pointer; padding: 4px 2px; transition: border-color 0.15s, background 0.15s;
+      cursor: pointer; padding: 4px 2px; overflow: hidden; transition: border-color 0.15s, background 0.15s;
     }
     .roster-cal-cell:hover { border-color: var(--border-hi); }
     .roster-cal-cell.today { border-color: var(--accent); border-width: 2px; }
@@ -8626,7 +8626,7 @@ function buildRosterCalendarGrid(monthStr, summary, selectedDate, onClickFn) {
     if (dateStr === today) classes.push('today');
     if (dateStr === selectedDate) classes.push('selected');
     const countHtml = avail > 0
-      ? `<span class="roster-cal-count">${avail} avail</span>`
+      ? `<span class="roster-cal-count">${avail}</span>`
       : `<span class="roster-cal-count zero">–</span>`;
     html += `<div class="${classes.join(' ')}" onclick="${onClickFn}('${dateStr}')">
       <span class="roster-cal-daynum">${day}</span>

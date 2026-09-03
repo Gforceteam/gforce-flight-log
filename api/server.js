@@ -1189,6 +1189,28 @@ app.get('/api/roster', verifyPilotOrOffice, async (req, res) => {
   }
 });
 
+/** Roster summary: per-day available/late/off counts across a date range, for the monthly calendar. */
+app.get('/api/roster/summary', verifyPilotOrOffice, async (req, res) => {
+  try {
+    const { start, end } = req.query;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start || '') || !/^\d{4}-\d{2}-\d{2}$/.test(end || '')) {
+      return res.status(400).json({ error: 'start and end (YYYY-MM-DD) required' });
+    }
+    const rows = await queryAll(
+      `SELECT date, status, COUNT(*) AS cnt FROM pilot_roster WHERE date >= ? AND date <= ? GROUP BY date, status`,
+      [start, end]
+    );
+    const summary = {};
+    for (const r of rows) {
+      if (!summary[r.date]) summary[r.date] = { available: 0, late: 0, off: 0 };
+      if (r.status in summary[r.date]) summary[r.date][r.status] = r.cnt;
+    }
+    res.json(summary);
+  } catch (e) {
+    console.error(e); res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 /** A pilot sets their own roster status for a given day. */
 app.put('/api/roster', verifyToken, async (req, res) => {
   try {

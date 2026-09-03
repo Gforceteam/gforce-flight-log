@@ -890,6 +890,40 @@
     .roster-seg button.active.late { background: var(--warning); border-color: var(--warning); color: #3a2600; }
     .roster-seg button.active.off { background: var(--muted); border-color: var(--muted); color: #fff; }
 
+    /* Roster monthly calendar */
+    .roster-cal-nav {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px;
+    }
+    .roster-cal-nav button {
+      background: var(--surface); border: 1px solid var(--border-hi); color: var(--text);
+      border-radius: 9999px; width: 36px; height: 36px; font-size: 18px; cursor: pointer; flex-shrink: 0;
+    }
+    .roster-cal-label {
+      font-size: 15px; font-weight: 800; color: var(--text); font-family: 'Montserrat', sans-serif;
+      text-align: center; flex: 1;
+    }
+    .roster-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 20px; }
+    .roster-cal-weekday {
+      text-align: center; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--muted); padding-bottom: 4px;
+    }
+    .roster-cal-cell {
+      aspect-ratio: 1; border-radius: 10px; border: 1px solid var(--border); background: var(--card);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+      cursor: pointer; padding: 4px 2px; transition: border-color 0.15s, background 0.15s;
+    }
+    .roster-cal-cell:hover { border-color: var(--border-hi); }
+    .roster-cal-cell.today { border-color: var(--accent); border-width: 2px; }
+    .roster-cal-cell.selected { background: var(--accent-dim); border-color: var(--accent); }
+    .roster-cal-cell.empty { visibility: hidden; cursor: default; }
+    .roster-cal-daynum { font-size: 13px; font-weight: 700; color: var(--text); }
+    .roster-cal-count { font-size: 11px; font-weight: 800; color: var(--success); }
+    .roster-cal-count.zero { font-size: 11px; font-weight: 600; color: var(--muted); }
+    .roster-day-detail-label {
+      font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase;
+      letter-spacing: 0.06em; margin-bottom: 10px;
+    }
+
     .glider-compact {
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
       padding: 12px 14px; border-radius: 12px; background: var(--surface);
@@ -1371,11 +1405,13 @@
     <div class="stats-page-header">
       <h2>Roster</h2>
     </div>
-    <div class="roster-day-nav">
-      <button onclick="changeRosterDay(-1)">‹</button>
-      <span class="roster-day-label" id="roster-date-label"></span>
-      <button onclick="changeRosterDay(1)">›</button>
+    <div class="roster-cal-nav">
+      <button onclick="changeRosterMonth(-1)">‹</button>
+      <span class="roster-cal-label" id="roster-month-label"></span>
+      <button onclick="changeRosterMonth(1)">›</button>
     </div>
+    <div class="roster-cal-grid" id="roster-cal-grid"></div>
+    <div class="roster-day-detail-label" id="roster-detail-label"></div>
     <div id="roster-list"><div class="empty-state">Loading…</div></div>
   </div>
 
@@ -1569,12 +1605,14 @@
 
     <div class="office-tab-content" id="office-tab-roster">
       <div style="padding:16px;max-width:640px;margin:0 auto;">
-        <div class="roster-day-nav">
-          <button onclick="changeOfficeRosterDay(-1)">‹</button>
-          <span class="roster-day-label" id="office-roster-date-label"></span>
-          <button onclick="changeOfficeRosterDay(1)">›</button>
+        <div class="roster-cal-nav">
+          <button onclick="changeOfficeRosterMonth(-1)">‹</button>
+          <span class="roster-cal-label" id="office-roster-month-label"></span>
+          <button onclick="changeOfficeRosterMonth(1)">›</button>
         </div>
-        <p style="font-size:12px;color:var(--muted);margin:-8px 0 16px;">Office has master access — tap any pilot's status to override it.</p>
+        <div class="roster-cal-grid" id="office-roster-cal-grid"></div>
+        <div class="roster-day-detail-label" id="office-roster-detail-label"></div>
+        <p style="font-size:12px;color:var(--muted);margin:-4px 0 12px;">Office has master access — tap any pilot's status to override it.</p>
         <div id="office-roster-list"><div class="empty-state">Loading…</div></div>
       </div>
     </div>
@@ -4119,7 +4157,7 @@ function showSubPage(name) {
   window.scrollTo({ top: 0, behavior: 'instant' });
   if (name === 'stats') { statsMonthOffset = 0; renderStats(); }
   if (name === 'ff') renderPilotFF();
-  if (name === 'roster') { rosterDate = nzTodayStr(); loadRoster(); }
+  if (name === 'roster') { rosterCalMonth = null; rosterSelectedDate = null; loadRosterCalendar(); }
 }
 
 function showPage(name) {
@@ -6520,7 +6558,7 @@ if (name === 'pilots') { renderAwayTab(); renderGroupsTab(); renderTodayFlights(
   if (name === 'flights') renderFlightsTab();
   if (name === 'tracker') { loadTrackerTab(); }
   if (name === 'coronet') { initCoronetTab(); }
-  if (name === 'roster') { officeRosterDate = nzTodayStr(); loadOfficeRoster(); }
+  if (name === 'roster') { officeRosterCalMonth = null; officeRosterSelectedDate = null; loadOfficeRosterCalendar(); }
   if (name === 'settings') { populateOfficeResetPilots(); populateOfficeDeletePilots(); populateOfficeRenamePilots(); loadOfficeSettings(); loadTrackerEnabledState(); }
 }
 
@@ -8502,19 +8540,36 @@ async function updateApp() {
   }
 }
 
-// ─── Roster ───────────────────────────────────────────────────────────────────
-let rosterDate = null; // YYYY-MM-DD, NZ-local calendar day currently shown
+// ─── Roster (shared date/calendar helpers) ────────────────────────────────────
 const ROSTER_STATUSES = ['available', 'late', 'off'];
 const ROSTER_LABELS = { available: 'Available', late: 'Late', off: 'Off' };
+const ROSTER_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 function nzTodayStr() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' });
 }
 
-function shiftDateStr(dateStr, days) {
-  const d = new Date(dateStr + 'T12:00:00'); // noon avoids DST edge cases
-  d.setDate(d.getDate() + days);
-  return d.toLocaleDateString('en-CA');
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+/** 'YYYY-MM-DD' -> 'YYYY-MM' */
+function ymStr(dateStr) { return dateStr.slice(0, 7); }
+
+function shiftMonthStr(monthStr, delta) {
+  const [y, m] = monthStr.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+}
+
+function monthLabel(monthStr) {
+  const [y, m] = monthStr.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('en-NZ', { month: 'long', year: 'numeric' });
+}
+
+/** First/last date strings and day count for a 'YYYY-MM' month. */
+function monthDayRange(monthStr) {
+  const [y, m] = monthStr.split('-').map(Number);
+  const daysCount = new Date(y, m, 0).getDate(); // day 0 of next month = last day of this month
+  return { y, m, daysCount, first: `${monthStr}-01`, last: `${monthStr}-${pad2(daysCount)}` };
 }
 
 function formatRosterDateLabel(dateStr) {
@@ -8525,19 +8580,84 @@ function formatRosterDateLabel(dateStr) {
   return prefix + new Date(dateStr + 'T12:00:00').toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
-function changeRosterDay(delta) {
-  rosterDate = shiftDateStr(rosterDate || nzTodayStr(), delta);
-  loadRoster();
+/** Builds the calendar grid HTML (weekday header row + day cells) for one month. */
+function buildRosterCalendarGrid(monthStr, summary, selectedDate, onClickFn) {
+  const { y, m, daysCount } = monthDayRange(monthStr);
+  const today = nzTodayStr();
+  const firstDow = (new Date(y, m - 1, 1).getDay() + 6) % 7; // 0 = Monday
+  let html = ROSTER_WEEKDAYS.map(d => `<div class="roster-cal-weekday">${d}</div>`).join('');
+  for (let i = 0; i < firstDow; i++) html += `<div class="roster-cal-cell empty"></div>`;
+  for (let day = 1; day <= daysCount; day++) {
+    const dateStr = `${monthStr}-${pad2(day)}`;
+    const s = summary[dateStr];
+    const avail = s ? s.available : 0;
+    const classes = ['roster-cal-cell'];
+    if (dateStr === today) classes.push('today');
+    if (dateStr === selectedDate) classes.push('selected');
+    const countHtml = avail > 0
+      ? `<span class="roster-cal-count">${avail} avail</span>`
+      : `<span class="roster-cal-count zero">–</span>`;
+    html += `<div class="${classes.join(' ')}" onclick="${onClickFn}('${dateStr}')">
+      <span class="roster-cal-daynum">${day}</span>
+      ${countHtml}
+    </div>`;
+  }
+  return html;
 }
 
-async function loadRoster() {
-  if (!rosterDate) rosterDate = nzTodayStr();
-  const labelEl = document.getElementById('roster-date-label');
-  if (labelEl) labelEl.textContent = formatRosterDateLabel(rosterDate);
+// ─── Pilot Roster ──────────────────────────────────────────────────────────────
+let rosterCalMonth = null; // 'YYYY-MM' currently shown
+let rosterSelectedDate = null; // 'YYYY-MM-DD' expanded below the calendar
+let _rosterSummaryCache = {}; // month -> { date: {available,late,off} }
+
+async function fetchRosterSummary(monthStr) {
+  if (_rosterSummaryCache[monthStr]) return _rosterSummaryCache[monthStr];
+  const { first, last } = monthDayRange(monthStr);
+  try {
+    const res = await apiFetch(`/api/roster/summary?start=${first}&end=${last}`);
+    const data = (res && res.ok) ? await res.json() : {};
+    _rosterSummaryCache[monthStr] = data;
+    return data;
+  } catch { return {}; }
+}
+
+async function renderRosterCalendarGrid() {
+  const summary = await fetchRosterSummary(rosterCalMonth);
+  const gridEl = document.getElementById('roster-cal-grid');
+  if (gridEl) gridEl.innerHTML = buildRosterCalendarGrid(rosterCalMonth, summary, rosterSelectedDate, 'selectRosterDay');
+}
+
+async function loadRosterCalendar() {
+  if (!rosterCalMonth) rosterCalMonth = ymStr(nzTodayStr());
+  if (!rosterSelectedDate || ymStr(rosterSelectedDate) !== rosterCalMonth) {
+    const today = nzTodayStr();
+    rosterSelectedDate = (ymStr(today) === rosterCalMonth) ? today : `${rosterCalMonth}-01`;
+  }
+  const labelEl = document.getElementById('roster-month-label');
+  if (labelEl) labelEl.textContent = monthLabel(rosterCalMonth);
+  await renderRosterCalendarGrid();
+  await loadRosterDayDetail();
+}
+
+function changeRosterMonth(delta) {
+  rosterCalMonth = shiftMonthStr(rosterCalMonth || ymStr(nzTodayStr()), delta);
+  rosterSelectedDate = null; // recompute default selection for the new month
+  loadRosterCalendar();
+}
+
+async function selectRosterDay(dateStr) {
+  rosterSelectedDate = dateStr;
+  await renderRosterCalendarGrid();
+  await loadRosterDayDetail();
+}
+
+async function loadRosterDayDetail() {
+  const labelEl = document.getElementById('roster-detail-label');
+  if (labelEl) labelEl.textContent = formatRosterDateLabel(rosterSelectedDate);
   const listEl = document.getElementById('roster-list');
   if (listEl) listEl.innerHTML = '<div class="empty-state">Loading…</div>';
   try {
-    const res = await apiFetch(`/api/roster?date=${rosterDate}`);
+    const res = await apiFetch(`/api/roster?date=${rosterSelectedDate}`);
     if (!res || !res.ok) throw new Error();
     renderRosterList(await res.json());
   } catch {
@@ -8569,35 +8689,74 @@ function renderRosterList(rows) {
 }
 
 async function setRosterStatus(status) {
-  if (!rosterDate) rosterDate = nzTodayStr();
+  if (!rosterSelectedDate) rosterSelectedDate = nzTodayStr();
   try {
     const res = await apiFetch('/api/roster', {
       method: 'PUT',
-      body: JSON.stringify({ date: rosterDate, status })
+      body: JSON.stringify({ date: rosterSelectedDate, status })
     });
     if (!res || !res.ok) throw new Error();
-    loadRoster();
+    delete _rosterSummaryCache[rosterCalMonth];
+    await loadRosterDayDetail();
+    await renderRosterCalendarGrid();
   } catch {
     toast('Could not update roster', 'err');
   }
 }
 
 // ─── Office Roster (master access — can set any pilot's status) ──────────────
-let officeRosterDate = null;
+let officeRosterCalMonth = null;
+let officeRosterSelectedDate = null;
+let _officeRosterSummaryCache = {};
 
-function changeOfficeRosterDay(delta) {
-  officeRosterDate = shiftDateStr(officeRosterDate || nzTodayStr(), delta);
-  loadOfficeRoster();
+async function fetchOfficeRosterSummary(monthStr) {
+  if (_officeRosterSummaryCache[monthStr]) return _officeRosterSummaryCache[monthStr];
+  const { first, last } = monthDayRange(monthStr);
+  try {
+    const res = await officeFetch(`/api/roster/summary?start=${first}&end=${last}`);
+    const data = (res && res.ok) ? await res.json() : {};
+    _officeRosterSummaryCache[monthStr] = data;
+    return data;
+  } catch { return {}; }
 }
 
-async function loadOfficeRoster() {
-  if (!officeRosterDate) officeRosterDate = nzTodayStr();
-  const labelEl = document.getElementById('office-roster-date-label');
-  if (labelEl) labelEl.textContent = formatRosterDateLabel(officeRosterDate);
+async function renderOfficeRosterCalendarGrid() {
+  const summary = await fetchOfficeRosterSummary(officeRosterCalMonth);
+  const gridEl = document.getElementById('office-roster-cal-grid');
+  if (gridEl) gridEl.innerHTML = buildRosterCalendarGrid(officeRosterCalMonth, summary, officeRosterSelectedDate, 'selectOfficeRosterDay');
+}
+
+async function loadOfficeRosterCalendar() {
+  if (!officeRosterCalMonth) officeRosterCalMonth = ymStr(nzTodayStr());
+  if (!officeRosterSelectedDate || ymStr(officeRosterSelectedDate) !== officeRosterCalMonth) {
+    const today = nzTodayStr();
+    officeRosterSelectedDate = (ymStr(today) === officeRosterCalMonth) ? today : `${officeRosterCalMonth}-01`;
+  }
+  const labelEl = document.getElementById('office-roster-month-label');
+  if (labelEl) labelEl.textContent = monthLabel(officeRosterCalMonth);
+  await renderOfficeRosterCalendarGrid();
+  await loadOfficeRosterDayDetail();
+}
+
+function changeOfficeRosterMonth(delta) {
+  officeRosterCalMonth = shiftMonthStr(officeRosterCalMonth || ymStr(nzTodayStr()), delta);
+  officeRosterSelectedDate = null;
+  loadOfficeRosterCalendar();
+}
+
+async function selectOfficeRosterDay(dateStr) {
+  officeRosterSelectedDate = dateStr;
+  await renderOfficeRosterCalendarGrid();
+  await loadOfficeRosterDayDetail();
+}
+
+async function loadOfficeRosterDayDetail() {
+  const labelEl = document.getElementById('office-roster-detail-label');
+  if (labelEl) labelEl.textContent = formatRosterDateLabel(officeRosterSelectedDate);
   const listEl = document.getElementById('office-roster-list');
   if (listEl) listEl.innerHTML = '<div class="empty-state">Loading…</div>';
   try {
-    const res = await officeFetch(`/api/roster?date=${officeRosterDate}`);
+    const res = await officeFetch(`/api/roster?date=${officeRosterSelectedDate}`);
     if (!res || !res.ok) throw new Error();
     renderOfficeRosterList(await res.json());
   } catch {
@@ -8621,14 +8780,16 @@ function renderOfficeRosterList(rows) {
 }
 
 async function officeSetRosterStatus(pilotId, status) {
-  if (!officeRosterDate) officeRosterDate = nzTodayStr();
+  if (!officeRosterSelectedDate) officeRosterSelectedDate = nzTodayStr();
   try {
     const res = await officeFetch('/api/office/roster', {
       method: 'PUT',
-      body: JSON.stringify({ pilot_id: pilotId, date: officeRosterDate, status })
+      body: JSON.stringify({ pilot_id: pilotId, date: officeRosterSelectedDate, status })
     });
     if (!res || !res.ok) throw new Error();
-    loadOfficeRoster();
+    delete _officeRosterSummaryCache[officeRosterCalMonth];
+    await loadOfficeRosterDayDetail();
+    await renderOfficeRosterCalendarGrid();
   } catch {
     toast('Could not update roster', 'err');
   }

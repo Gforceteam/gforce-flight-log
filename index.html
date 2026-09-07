@@ -2614,7 +2614,7 @@ async function doLogin() {
 function doLogout() {
   unsubscribeFromPush();
   pilotToken = pilotId = pilotName = null;
-  if (ws && !officeToken) { ws.close(); ws = null; }
+  if (ws && !officeToken) { _intentionalLogout = true; ws.close(); ws = null; }
   clearInterval(window._statusPoll);
   clearInterval(window._dashboardTimer);
   if (window._statusPollAbort) { window._statusPollAbort.abort(); window._statusPollAbort = null; }
@@ -4828,7 +4828,7 @@ function officeDoLogout() {
   localStorage.removeItem('gforce_office_token');
   localStorage.removeItem('gforce_office_refresh');
   officeToken = null;
-  if (ws) { ws.close(); ws = null; }
+  if (ws) { _intentionalLogout = true; ws.close(); ws = null; }
   clearInterval(timerInterval);
   if (officeRefreshInterval) { clearInterval(officeRefreshInterval); officeRefreshInterval = null; }
   if (_officeClockInterval) { clearInterval(_officeClockInterval); _officeClockInterval = null; }
@@ -8153,6 +8153,7 @@ function connectWS() {
     if (label) label.textContent = 'LIVE';
   };
   ws.onclose = () => {
+    if (_intentionalLogout) { _intentionalLogout = false; return; }
     const ind = document.getElementById('ws-indicator');
     if (ind) { ind.classList.remove('connected'); ind.title = 'Disconnected'; }
     const badge = document.getElementById('office-ws-badge');
@@ -9010,6 +9011,7 @@ async function loadOfficeRosterDayDetail() {
 }
 
 let _officeRosterEditMode = false;
+let _intentionalLogout = false;
 let _officeRosterRows = [];
 
 function renderOfficeRosterList(rows) {

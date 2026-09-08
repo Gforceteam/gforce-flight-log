@@ -5968,6 +5968,7 @@ function downloadCSV(csv, filename) {
 
 // ─── Office Timers ────────────────────────────────────────────────────────────
 function playBell(count) {
+  if (officeMuted) return;
   try {
     // Reuse the shared unlocked AudioContext — new contexts won't play without a user gesture
     const ctx = ensureAudioCtx();

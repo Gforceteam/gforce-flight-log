@@ -8427,6 +8427,7 @@ async function requestAndSubscribePush(btn) {
   try {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       toast('Push notifications not supported on this browser');
+      if (btn) { btn.disabled = false; btn.textContent = 'Enable notifications'; }
       return;
     }
     // This MUST be called from a user gesture for iOS to show the permission dialog
@@ -8587,20 +8588,31 @@ function renderSettingsPageDeferred() {
   const statusEl = document.getElementById('settings-notif-status');
   const btnEl = document.getElementById('settings-notif-btn');
   if (statusEl && btnEl) {
-    btnEl.style.display = '';
+    btnEl.style.display = 'none';
     btnEl.className = 'settings-btn settings-btn-secondary';
-    if (!('Notification' in window)) {
-      statusEl.textContent = 'Push notifications are not supported in this browser.';
-      btnEl.style.display = 'none';
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isPWA = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+    const supported = ('Notification' in window) && ('serviceWorker' in navigator) && ('PushManager' in window);
+    if (!supported) {
+      if (isIOS && !isPWA) {
+        statusEl.innerHTML = 'To enable push notifications on iPhone, add GForce to your Home Screen first:<br><br>Tap the <strong>Share</strong> button (□↑) in Safari → <strong>Add to Home Screen</strong> → then open the app from your home screen.';
+      } else {
+        statusEl.textContent = 'Push notifications are not supported in this browser.';
+      }
     } else if (Notification.permission === 'granted') {
-      statusEl.textContent = 'You will get an alert when the office starts your away timer.';
+      statusEl.textContent = '✅ Notifications are on — you\'ll be alerted when the office starts your timer.';
+      btnEl.style.display = '';
       btnEl.textContent = 'Turn off notifications';
       btnEl.className = 'settings-btn settings-btn-danger-outline';
     } else if (Notification.permission === 'denied') {
-      statusEl.textContent = 'Notifications are blocked. On iPhone: Settings → Safari → this site → Notifications.';
-      btnEl.style.display = 'none';
+      if (isIOS) {
+        statusEl.textContent = 'Notifications are blocked. To re-enable: iPhone Settings → Apps → Safari → [this site] → Notifications → Allow.';
+      } else {
+        statusEl.textContent = 'Notifications are blocked in your browser. Click the lock icon in the address bar to re-enable.';
+      }
     } else {
-      statusEl.textContent = 'Get alerted when the office sends you away.';
+      statusEl.textContent = 'Get an alert the moment the office starts your away timer.';
+      btnEl.style.display = '';
       btnEl.textContent = 'Enable notifications';
     }
   }

@@ -495,9 +495,11 @@ function validateAvatarBody(body) {
 
 function broadcast(data) {
   const msg = JSON.stringify(data);
+  let count = 0;
   wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) client.send(msg);
+    if (client.readyState === WebSocket.OPEN) { client.send(msg); count++; }
   });
+  return count;
 }
 
 // ─── WebSocket connection handler (ping/pong to prune dead clients) ──────────
@@ -2424,6 +2426,13 @@ app.put('/api/office/settings/push-notifications', verifyOffice, async (req, res
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// Force all connected WS clients to reload (picks up latest deployed version)
+app.post('/api/office/force-update', verifyOffice, async (req, res) => {
+  const clients = broadcast({ type: 'FORCE_UPDATE' });
+  console.log(`[force-update] Sent to ${clients} connected client(s)`);
+  res.json({ ok: true, clients });
 });
 
 // Diagnostic: list all pilots and their push subscription status (office only)

@@ -1818,7 +1818,11 @@
               <label class="notif-switch"><input type="checkbox" id="notif-push" onchange="togglePushNotifications()"><span class="notif-slider"></span></label>
             </div>
 
-            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin:18px 0 8px;">Push Diagnostic</div>
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin:18px 0 8px;">App Updates</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Force all connected pilots and office accounts to reload and pick up the latest version immediately.</div>
+            <button onclick="officeForceUpdateAll(this)" style="padding:9px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:20px;">🔄 Force Update All Devices</button>
+
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:8px;">Push Diagnostic</div>
             <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Check which pilots have push notifications enabled on their devices.</div>
             <button onclick="loadPushDiagnostic()" style="padding:9px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;margin-bottom:10px;">Check Subscription Status</button>
             <div id="push-diag-results" style="font-size:13px;"></div>
@@ -7949,6 +7953,17 @@ function updatePushNotifUI() {
   if (cb) cb.checked = _officePushEnabled;
 }
 
+async function officeForceUpdateAll(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  try {
+    const res = await officeFetch('/api/office/force-update', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) { toast('Failed: ' + (data.error || res.statusText), 'err'); }
+    else { toast(`✅ Update signal sent to ${data.clients} connected device${data.clients === 1 ? '' : 's'}`); }
+  } catch { toast('Cannot reach server', 'err'); }
+  if (btn) { btn.disabled = false; btn.textContent = '🔄 Force Update All Devices'; }
+}
+
 async function loadPushDiagnostic() {
   const el = document.getElementById('push-diag-results');
   if (!el) return;
@@ -8361,6 +8376,11 @@ function connectWS() {
         }
         break;
       }
+      case 'FORCE_UPDATE':
+        // Office triggered a forced refresh — reload immediately to pick up latest version
+        toast('🔄 App update in progress…');
+        setTimeout(() => updateApp(), 1200);
+        break;
       case 'CORONET_MANIFEST_UPDATE':
         // Live-update pilot Coronet tab if open
         if (document.getElementById('page-coronet')?.classList.contains('active')) loadPilotCoronetManifests();
@@ -9161,20 +9181,21 @@ async function doInstallApp() {
 }
 
 function showVersionBanner(version) {
-  const banner = document.getElementById('version-banner');
-  if (banner) { banner.style.display = 'flex'; return; }
+  const existing = document.getElementById('version-banner');
+  if (existing) { existing.style.display = 'flex'; return; }
   const div = document.createElement('div');
   div.id = 'version-banner';
   div.style.cssText = 'position:fixed;top:0;left:0;right:0;background:linear-gradient(90deg,#f37329,#c95f1a);color:#fff;padding:14px 20px;z-index:9999;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 4px 16px rgba(243,115,41,0.4);';
   const span = document.createElement('span');
-  span.style.cssText = 'font-weight:700;font-size:14px;';
-  span.textContent = `🚀 New version available (v${version})`;
+  span.style.cssText = 'font-weight:700;font-size:14px;flex:1;';
+  span.textContent = `🚀 Update required (v${version}) — tap to reload`;
   const btn = document.createElement('button');
-  btn.style.cssText = 'background:#fff;color:var(--accent);border:none;border-radius:9999px;padding:6px 16px;font-weight:700;font-size:13px;cursor:pointer;';
+  btn.style.cssText = 'background:#fff;color:var(--accent);border:none;border-radius:9999px;padding:6px 16px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;flex-shrink:0;';
   btn.textContent = 'Update Now';
-  btn.onclick = () => { updateApp(); div.style.display = 'none'; };
+  btn.onclick = () => updateApp(); // no dismiss — must update
   div.appendChild(span);
   div.appendChild(btn);
+  div.onclick = (e) => { if (e.target === div || e.target === span) updateApp(); };
   document.body.appendChild(div);
 }
 

@@ -2332,62 +2332,78 @@ app.use((err, req, res, next) => {
 // ─── Daily Data Backup ────────────────────────────────────────────────────────
 async function pushDailyBackup() {
   try {
-    const flights = await queryAll(`
-      SELECT f.*, p.name as pilot_name
-      FROM flights f JOIN pilots p ON f.pilot_id = p.id
-      ORDER BY f.date DESC, f.created_at DESC
-    `);
-    if (!flights.length) return;
-
-    const headers = ['Date','Pilot','Client','Flight #','Weight (kg)','Takeoff','Landing','Time (min)','Notes','Wing','Sent Away','Pilot Landed','Hours Worked'];
-    const rows = flights.map(f => [
-      f.date, f.pilot_name||'', f.client_name||'', f.flight_num, f.weight,
-      f.takeoff, f.landing, f.time, (f.notes||'').replace(/,/g,''), f.wing_reg||'',
-      f.sent_away_at ? new Date(f.sent_away_at).toISOString() : '',
-      f.landed_at ? new Date(f.landed_at).toISOString() : '',
-      f.hours_worked||''
-    ].map(v => `"${v}"`).join(','));
-    const csv = [headers.join(','), ...rows].join('\n');
-
-    const NZ_TZ = 'Pacific/Auckland';
-    const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
-    const filename = `backups/flights-${dateStr}.csv`;
     const token = process.env.GITHUB_TOKEN;
     if (!token) { console.log('[backup] No GITHUB_TOKEN, skipping'); return; }
 
-    // Never push flight data to the public pilot-app repo. Use a private repo (override with GITHUB_BACKUP_REPO).
-    const repo = process.env.GITHUB_BACKUP_REPO || 'brookewhatnall/gforce-flight-data-backups';
+    const repo = process.env.GITHUB_BACKUP_REPO;
+    if (!repo) { console.log('[backup] No GITHUB_BACKUP_REPO, skipping'); return; }
+
+    // Safety: refuse to push to a public repo
     const metaRes = await fetch(`https://api.github.com/repos/${repo}`, {
       headers: { Authorization: `token ${token}`, 'User-Agent': 'gforce-api' }
     });
     if (metaRes.ok) {
       const meta = await metaRes.json();
       if (meta.private === false) {
-        console.error('[backup] Refusing to push: target repo is public. Flight CSV backups must use a private repository (set GITHUB_BACKUP_REPO).');
+        console.error('[backup] Refusing to push: target repo is public. Set GITHUB_BACKUP_REPO to a private repository.');
         return;
       }
+    } else {
+      console.error('[backup] Could not verify repo visibility:', metaRes.status);
+      return;
     }
 
-    const apiUrl = `https://api.github.com/repos/${repo}/contents/${filename}`;
+    const NZ_TZ = 'Pacific/Auckland';
+    const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
 
-    // Check for existing file to get SHA
-    const existingRes = await fetch(apiUrl, { headers: { Authorization: `token ${token}`, 'User-Agent': 'gforce-api' } });
-    const existing = existingRes.ok ? await existingRes.json() : null;
+    async function pushFile(filename, content) {
+      const apiUrl = `https://api.github.com/repos/${repo}/contents/${filename}`;
+      const existingRes = await fetch(apiUrl, { headers: { Authorization: `token ${token}`, 'User-Agent': 'gforce-api' } });
+      const existing = existingRes.ok ? await existingRes.json() : null;
+      const body = {
+        message: `Daily backup ${dateStr}`,
+        content: Buffer.from(content).toString('base64'),
+        ...(existing?.sha ? { sha: existing.sha } : {})
+      };
+      const putRes = await fetch(apiUrl, {
+        method: 'PUT',
+        headers: { Authorization: `token ${token}`, 'Content-Type': 'application/json', 'User-Agent': 'gforce-api' },
+        body: JSON.stringify(body)
+      });
+      if (!putRes.ok) throw new Error(await putRes.text());
+    }
 
-    const body = {
-      message: `Daily backup ${dateStr}`,
-      content: Buffer.from(csv).toString('base64'),
-      ...(existing?.sha ? { sha: existing.sha } : {})
-    };
+    // ── Flights CSV ──────────────────────────────────────────────────────
+    const flights = await queryAll(`
+      SELECT f.*, p.name as pilot_name
+      FROM flights f JOIN pilots p ON f.pilot_id = p.id
+      ORDER BY f.date DESC, f.created_at DESC
+    `);
+    if (flights.length) {
+      const headers = ['Date','Pilot','Client','Flight #','Weight (kg)','Takeoff','Landing','Time (min)','Notes','Wing','Sent Away','Pilot Landed','Hours Worked'];
+      const rows = flights.map(f => [
+        f.date, f.pilot_name||'', f.client_name||'', f.flight_num, f.weight,
+        f.takeoff, f.landing, f.time, (f.notes||'').replace(/,/g,''), f.wing_reg||'',
+        f.sent_away_at ? new Date(f.sent_away_at).toISOString() : '',
+        f.landed_at ? new Date(f.landed_at).toISOString() : '',
+        f.hours_worked||''
+      ].map(v => `"${String(v??'').replace(/"/g,'""')}"`).join(','));
+      const csv = [headers.join(','), ...rows].join('\n');
+      await pushFile(`backups/flights-${dateStr}.csv`, csv);
+      console.log(`[backup] ✓ Pushed ${flights.length} flights to backups/flights-${dateStr}.csv`);
+    }
 
-    const putRes = await fetch(apiUrl, {
-      method: 'PUT',
-      headers: { Authorization: `token ${token}`, 'Content-Type': 'application/json', 'User-Agent': 'gforce-api' },
-      body: JSON.stringify(body)
-    });
+    // ── Pilots CSV ───────────────────────────────────────────────────────
+    const pilots = await queryAll(`SELECT id, name, default_roster_status, created_at FROM pilots ORDER BY name ASC`);
+    if (pilots.length) {
+      const headers = ['ID','Name','Default Roster Status','Created At'];
+      const rows = pilots.map(p => [p.id, p.name||'', p.default_roster_status||'available', p.created_at||'']
+        .map(v => `"${String(v??'').replace(/"/g,'""')}"`).join(','));
+      const csv = [headers.join(','), ...rows].join('\n');
+      await pushFile(`backups/pilots-${dateStr}.csv`, csv);
+      console.log(`[backup] ✓ Pushed ${pilots.length} pilots to backups/pilots-${dateStr}.csv`);
+    }
 
-    if (putRes.ok) console.log(`[backup] ✓ Pushed ${flights.length} flights to ${filename}`);
-    else console.error('[backup] Failed:', await putRes.text());
   } catch (e) { console.error('[backup] Error:', e.message); }
 }
 

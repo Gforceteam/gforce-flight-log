@@ -2120,12 +2120,21 @@ async function adjustPilotTimer(pilotId, delta) {
 
 // ─── Audio Context (unlocked on first touch, reused) ─────────────────────────
 let _audioCtx = null;
+let _masterGain = null;
 function ensureAudioCtx() {
   try {
-    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!_audioCtx) {
+      _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      _masterGain = _audioCtx.createGain();
+      _masterGain.connect(_audioCtx.destination);
+    }
     if (_audioCtx.state === 'suspended') _audioCtx.resume();
   } catch (e) {}
   return _audioCtx;
+}
+function audioDestination() {
+  ensureAudioCtx();
+  return _masterGain || (_audioCtx ? _audioCtx.destination : null);
 }
 // Unlock audio on first user interaction (required for iOS)
 document.addEventListener('touchstart', () => { ensureAudioCtx(); }, { once: true, passive: true });
@@ -5976,7 +5985,8 @@ function playBell(count) {
   try {
     // Reuse the shared unlocked AudioContext — new contexts won't play without a user gesture
     const ctx = ensureAudioCtx();
-    if (!ctx) return;
+    const dest = audioDestination();
+    if (!ctx || !dest) return;
     const ring = (t) => {
       // Three partials — fundamental + harmonics — give a realistic bell tone
       [[880, 0.55, 2.8], [1760, 0.28, 1.6], [2640, 0.13, 0.9]].forEach(([freq, vol, dur]) => {
@@ -5988,7 +5998,7 @@ function playBell(count) {
         gain.gain.linearRampToValueAtTime(vol, t + 0.008); // sharp attack
         gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(dest); // → master gain → destination
         osc.start(t);
         osc.stop(t + dur);
       });
@@ -5999,6 +6009,11 @@ function playBell(count) {
 
 function toggleMute() {
   officeMuted = !officeMuted;
+  // Instantly silence any currently playing audio via the master gain node
+  if (_masterGain) {
+    _masterGain.gain.cancelScheduledValues(_audioCtx.currentTime);
+    _masterGain.gain.setValueAtTime(officeMuted ? 0 : 1, _audioCtx.currentTime);
+  }
   if (officeMuted) window.speechSynthesis && window.speechSynthesis.cancel();
   const btn = document.getElementById('mute-btn');
   if (btn) {
@@ -8504,7 +8519,8 @@ async function unsubscribeFromPush() {
 function playAlarmSound() {
   try {
     const ctx = ensureAudioCtx();
-    if (!ctx) return;
+    const dest = audioDestination();
+    if (!ctx || !dest) return;
     // Soft bell chime — C5 E5 G5, sine wave, gentle bell-like decay
     const notes = [523.25, 659.25, 783.99];
     let t = ctx.currentTime;
@@ -8512,7 +8528,7 @@ function playAlarmSound() {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(dest); // → master gain → destination
       osc.type = 'sine';
       osc.frequency.value = freq;
       gain.gain.setValueAtTime(0, t);

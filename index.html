@@ -9160,6 +9160,8 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register(new URL('sw.js', location.href).href).then(reg => {
     // Proactively check for a new SW version each time the app loads
     reg.update().catch(() => {});
+    // Keep checking periodically so long-running sessions auto-update within 30 min
+    setInterval(() => reg.update().catch(() => {}), 30 * 60 * 1000);
   }).catch(() => {});
 
   // When a new SW takes control (after skipWaiting activates it), reload to get

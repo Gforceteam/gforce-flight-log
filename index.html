@@ -4835,6 +4835,10 @@ function showOfficeDashboard() {
   officeRefreshInterval = setInterval(loadOfficeData, 20000);
   startOfficeClock();
   loadOfficeData().then(() => showOfficeTab('pilots'));
+  // Request browser notification permission so alarms work when tab is in background
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
 }
 
 function officeDoLogout() {
@@ -6077,10 +6081,21 @@ if (window.speechSynthesis) {
   }, 10000);
 }
 
+function officeSystemNotif(title, body) {
+  // Show a browser system notification when the tab is in the background
+  try {
+    if (!document.hidden) return; // tab is visible — on-page alert is enough
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    new Notification(title, { body, icon: '/icon-192.png', tag: title });
+  } catch (_) {}
+}
+
 function updateTimers() {
   clearInterval(timerInterval);
   function tick() {
     const now = Date.now();
+    // Use officeToken to gate audio — bells fire even when tab is in background
+    const officeActive = !!officeToken;
     const officeVisible = document.getElementById('office-dashboard')?.style.display !== 'none';
     officePilots.forEach(p => {
       if (p.status !== 'airborne' || !p.timer_expires_at) return;
@@ -6095,10 +6110,13 @@ function updateTimers() {
         el.classList.add('urgent');
         const card = document.getElementById(`pilot-card-${p.id}`);
         if (card) { card.classList.add('alert', 'office-timer-expired'); card.classList.remove('airborne'); }
-        if (notifEnabled(NOTIF_KEYS.expired)) showAlert(p.name);
-        if (officeVisible && !_bellFired.has(`${p.id}:exp`)) {
+        if (officeVisible && notifEnabled(NOTIF_KEYS.expired)) showAlert(p.name);
+        if (officeActive && !_bellFired.has(`${p.id}:exp`)) {
           _bellFired.add(`${p.id}:exp`);
-          if (notifEnabled(NOTIF_KEYS.expired)) playBell(10);
+          if (notifEnabled(NOTIF_KEYS.expired)) {
+            playBell(10);
+            officeSystemNotif('⏰ Timer expired!', `${p.name}'s timer has expired — they need to land.`);
+          }
         }
       } else {
         const mins = Math.floor(remaining / 60000);
@@ -6119,21 +6137,26 @@ function updateTimers() {
           if (card) card.classList.add('alert');
           if (!_bellFired.has(bellKey10)) {
             _bellFired.add(bellKey10);
-            if (officeVisible && notifEnabled(NOTIF_KEYS['10min'])) {
+            if (officeActive && notifEnabled(NOTIF_KEYS['10min'])) {
               const groupMembers = p.group_id
                 ? officePilots.filter(q => q.group_id === p.group_id && q.status === 'airborne').map(q => q.name)
                 : [p.name];
               const nameStr = groupMembers.length > 1
                 ? groupMembers.slice(0, -1).join(', ') + ' and ' + groupMembers[groupMembers.length - 1]
                 : groupMembers[0];
-              toast(`⚠️ ${nameStr} — 10 min to landing`);
+              if (officeVisible) toast(`⚠️ ${nameStr} — 10 min to landing`);
               if (notifEnabled(NOTIF_KEYS.voice)) speak(`10 minute warning for ${nameStr}, 10 minute warning for ${nameStr}, 10 minute warning for ${nameStr}`, nameStr);
+              officeSystemNotif('⚠️ 10 min to landing', `${nameStr} needs to land in 10 minutes.`);
             }
           }
         }
         if (remaining < 300000 && !_bellFired.has(`${p.id}:5`)) {
           _bellFired.add(`${p.id}:5`);
-          if (officeVisible && notifEnabled(NOTIF_KEYS['5min'])) { toast(`⚠️ ${p.name} — 5 min to landing`); playBell(5); }
+          if (officeActive && notifEnabled(NOTIF_KEYS['5min'])) {
+            if (officeVisible) toast(`⚠️ ${p.name} — 5 min to landing`);
+            playBell(5);
+            officeSystemNotif('⚠️ 5 min to landing', `${p.name} needs to land in 5 minutes.`);
+          }
         }
       }
     });

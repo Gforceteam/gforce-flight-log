@@ -2622,19 +2622,17 @@ async function doLogin() {
 // ─── Pilot Logout ─────────────────────────────────────────────────────────────
 function doLogout() {
   unsubscribeFromPush();
-  pilotToken = pilotId = pilotName = null;
-  if (ws && !officeToken) { _intentionalLogout = true; ws.close(); ws = null; }
-  clearInterval(window._statusPoll);
-  clearInterval(window._dashboardTimer);
-  if (window._statusPollAbort) { window._statusPollAbort.abort(); window._statusPollAbort = null; }
+  // Clear tokens first so the page reinitialises to the login screen on reload
   localStorage.removeItem('gforce_pilot_token');
   localStorage.removeItem('gforce_pilot_id');
   localStorage.removeItem('gforce_pilot_name');
   localStorage.removeItem('gforce_pilot_refresh');
-  document.getElementById('app-page').style.display = 'none';
-  document.getElementById('login-page').style.display = 'flex';
-  document.getElementById('pilot-pin').value = '';
-  loadPilotList();
+  if (ws && !officeToken) { _intentionalLogout = true; ws.close(); ws = null; }
+  clearInterval(window._statusPoll);
+  clearInterval(window._dashboardTimer);
+  if (window._statusPollAbort) { window._statusPollAbort.abort(); window._statusPollAbort = null; }
+  // Reload the page — most reliable way to return to login on iOS PWA
+  window.location.reload();
 }
 
 // ─── Pilot App Shell ──────────────────────────────────────────────────────────
@@ -4838,6 +4836,7 @@ function showOfficeDashboard() {
 }
 
 function officeDoLogout() {
+  // Clear tokens first so the page reinitialises to the login screen on reload
   localStorage.removeItem('gforce_office_token');
   localStorage.removeItem('gforce_office_refresh');
   officeToken = null;
@@ -4845,10 +4844,8 @@ function officeDoLogout() {
   clearInterval(timerInterval);
   if (officeRefreshInterval) { clearInterval(officeRefreshInterval); officeRefreshInterval = null; }
   if (_officeClockInterval) { clearInterval(_officeClockInterval); _officeClockInterval = null; }
-  document.getElementById('office-dashboard').style.display = 'none';
-  document.getElementById('login-page').style.display = 'flex';
-  document.getElementById('pilot-pin').value = '';
-  loadPilotList();
+  // Reload the page — most reliable way to return to login on iOS PWA
+  window.location.reload();
 }
 
 // ─── Office Data ──────────────────────────────────────────────────────────────

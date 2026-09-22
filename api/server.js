@@ -212,6 +212,9 @@ async function createTables() {
   try { await db.execute('ALTER TABLE active_timers ADD COLUMN cancelled_at TEXT'); } catch (_) {}
   // Add office_adjustments column to track cumulative time adjustments
   try { await db.execute('ALTER TABLE active_timers ADD COLUMN office_adjustments INTEGER DEFAULT 0'); } catch (_) {}
+  // Per-event adjustment log so pilots can see what the office changed
+  await db.execute(`CREATE TABLE IF NOT EXISTS timer_adjustment_log (
+    id TEXT PRIMARY KEY, pilot_id TEXT, delta INTEGER, created_at TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS drives (
     id TEXT PRIMARY KEY, pilot_id TEXT, date TEXT, notes TEXT, group_id TEXT, created_at TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS extension_requests (
@@ -2010,11 +2013,30 @@ app.post('/api/office/adjust-timer', verifyOffice, async (req, res) => {
     const newExpiry = new Date(new Date(timer.expires_at).getTime() + deltaMs);
     if (newExpiry <= new Date()) return res.status(400).json({ error: 'New time must be in the future' });
     const currentAdjustments = Number(timer.office_adjustments || 0);
+    const now = new Date().toISOString();
     await run('UPDATE active_timers SET expires_at = ?, office_adjustments = ? WHERE pilot_id = ?', [newExpiry.toISOString(), currentAdjustments + clampedDelta, pilot_id]);
+    await run('INSERT INTO timer_adjustment_log (id, pilot_id, delta, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, clampedDelta, now]);
     const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [pilot_id]);
     if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
     broadcast({ type: 'TIMER_ADJUSTED', pilot_id, pilot_name: pilot.name, expires_at: newExpiry.toISOString() });
     res.json({ message: `Timer ${clampedDelta > 0 ? 'added' : 'removed'} ${Math.abs(clampedDelta)} min`, expires_at: newExpiry.toISOString() });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Pilot fetches adjustment log for their current active timer
+app.get('/api/pilot/flight-adjustments', verifyToken, async (req, res) => {
+  try {
+    const pilotId = req.pilot.id;
+    const timer = await queryOne('SELECT started_at FROM active_timers WHERE pilot_id = ?', [pilotId]);
+    if (!timer) return res.json({ adjustments: [] });
+    const rows = await queryAll(
+      'SELECT delta, created_at FROM timer_adjustment_log WHERE pilot_id = ? AND created_at >= ? ORDER BY created_at ASC',
+      [pilotId, timer.started_at]
+    );
+    res.json({ adjustments: rows });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Internal server error' });

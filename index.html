@@ -365,6 +365,18 @@
     .ff-group-name { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
     .ff-group-pilots { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
     .ff-secondary-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+    #flight-info-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:400; }
+    #flight-info-overlay.open { display:block; }
+    #flight-info-sheet { position:fixed; bottom:0; left:0; right:0; background:var(--card); border-radius:18px 18px 0 0; z-index:401; padding:24px 20px 40px; max-height:70vh; overflow-y:auto; transform:translateY(100%); transition:transform 0.25s ease; }
+    #flight-info-sheet.open { transform:translateY(0); }
+    .fi-title { font-size:16px; font-weight:800; color:var(--text); margin-bottom:16px; font-family:'Montserrat',sans-serif; }
+    .fi-row { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--border); }
+    .fi-row:last-child { border-bottom:none; }
+    .fi-icon { font-size:20px; width:28px; text-align:center; flex-shrink:0; }
+    .fi-text { flex:1; }
+    .fi-action { font-size:14px; font-weight:600; color:var(--text); }
+    .fi-time { font-size:12px; color:var(--muted); margin-top:2px; }
+    .fi-empty { text-align:center; color:var(--muted); font-size:14px; padding:20px 0; }
     .ff-flights-section { margin-bottom: 16px; }
     .pilot-tab-date { font-size: 20px; font-weight: 800; color: var(--text); letter-spacing: 0.3px; margin-bottom: 20px; text-align: center; font-family: 'Montserrat', sans-serif; }
     .ff-flights-heading { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
@@ -1348,6 +1360,13 @@
       <span class="server-badge" id="server-badge">...</span>
       <button onclick="togglePilotMenu()" class="pilot-icon-btn" title="Menu">☰</button>
     </div>
+  </div>
+
+  <!-- Flight Info bottom sheet -->
+  <div id="flight-info-overlay" onclick="closeFlightInfo()"></div>
+  <div id="flight-info-sheet">
+    <div class="fi-title">✈️ Flight Info</div>
+    <div id="flight-info-body"><div class="fi-empty">Loading…</div></div>
   </div>
 
   <!-- Menu drawer -->
@@ -3353,6 +3372,7 @@ function renderDashboard() {
         </div>
         <div class="ff-secondary-actions">
           <button class="btn-extend" id="btn-dnf" onclick="didNotFly()" style="border-color:var(--muted);color:var(--muted);">✕ Did Not Fly</button>
+          <button class="btn-extend" onclick="showFlightInfo()" style="border-color:var(--border);color:var(--muted);">ℹ️ Flight Info</button>
         </div>
       </div>
       ${renderFlyingList(true)}
@@ -3455,6 +3475,46 @@ function renderAllTodayFlights() {
 
   html += `</div></div>`;
   return html;
+}
+
+async function showFlightInfo() {
+  const overlay = document.getElementById('flight-info-overlay');
+  const sheet = document.getElementById('flight-info-sheet');
+  const body = document.getElementById('flight-info-body');
+  body.innerHTML = '<div class="fi-empty">Loading…</div>';
+  overlay.classList.add('open');
+  requestAnimationFrame(() => sheet.classList.add('open'));
+  try {
+    const res = await apiFetch('/api/pilot/flight-adjustments');
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    const adj = data.adjustments || [];
+    if (adj.length === 0) {
+      body.innerHTML = '<div class="fi-empty">No adjustments made to this flight.</div>';
+    } else {
+      body.innerHTML = adj.map(a => {
+        const added = a.delta > 0;
+        const abs = Math.abs(a.delta);
+        const timeStr = new Date(a.created_at).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', timeZone: NZ_TZ });
+        return `<div class="fi-row">
+          <div class="fi-icon">${added ? '⏫' : '⏬'}</div>
+          <div class="fi-text">
+            <div class="fi-action">Office ${added ? 'added' : 'removed'} ${abs} min</div>
+            <div class="fi-time">${timeStr}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  } catch {
+    body.innerHTML = '<div class="fi-empty">Could not load flight info.</div>';
+  }
+}
+
+function closeFlightInfo() {
+  const overlay = document.getElementById('flight-info-overlay');
+  const sheet = document.getElementById('flight-info-sheet');
+  sheet.classList.remove('open');
+  setTimeout(() => overlay.classList.remove('open'), 260);
 }
 
 async function refreshPilotTodayFlights() {

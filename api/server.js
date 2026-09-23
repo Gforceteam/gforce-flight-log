@@ -2466,6 +2466,29 @@ app.put('/api/office/settings/push-notifications', verifyOffice, async (req, res
   }
 });
 
+// Flight event timeline for office Flight Info panel
+app.get('/api/office/flight-info/:flight_id', verifyOffice, async (req, res) => {
+  try {
+    const flight = await queryOne('SELECT * FROM flights WHERE id = ?', [req.params.flight_id]);
+    if (!flight) return res.status(404).json({ error: 'Flight not found' });
+    const { pilot_id, sent_away_at, landed_at } = flight;
+    const windowStart = sent_away_at || flight.date + 'T00:00:00.000Z';
+    const windowEnd = landed_at || new Date().toISOString();
+    const adjustments = await queryAll(
+      'SELECT delta, created_at FROM timer_adjustment_log WHERE pilot_id = ? AND created_at >= ? AND created_at <= ? ORDER BY created_at ASC',
+      [pilot_id, windowStart, windowEnd]
+    );
+    const logs = await queryAll(
+      'SELECT event, created_at FROM office_logs WHERE pilot_id = ? AND created_at >= ? AND created_at <= ? ORDER BY created_at ASC',
+      [pilot_id, windowStart, windowEnd]
+    );
+    res.json({ flight, adjustments, logs });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Force all connected WS clients to reload (picks up latest deployed version)
 app.post('/api/office/force-update', verifyOffice, async (req, res) => {
   const clients = broadcast({ type: 'FORCE_UPDATE' });

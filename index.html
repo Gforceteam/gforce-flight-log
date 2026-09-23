@@ -5049,10 +5049,13 @@ function renderTodayFlights() {
       const pilotRows = grp.map(f => {
         const landedTime = fmtTime(f.landed_at);
         const stillUp = !f.landed_at;
-        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);gap:8px;">
-          <span style="font-size:14px;font-weight:600;flex:1;min-width:0;">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
-          <span style="font-size:13px;color:${stillUp ? 'var(--accent)' : 'var(--muted)'};">${stillUp ? 'Airborne' : `Landed ${esc(landedTime)}`}</span>
-          <button onclick="officeEditFlight('${esc(f.id)}',true)" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid var(--border-hi);background:var(--surface);color:var(--text-2);cursor:pointer;flex-shrink:0;touch-action:manipulation;">Edit</button>
+        return `<div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);gap:8px;">
+            <span style="font-size:14px;font-weight:600;flex:1;min-width:0;">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
+            <span style="font-size:13px;color:${stillUp ? 'var(--accent)' : 'var(--muted)'};">${stillUp ? 'Airborne' : `Landed ${esc(landedTime)}`}</span>
+            <button onclick="toggleOfficeFI('${esc(f.id)}',this)" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid var(--border-hi);background:var(--surface);color:var(--text-2);cursor:pointer;flex-shrink:0;touch-action:manipulation;">Flight Info</button>
+          </div>
+          <div id="ofi-${esc(f.id)}" style="display:none;"></div>
         </div>`;
       }).join('');
       html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;">
@@ -5074,14 +5077,76 @@ function renderTodayFlights() {
         <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);gap:8px;">
           <span class="tdf-pilot" style="flex:1;min-width:0;">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
           <span style="font-size:13px;color:${stillUp ? 'var(--accent)' : 'var(--muted)'};">${stillUp ? 'Airborne' : `Landed ${esc(landedTime)}`}</span>
-          <button onclick="officeEditFlight('${esc(f.id)}',true)" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid var(--border-hi);background:var(--surface);color:var(--text-2);cursor:pointer;flex-shrink:0;touch-action:manipulation;">Edit</button>
+          <button onclick="toggleOfficeFI('${esc(f.id)}',this)" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid var(--border-hi);background:var(--surface);color:var(--text-2);cursor:pointer;flex-shrink:0;touch-action:manipulation;">Flight Info</button>
         </div>
+        <div id="ofi-${esc(f.id)}" style="display:none;"></div>
       </div>`;
     }
   }
 
   html += `</div></div>`;
   el.innerHTML = html;
+}
+
+const _ofiFetched = new Set();
+
+async function toggleOfficeFI(flightId, btn) {
+  const panel = document.getElementById('ofi-' + flightId);
+  if (!panel) return;
+  const open = panel.style.display !== 'none';
+  if (open) {
+    panel.style.display = 'none';
+    btn.textContent = 'Flight Info';
+    return;
+  }
+  panel.style.display = 'block';
+  btn.textContent = 'Hide Info';
+  if (_ofiFetched.has(flightId)) return;
+  _ofiFetched.add(flightId);
+  panel.innerHTML = '<div style="padding:10px 0 4px;font-size:12px;color:var(--muted);">Loading…</div>';
+  try {
+    const res = await officeFetch('/api/office/flight-info/' + flightId);
+    if (!res.ok) throw new Error();
+    const { flight, adjustments, logs } = await res.json();
+    const fmtTs = ts => new Date(ts).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', timeZone: NZ_TZ });
+    const events = [];
+    if (flight.sent_away_at) events.push({ ts: flight.sent_away_at, icon: '🛫', text: 'Office sent away' });
+    for (const a of adjustments) {
+      const added = a.delta > 0;
+      events.push({ ts: a.created_at, icon: added ? '⏫' : '⏬', text: `Office ${added ? 'added' : 'removed'} ${Math.abs(a.delta)} min` });
+    }
+    for (const l of logs) {
+      const map = {
+        timer_expired: { icon: '⏰', text: 'Timer expired' },
+        timer_extended_30min: { icon: '⏱', text: 'Office added 30-min extension' },
+        timer_extended_30min_approved: { icon: '⏱', text: 'Extension approved (+30 min)' },
+        landed: { icon: '🛬', text: 'Pilot landed' },
+        landed_early: { icon: '🛬', text: 'Office landed pilot' },
+        landed_by_group_member: { icon: '🛬', text: 'Landed via group member' },
+        did_not_fly: { icon: '✕', text: 'Did not fly' },
+      };
+      const m = map[l.event];
+      if (m) events.push({ ts: l.created_at, ...m });
+    }
+    if (flight.landed_at && !logs.some(l => ['landed','landed_early','landed_by_group_member'].includes(l.event))) {
+      events.push({ ts: flight.landed_at, icon: '🛬', text: 'Pilot landed' });
+    }
+    events.sort((a, b) => a.ts.localeCompare(b.ts));
+    if (events.length === 0) {
+      panel.innerHTML = '<div style="padding:10px 0 4px;font-size:12px;color:var(--muted);">No events recorded.</div>';
+    } else {
+      panel.innerHTML = `<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;display:flex;flex-direction:column;gap:0;">
+        ${events.map(e => `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);">
+          <span style="font-size:16px;width:22px;text-align:center;flex-shrink:0;">${e.icon}</span>
+          <span style="font-size:13px;font-weight:600;color:var(--text);flex:1;">${e.text}</span>
+          <span style="font-size:11px;color:var(--muted);flex-shrink:0;">${fmtTs(e.ts)}</span>
+        </div>`).join('')}
+      </div>`;
+    }
+  } catch {
+    panel.innerHTML = '<div style="padding:10px 0 4px;font-size:12px;color:var(--muted);">Could not load flight info.</div>';
+    _ofiFetched.delete(flightId);
+  }
 }
 
 function makeSendAwayRow(isFirst) {

@@ -6033,10 +6033,21 @@ function officeFmtDate(s) {
   return d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' });
 }
 
-function exportTodayFlightsCSV() {
+async function exportTodayFlightsCSV() {
   const today = todayStr();
   const todayF = allFlights.filter(f => f.date === today);
   if (todayF.length === 0) { toast('No flights today to export'); return; }
+
+  toast('Preparing export…');
+
+  // Fetch event log for every flight in parallel
+  const infoMap = {};
+  await Promise.all(todayF.map(async f => {
+    try {
+      const res = await officeFetch('/api/office/flight-info/' + f.id);
+      if (res.ok) infoMap[f.id] = await res.json();
+    } catch (_) {}
+  }));
 
   // Build group lookup so we can label solo vs group flights
   const groupCount = {};
@@ -6048,7 +6059,36 @@ function exportTodayFlightsCSV() {
     return Math.round((new Date(landed) - new Date(sent)) / 60000);
   };
 
-  const header = ['Pilot', 'Flight #', 'Client', 'Type', 'Sent Away', 'Landed', 'Duration (min)'];
+  const eventLabel = { timer_expired: 'Timer expired', timer_extended_30min: 'Extension +30 min', timer_extended_30min_approved: 'Extension approved +30 min', landed: 'Pilot landed', landed_early: 'Office landed pilot', landed_by_group_member: 'Landed via group', did_not_fly: 'Did not fly' };
+
+  const buildEvents = f => {
+    const info = infoMap[f.id];
+    if (!info) return '';
+    const fmtT = ts => new Date(ts).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', timeZone: NZ_TZ });
+    const parts = [];
+    if (f.sent_away_at) parts.push(`Sent away ${fmtT(f.sent_away_at)}`);
+    for (const a of (info.adjustments || [])) {
+      parts.push(`${a.delta > 0 ? '+' : ''}${a.delta} min @ ${fmtT(a.created_at)}`);
+    }
+    for (const l of (info.logs || [])) {
+      const label = eventLabel[l.event];
+      if (label) parts.push(`${label} @ ${fmtT(l.created_at)}`);
+    }
+    if (f.landed_at && !(info.logs || []).some(l => ['landed','landed_early','landed_by_group_member'].includes(l.event))) {
+      parts.push(`Landed ${fmtT(f.landed_at)}`);
+    }
+    return parts.join('; ');
+  };
+
+  const buildAdjSummary = f => {
+    const info = infoMap[f.id];
+    if (!info || !(info.adjustments || []).length) return '';
+    const total = info.adjustments.reduce((s, a) => s + a.delta, 0);
+    const parts = info.adjustments.map(a => `${a.delta > 0 ? '+' : ''}${a.delta} min`).join(', ');
+    return `${parts} (net ${total > 0 ? '+' : ''}${total} min)`;
+  };
+
+  const header = ['Pilot', 'Flight #', 'Client', 'Type', 'Sent Away', 'Landed', 'Duration (min)', 'Adjustments', 'Event Log'];
   const rows = todayF
     .sort((a, b) => (a.sent_away_at || '').localeCompare(b.sent_away_at || '') || (a.flight_num || 0) - (b.flight_num || 0))
     .map(f => {
@@ -6061,7 +6101,9 @@ function exportTodayFlightsCSV() {
         type,
         fmtNZ(f.sent_away_at),
         fmtNZ(f.landed_at),
-        durationMins(f.sent_away_at, f.landed_at)
+        durationMins(f.sent_away_at, f.landed_at),
+        buildAdjSummary(f),
+        buildEvents(f)
       ];
     });
 

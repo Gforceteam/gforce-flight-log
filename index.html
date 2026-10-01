@@ -6053,9 +6053,13 @@ async function exportTodayFlightsCSV() {
     } catch (_) {}
   }));
 
-  // Build group lookup so we can label solo vs group flights
-  const groupCount = {};
-  todayF.forEach(f => { if (f.sent_away_at) groupCount[f.sent_away_at] = (groupCount[f.sent_away_at] || 0) + 1; });
+  // Build group lookup: sent_away_at → all flights in that group
+  const groupMap = {};
+  todayF.forEach(f => {
+    if (!f.sent_away_at) return;
+    if (!groupMap[f.sent_away_at]) groupMap[f.sent_away_at] = [];
+    groupMap[f.sent_away_at].push(f);
+  });
 
   const fmtNZ = ts => ts ? new Date(ts).toLocaleString('en-NZ', { timeZone: NZ_TZ, hour: 'numeric', minute: '2-digit', hour12: true }) : '';
   const durationMins = (sent, landed) => {
@@ -6096,8 +6100,13 @@ async function exportTodayFlightsCSV() {
   const rows = todayF
     .sort((a, b) => (a.sent_away_at || '').localeCompare(b.sent_away_at || '') || (a.flight_num || 0) - (b.flight_num || 0))
     .map(f => {
-      const count = f.sent_away_at ? (groupCount[f.sent_away_at] || 1) : 1;
-      const type = count > 1 ? `${count}-Pax Group` : 'Single Pax';
+      const grp = f.sent_away_at ? (groupMap[f.sent_away_at] || [f]) : [f];
+      const count = grp.length;
+      const others = grp.filter(g => g.id !== f.id);
+      const otherStr = others.length
+        ? ' with ' + others.map(g => `${g.pilot_name}${g.flight_num ? ` (#${g.flight_num})` : ''}`).join(' and ')
+        : '';
+      const type = count > 1 ? `${count}-Pax Group${otherStr}` : 'Single Pax';
       return [
         f.pilot_name || '',
         f.flight_num || '',

@@ -3429,7 +3429,7 @@ function renderAllTodayFlights() {
     ? new Date(ts).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', timeZone: NZ_TZ })
     : '—';
 
-  const completedCount = todayF.filter(f => f.landed_at).length;
+  const completedCount = todayF.filter(f => f.landed_at && !f.did_not_fly).length;
   let html = `<div class="tdf-wrap" style="margin-top:16px;">
     <div class="section-title" style="margin-bottom:10px;">Today's Flights</div>
     <div style="display:flex;flex-direction:column;gap:8px;">`;
@@ -4619,7 +4619,7 @@ async function renderOfficeFF() {
   const ffPilots = [...officePilots].filter(p => !HIDDEN_PILOTS.includes(p.name)).sort(pilotSort).map(p => {
     const dayCounts = {};
     dates.forEach(d => {
-      const autoCnt = allFlights.filter(f => String(f.pilot_id) === String(p.id) && f.date === d).length;
+      const autoCnt = allFlights.filter(f => String(f.pilot_id) === String(p.id) && f.date === d && !f.did_not_fly).length;
       const ov = dutySheetOverrides.find(o => String(o.pilot_id) === String(p.id) && o.date === d);
       const cnt = ov !== undefined ? ov.count : autoCnt;
       if (cnt > 0) dayCounts[d] = cnt;
@@ -4644,7 +4644,7 @@ async function renderOfficeFF() {
     const cls = daysLeft <= 2 ? 'ff-limit' : daysLeft <= 3 ? 'ff-warn-hard' : daysLeft <= 5 ? 'ff-warn' : 'ff-ok';
 
     const cells = dates.map(d => {
-      const autoCnt = allFlights.filter(f => String(f.pilot_id) === String(p.id) && f.date === d).length;
+      const autoCnt = allFlights.filter(f => String(f.pilot_id) === String(p.id) && f.date === d && !f.did_not_fly).length;
       const ov = dutySheetOverrides.find(o => String(o.pilot_id) === String(p.id) && o.date === d);
       const cnt = ov !== undefined ? ov.count : autoCnt;
       const isOv = ov !== undefined;
@@ -4698,7 +4698,7 @@ async function saveDutySheetOverride(pilotId, date, value) {
 }
 
 async function resetDutySheetOverride(pilotId, date, inputEl) {
-  const autoCnt = allFlights.filter(f => String(f.pilot_id) === String(pilotId) && f.date === date).length;
+  const autoCnt = allFlights.filter(f => String(f.pilot_id) === String(pilotId) && f.date === date && !f.did_not_fly).length;
   inputEl.value = autoCnt > 0 ? autoCnt : '';
   inputEl.closest('td').classList.remove('ff-cell-override');
   await saveDutySheetOverride(pilotId, date, inputEl.value);
@@ -4712,7 +4712,7 @@ function _updateDaysLeftCell(pilotId) {
   }
   let daysWorked = 0;
   dates.forEach(d => {
-    const autoCnt = allFlights.filter(f => String(f.pilot_id) === String(pilotId) && f.date === d).length;
+    const autoCnt = allFlights.filter(f => String(f.pilot_id) === String(pilotId) && f.date === d && !f.did_not_fly).length;
     const ov = dutySheetOverrides.find(o => String(o.pilot_id) === String(pilotId) && o.date === d);
     const cnt = ov !== undefined ? ov.count : autoCnt;
     if (cnt > 0) daysWorked++;
@@ -5030,7 +5030,7 @@ function renderTodayFlights() {
     ? new Date(ts).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', timeZone: NZ_TZ })
     : '—';
 
-  const completedCount = todayF.filter(f => f.landed_at).length;
+  const completedCount = todayF.filter(f => f.landed_at && !f.did_not_fly).length;
   let html = `<div class="tdf-wrap">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;">
       <div class="section-title" style="margin:0;">Today's Flights</div>
@@ -5048,11 +5048,13 @@ function renderTodayFlights() {
       // Render group as a single card with all pilots inside
       const pilotRows = grp.map(f => {
         const landedTime = fmtTime(f.landed_at);
-        const stillUp = !f.landed_at;
+        const stillUp = !f.landed_at && !f.did_not_fly;
+        const statusText = f.did_not_fly ? 'Did Not Fly' : stillUp ? 'Airborne' : `Landed ${esc(landedTime)}`;
+        const statusColor = f.did_not_fly ? 'var(--muted)' : stillUp ? 'var(--accent)' : 'var(--muted)';
         return `<div>
           <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);gap:8px;">
-            <span style="font-size:14px;font-weight:600;flex:1;min-width:0;">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
-            <span style="font-size:13px;color:${stillUp ? 'var(--accent)' : 'var(--muted)'};">${stillUp ? 'Airborne' : `Landed ${esc(landedTime)}`}</span>
+            <span style="font-size:14px;font-weight:600;flex:1;min-width:0;${f.did_not_fly ? 'text-decoration:line-through;opacity:0.6;' : ''}">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
+            <span style="font-size:13px;color:${statusColor};">${statusText}</span>
             <button onclick="toggleOfficeFI('${esc(f.id)}',this)" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid var(--border-hi);background:var(--surface);color:var(--text-2);cursor:pointer;flex-shrink:0;touch-action:manipulation;">Flight Info</button>
           </div>
           <div id="ofi-${esc(f.id)}" style="display:none;"></div>
@@ -5068,15 +5070,17 @@ function renderTodayFlights() {
     } else {
       const f = grp[0];
       const landedTime = fmtTime(f.landed_at);
-      const stillUp = !f.landed_at;
-      html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;">
+      const stillUp = !f.landed_at && !f.did_not_fly;
+      const statusText = f.did_not_fly ? 'Did Not Fly' : stillUp ? 'Airborne' : `Landed ${esc(landedTime)}`;
+      const statusColor = f.did_not_fly ? 'var(--muted)' : stillUp ? 'var(--accent)' : 'var(--muted)';
+      html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;${f.did_not_fly ? 'opacity:0.7;' : ''}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
           <span class="tdf-group-label">Single Pax</span>
           <span style="font-size:12px;color:var(--muted);">Away ${esc(sentTime)}</span>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);gap:8px;">
-          <span class="tdf-pilot" style="flex:1;min-width:0;">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
-          <span style="font-size:13px;color:${stillUp ? 'var(--accent)' : 'var(--muted)'};">${stillUp ? 'Airborne' : `Landed ${esc(landedTime)}`}</span>
+          <span class="tdf-pilot" style="flex:1;min-width:0;${f.did_not_fly ? 'text-decoration:line-through;' : ''}">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
+          <span style="font-size:13px;color:${statusColor};">${statusText}</span>
           <button onclick="toggleOfficeFI('${esc(f.id)}',this)" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid var(--border-hi);background:var(--surface);color:var(--text-2);cursor:pointer;flex-shrink:0;touch-action:manipulation;">Flight Info</button>
         </div>
         <div id="ofi-${esc(f.id)}" style="display:none;"></div>
@@ -5604,8 +5608,8 @@ function showCancelFFModal(pilotId, pilotName) {
           ✈️ &nbsp;Land — cancel timer &amp; log flight
         </button>
         <button onclick="doCancelTimerNoFlight('${pilotId}');document.getElementById('cancel-ff-modal').remove();"
-          style="background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;color:#991b1b;cursor:pointer;font-size:14px;font-weight:700;padding:12px;text-align:left;touch-action:manipulation;">
-          🗑️ &nbsp;Delete — cancel timer, no flight logged
+          style="background:var(--surface);border:1px solid var(--border-hi);border-radius:10px;color:var(--text);cursor:pointer;font-size:14px;font-weight:700;padding:12px;text-align:left;touch-action:manipulation;">
+          ✕ &nbsp;Cancel Flight — Did Not Fly
         </button>
         <button onclick="document.getElementById('cancel-ff-modal').remove();"
           style="background:var(--surface);border:1px solid var(--border-hi);border-radius:10px;color:var(--muted);cursor:pointer;font-size:14px;padding:10px;touch-action:manipulation;">
@@ -5635,7 +5639,7 @@ async function doCancelTimerNoFlight(pilotId) {
   });
   if (!res) return;
   const data = await res.json();
-  if (res.ok) { toast('Timer deleted — no flight logged'); await loadOfficeData(); }
+  if (res.ok) { toast('Flight cancelled — logged as Did Not Fly'); await loadOfficeData(); }
   else { toast(data.error || 'Error'); }
 }
 
@@ -6100,8 +6104,8 @@ async function exportTodayFlightsCSV() {
         f.client_name || '',
         type,
         fmtNZ(f.sent_away_at),
-        fmtNZ(f.landed_at),
-        durationMins(f.sent_away_at, f.landed_at),
+        f.did_not_fly ? 'Did Not Fly' : fmtNZ(f.landed_at),
+        f.did_not_fly ? '' : durationMins(f.sent_away_at, f.landed_at),
         buildAdjSummary(f),
         buildEvents(f)
       ];

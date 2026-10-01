@@ -212,6 +212,8 @@ async function createTables() {
   try { await db.execute('ALTER TABLE active_timers ADD COLUMN cancelled_at TEXT'); } catch (_) {}
   // Add office_adjustments column to track cumulative time adjustments
   try { await db.execute('ALTER TABLE active_timers ADD COLUMN office_adjustments INTEGER DEFAULT 0'); } catch (_) {}
+  // Flag flights cancelled as "Did Not Fly" — excluded from counts but visible in history
+  try { await db.execute('ALTER TABLE flights ADD COLUMN did_not_fly INTEGER DEFAULT 0'); } catch (_) {}
   // Per-event adjustment log so pilots can see what the office changed
   await db.execute(`CREATE TABLE IF NOT EXISTS timer_adjustment_log (
     id TEXT PRIMARY KEY, pilot_id TEXT, delta INTEGER, created_at TEXT)`);
@@ -1505,7 +1507,7 @@ app.post('/api/pilot/land-group-member', verifyToken, async (req, res) => {
     const now = new Date().toISOString();
     const today = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
     const flightId = uuidv4();
-    const todayCount = await queryOne('SELECT COUNT(*) as c FROM flights WHERE pilot_id = ? AND date = ?', [pilot_id, today]);
+    const todayCount = await queryOne('SELECT COUNT(*) as c FROM flights WHERE pilot_id = ? AND date = ? AND (did_not_fly IS NULL OR did_not_fly = 0)', [pilot_id, today]);
     const flightNum = (Number(todayCount?.c) || 0) + 1;
     const pilotRec = await queryOne('SELECT current_wing FROM pilots WHERE id = ?', [pilot_id]);
     await run(
@@ -1549,7 +1551,7 @@ app.post('/api/pilot/land', verifyToken, async (req, res) => {
     const flightId = uuidv4();
 
     const todayCount = await queryOne(
-      'SELECT COUNT(*) as c FROM flights WHERE pilot_id = ? AND date = ?',
+      'SELECT COUNT(*) as c FROM flights WHERE pilot_id = ? AND date = ? AND (did_not_fly IS NULL OR did_not_fly = 0)',
       [req.pilot.id, today]
     );
     const flightNum = (Number(todayCount?.c) || 0) + 1;
@@ -1669,7 +1671,7 @@ app.get('/api/today-flights', verifyToken, async (req, res) => {
     const today = nzToday();
     const flights = await queryAll(`
       SELECT f.id, f.pilot_id, f.flight_num, f.date, f.landed_at, f.sent_away_at, f.client_name,
-             p.name AS pilot_name
+             f.did_not_fly, p.name AS pilot_name
       FROM flights f
       JOIN pilots p ON f.pilot_id = p.id
       WHERE f.date = ?
@@ -1694,7 +1696,7 @@ app.get('/api/flight-following', verifyToken, async (req, res) => {
 
     const pilots = await queryAll('SELECT id, name FROM pilots ORDER BY name');
     const flightCounts = await queryAll(
-      'SELECT pilot_id, date, COUNT(*) as cnt FROM flights WHERE date >= ? GROUP BY pilot_id, date',
+      'SELECT pilot_id, date, COUNT(*) as cnt FROM flights WHERE date >= ? AND (did_not_fly IS NULL OR did_not_fly = 0) GROUP BY pilot_id, date',
       [from]
     );
     const overrides = await queryAll(
@@ -1907,7 +1909,7 @@ app.post('/api/office/land-pilot', verifyOffice, async (req, res) => {
     const flightId = uuidv4();
     const today = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
 
-    const todayFlights = await queryAll('SELECT COUNT(*) as c FROM flights WHERE pilot_id = ? AND date = ?', [pilot_id, today]);
+    const todayFlights = await queryAll('SELECT COUNT(*) as c FROM flights WHERE pilot_id = ? AND date = ? AND (did_not_fly IS NULL OR did_not_fly = 0)', [pilot_id, today]);
     const flightNum = (Number(todayFlights?.[0]?.c) || 0) + 1;
 
     const pilotRec = await queryOne('SELECT current_wing FROM pilots WHERE id = ?', [pilot_id]);
@@ -1939,19 +1941,28 @@ app.post('/api/office/land-pilot', verifyOffice, async (req, res) => {
   }
 });
 
-// Office cancel timer — removes the active timer without logging any flight
+// Office cancel timer — marks as Did Not Fly and logs a DNF flight record
 app.post('/api/office/cancel-timer', verifyOffice, async (req, res) => {
   try {
     const { pilot_id } = req.body;
     if (!pilot_id) return res.status(400).json({ error: 'pilot_id required' });
     const timer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [pilot_id]);
     if (!timer) return res.status(404).json({ error: 'No active timer for this pilot' });
+    const now = new Date().toISOString();
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+    const flightId = uuidv4();
+    const pilotRec = await queryOne('SELECT current_wing FROM pilots WHERE id = ?', [pilot_id]);
+    await run(
+      `INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, sent_away_at, wing_reg, did_not_fly)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [flightId, pilot_id, timer.client_name || '', today, 0, 0, '', '', 0, 0, 'Did Not Fly', null, timer.started_at || null, pilotRec?.current_wing || null, 1]
+    );
     await run('DELETE FROM active_timers WHERE pilot_id = ?', [pilot_id]);
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)',
-      [uuidv4(), pilot_id, 'office_cancelled_timer', new Date().toISOString()]);
+      [uuidv4(), pilot_id, 'did_not_fly', now]);
     const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [pilot_id]);
     broadcast({ type: 'DID_NOT_FLY', pilot_id, pilot_name: pilot?.name });
-    res.json({ message: 'Timer cancelled — no flight logged' });
+    res.json({ message: 'Flight cancelled — marked as Did Not Fly' });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Internal server error' });
@@ -1969,7 +1980,7 @@ app.post('/api/office/landed-early', verifyOffice, async (req, res) => {
     const flightId = uuidv4();
     const today = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
 
-    const todayFlights = await queryAll('SELECT COUNT(*) as c FROM flights WHERE pilot_id = ? AND date = ?', [pilot_id, today]);
+    const todayFlights = await queryAll('SELECT COUNT(*) as c FROM flights WHERE pilot_id = ? AND date = ? AND (did_not_fly IS NULL OR did_not_fly = 0)', [pilot_id, today]);
     const flightNum = (Number(todayFlights?.[0]?.c) || 0) + 1;
 
     const pilotRec = await queryOne('SELECT current_wing FROM pilots WHERE id = ?', [pilot_id]);

@@ -1735,6 +1735,8 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
     if (!pilot_id) return res.status(400).json({ error: 'pilot_id required' });
     const pilot = await queryOne('SELECT * FROM pilots WHERE id = ?', [pilot_id]);
     if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
+    const existing = await queryOne('SELECT pilot_id FROM active_timers WHERE pilot_id = ?', [pilot_id]);
+    if (existing) return res.status(409).json({ error: `${pilot.name} is already away` });
 
     const now = new Date();
     const expires = new Date(now.getTime() + 60 * 60 * 1000);
@@ -1776,6 +1778,14 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
     const duration = is_peak_trip ? 120 : 60; // peak trips get 2 hours, standard 1 hour
     const expires = new Date(now.getTime() + duration * 60 * 1000);
     const groupId = uuidv4();
+
+    // Guard: reject if any pilot is already away
+    const alreadyAway = [];
+    for (const pid of pilot_ids) {
+      const t = await queryOne('SELECT pilot_id FROM active_timers WHERE pilot_id = ?', [pid]);
+      if (t) { const p = await queryOne('SELECT name FROM pilots WHERE id = ?', [pid]); alreadyAway.push(p?.name || pid); }
+    }
+    if (alreadyAway.length > 0) return res.status(409).json({ error: `Already away: ${alreadyAway.join(', ')}` });
 
     const pilotNames = [];
     const pilotMap = []; // { id, name } for push after all names known
@@ -1834,6 +1844,8 @@ app.post('/api/office/add-to-group', verifyOffice, async (req, res) => {
     // Get pilot info
     const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [pilot_id]);
     if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
+    const existingTimer = await queryOne('SELECT pilot_id FROM active_timers WHERE pilot_id = ?', [pilot_id]);
+    if (existingTimer) return res.status(409).json({ error: `${pilot.name} is already away` });
     // Add pilot with their own fresh timer starting from now, using their individual flight #
     const now = new Date();
     const newExpires = new Date(now.getTime() + 60 * 60 * 1000);
@@ -1866,6 +1878,8 @@ app.post('/api/office/convert-to-group', verifyOffice, async (req, res) => {
 
     const newPilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [new_pilot_id]);
     if (!newPilot) return res.status(404).json({ error: 'New pilot not found' });
+    const newPilotTimer = await queryOne('SELECT pilot_id FROM active_timers WHERE pilot_id = ?', [new_pilot_id]);
+    if (newPilotTimer) return res.status(409).json({ error: `${newPilot.name} is already away` });
 
     const groupId = uuidv4();
     const now = new Date();

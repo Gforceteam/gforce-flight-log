@@ -5198,6 +5198,11 @@ async function submitSendAway() {
       pilots.push({ id: sel.value, name: sel.options[sel.selectedIndex].textContent, num: num ? (num.value || '') : '' });
   });
   if (pilots.length === 0) { toast('Select at least one pilot', 'warn'); return; }
+  const alreadyAway = pilots.filter(p => officePilots.find(op => String(op.id) === String(p.id) && op.status === 'airborne'));
+  if (alreadyAway.length > 0) {
+    toast(`${alreadyAway.map(p => p.name).join(', ')} ${alreadyAway.length === 1 ? 'is' : 'are'} already away`, 'err');
+    return;
+  }
   try {
     let res, data;
     if (pilots.length === 1) {

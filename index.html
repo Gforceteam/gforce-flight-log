@@ -5195,10 +5195,14 @@ async function toggleOfficeFI(flightId, btn) {
           <textarea id="ofi-edit-notes-${esc(flightId)}" rows="2"
             style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-size:13px;resize:vertical;">${notesVal}</textarea>
         </div>
-        <div style="display:flex;gap:8px;justify-content:flex-end;">
-          <span id="ofi-edit-msg-${esc(flightId)}" style="font-size:12px;color:var(--muted);align-self:center;"></span>
-          <button onclick="saveOfficeFIEdit('${esc(flightId)}')"
-            style="padding:5px 16px;background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Save</button>
+        <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;">
+          <button onclick="deleteOfficeFlight('${esc(flightId)}')"
+            style="padding:5px 14px;background:transparent;border:1px solid var(--danger);border-radius:6px;color:var(--danger);font-size:12px;font-weight:700;cursor:pointer;">🗑 Delete</button>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span id="ofi-edit-msg-${esc(flightId)}" style="font-size:12px;color:var(--muted);"></span>
+            <button onclick="saveOfficeFIEdit('${esc(flightId)}')"
+              style="padding:5px 16px;background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Save</button>
+          </div>
         </div>
       </div>`;
     panel.innerHTML = eventsHtml + editHtml;
@@ -5225,6 +5229,17 @@ async function saveOfficeFIEdit(flightId) {
     await loadOfficeData();
     setTimeout(() => { msgEl && (msgEl.textContent = ''); }, 2000);
   } catch { msgEl.textContent = 'Error saving'; }
+}
+
+async function deleteOfficeFlight(flightId) {
+  if (!confirm('Permanently delete this flight record? This cannot be undone.')) return;
+  try {
+    const res = await officeFetch('/api/office/flights/' + flightId, { method: 'DELETE' });
+    if (!res || !res.ok) { toast('Could not delete flight', 'err'); return; }
+    _ofiFetched.delete(flightId);
+    toast('Flight deleted');
+    await loadOfficeData();
+  } catch { toast('Could not delete flight', 'err'); }
 }
 
 function makeSendAwayRow(isFirst) {

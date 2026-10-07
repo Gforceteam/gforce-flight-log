@@ -6347,7 +6347,7 @@ function updateTimers() {
         if (officeActive && !_bellFired.has(`${p.id}:exp`)) {
           _bellFired.add(`${p.id}:exp`);
           if (notifEnabled(NOTIF_KEYS.expired)) {
-            playBell(10);
+            playBell(2);
             officeSystemNotif('⏰ Timer expired!', `${p.name}'s timer has expired — they need to land.`);
           }
         }

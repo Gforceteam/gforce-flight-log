@@ -672,6 +672,10 @@
       .office-clock { display: none; }
       .office-subtitle { display: none; }
       .office-dispatch-label { display: none; }
+      .office-header-center { display: none; }
+      .office-ws-badge { display: none; }
+      .office-refresh-btn { display: none; }
+      .airborne-label { display: none; }
       .office-logo-icon { width: 30px; height: 30px; }
       .office-header h1 { font-size: 17px; letter-spacing: 2px; }
       .office-header { padding: 10px 14px; }
@@ -1626,7 +1630,7 @@
     <div class="office-header-right">
       <div class="office-airborne-chip" id="office-airborne-chip">
         <span class="airborne-dot"></span>
-        <span id="office-airborne-count">0</span>&nbsp;airborne
+        <span id="office-airborne-count">0</span><span class="airborne-label">&nbsp;airborne</span>
       </div>
       <div class="office-clock" id="office-clock"></div>
       <div class="office-ws-badge" id="office-ws-badge">
@@ -1634,7 +1638,7 @@
         <span class="ws-badge-label" id="ws-badge-label">LIVE</span>
       </div>
       <button id="mute-btn" onclick="toggleMute()" class="office-icon-btn" title="Mute alerts" style="font-size:18px;">🔔</button>
-      <button onclick="location.reload()" class="office-icon-btn" title="Refresh app" style="font-size:18px;">↻</button>
+      <button onclick="location.reload()" class="office-icon-btn office-refresh-btn" title="Refresh app" style="font-size:18px;">↻</button>
       <button onclick="openOfficeMenu()" class="office-icon-btn" title="Menu" style="font-size:22px;line-height:1;">☰</button>
     </div>
   </div>

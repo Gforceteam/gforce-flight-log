@@ -2116,6 +2116,26 @@ app.get('/api/office/pending-acks', verifyOffice, async (req, res) => {
   }
 });
 
+app.patch('/api/office/flights/:id', verifyOffice, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { flight_num, notes } = req.body;
+    const flight = await queryOne('SELECT * FROM flights WHERE id = ?', [id]);
+    if (!flight) return res.status(404).json({ error: 'Flight not found' });
+    const newNum = flight_num !== undefined ? Number(flight_num) : flight.flight_num;
+    if (flight_num !== undefined && (!Number.isInteger(newNum) || newNum < 0)) {
+      return res.status(400).json({ error: 'Invalid flight number' });
+    }
+    const newNotes = notes !== undefined ? sanitize(String(notes), 500) : (flight.notes || '');
+    await run('UPDATE flights SET flight_num=?, notes=? WHERE id=?', [newNum, newNotes, id]);
+    broadcast({ type: 'FLIGHT_UPDATED', pilot_id: flight.pilot_id });
+    res.json({ message: 'Flight updated' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.get('/api/office/flights', verifyOffice, async (req, res) => {
   try {
     const flights = await queryAll(`

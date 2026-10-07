@@ -5171,21 +5171,60 @@ async function toggleOfficeFI(flightId, btn) {
       events.push({ ts: flight.landed_at, icon: '🛬', text: 'Pilot landed' });
     }
     events.sort((a, b) => a.ts.localeCompare(b.ts));
-    if (events.length === 0) {
-      panel.innerHTML = '<div style="padding:10px 0 4px;font-size:12px;color:var(--muted);">No events recorded.</div>';
-    } else {
-      panel.innerHTML = `<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;display:flex;flex-direction:column;gap:0;">
-        ${events.map(e => `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);">
-          <span style="font-size:16px;width:22px;text-align:center;flex-shrink:0;">${e.icon}</span>
-          <span style="font-size:13px;font-weight:600;color:var(--text);flex:1;">${e.text}</span>
-          <span style="font-size:11px;color:var(--muted);flex-shrink:0;">${fmtTs(e.ts)}</span>
-        </div>`).join('')}
+    const eventsHtml = events.length === 0
+      ? '<div style="padding:10px 0 4px;font-size:12px;color:var(--muted);">No events recorded.</div>'
+      : `<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;display:flex;flex-direction:column;gap:0;">
+          ${events.map(e => `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);">
+            <span style="font-size:16px;width:22px;text-align:center;flex-shrink:0;">${e.icon}</span>
+            <span style="font-size:13px;font-weight:600;color:var(--text);flex:1;">${e.text}</span>
+            <span style="font-size:11px;color:var(--muted);flex-shrink:0;">${fmtTs(e.ts)}</span>
+          </div>`).join('')}
+        </div>`;
+    const notesVal = esc(flight.notes && flight.notes !== 'Did Not Fly' ? flight.notes : '');
+    const flightNumVal = flight.flight_num || '';
+    const editHtml = `
+      <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px;display:flex;flex-direction:column;gap:8px;">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">Edit Flight</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label style="font-size:12px;color:var(--text-2);white-space:nowrap;flex-shrink:0;">Flight #</label>
+          <input id="ofi-edit-num-${esc(flightId)}" type="number" min="0" value="${flightNumVal}"
+            style="width:72px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-size:13px;">
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-start;">
+          <label style="font-size:12px;color:var(--text-2);white-space:nowrap;flex-shrink:0;padding-top:6px;">Notes</label>
+          <textarea id="ofi-edit-notes-${esc(flightId)}" rows="2"
+            style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-size:13px;resize:vertical;">${notesVal}</textarea>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <span id="ofi-edit-msg-${esc(flightId)}" style="font-size:12px;color:var(--muted);align-self:center;"></span>
+          <button onclick="saveOfficeFIEdit('${esc(flightId)}')"
+            style="padding:5px 16px;background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Save</button>
+        </div>
       </div>`;
-    }
+    panel.innerHTML = eventsHtml + editHtml;
   } catch {
     panel.innerHTML = '<div style="padding:10px 0 4px;font-size:12px;color:var(--muted);">Could not load flight info.</div>';
     _ofiFetched.delete(flightId);
   }
+}
+
+async function saveOfficeFIEdit(flightId) {
+  const numEl   = document.getElementById('ofi-edit-num-'   + flightId);
+  const notesEl = document.getElementById('ofi-edit-notes-' + flightId);
+  const msgEl   = document.getElementById('ofi-edit-msg-'   + flightId);
+  if (!numEl || !notesEl) return;
+  msgEl.textContent = 'Saving…';
+  try {
+    const res = await officeFetch('/api/office/flights/' + flightId, {
+      method: 'PATCH',
+      body: JSON.stringify({ flight_num: Number(numEl.value), notes: notesEl.value.trim() })
+    });
+    if (!res || !res.ok) { const e = await res?.json().catch(() => ({})); msgEl.textContent = e.error || 'Error saving'; return; }
+    msgEl.textContent = 'Saved ✓';
+    _ofiFetched.delete(flightId);
+    await loadOfficeData();
+    setTimeout(() => { msgEl && (msgEl.textContent = ''); }, 2000);
+  } catch { msgEl.textContent = 'Error saving'; }
 }
 
 function makeSendAwayRow(isFirst) {

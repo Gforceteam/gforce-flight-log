@@ -729,32 +729,39 @@
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.75; } }
     #office-alert-banner.show { display: block; }
 
-    #landing-banners { display: flex; flex-direction: column; }
+    #landing-banners {
+      display: flex; flex-direction: row; flex-wrap: wrap;
+      gap: 8px; padding: 8px 14px;
+      background: rgba(26,122,60,0.08);
+      border-bottom: 1px solid rgba(26,122,60,0.2);
+    }
+    #landing-banners:empty { display: none; }
     .landing-banner-item {
       display: flex;
-      background: linear-gradient(90deg, #1a7a3c, #219150);
+      background: linear-gradient(135deg, #1a7a3c, #219150);
       color: #fff;
-      padding: 11px 20px;
-      font-size: 15px;
-      font-weight: 700;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      border-bottom: 1px solid rgba(255,255,255,0.15);
-      animation: landingSlideIn 0.2s ease;
-    }
-    @keyframes landingSlideIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
-    .landing-banner-dismiss {
-      background: rgba(255,255,255,0.2);
-      border: 1px solid rgba(255,255,255,0.4);
-      border-radius: 6px;
-      color: #fff;
+      padding: 8px 10px 8px 14px;
       font-size: 13px;
       font-weight: 700;
-      padding: 4px 12px;
+      align-items: center;
+      gap: 8px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(26,122,60,0.3);
+      animation: landingSlideIn 0.18s ease;
+    }
+    @keyframes landingSlideIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+    .landing-banner-dismiss {
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 6px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 8px;
       cursor: pointer;
       white-space: nowrap;
       flex-shrink: 0;
+      line-height: 1.4;
     }
     .landing-banner-dismiss:hover { background: rgba(255,255,255,0.35); }
 

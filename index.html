@@ -729,19 +729,22 @@
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.75; } }
     #office-alert-banner.show { display: block; }
 
-    #landing-banner {
-      display: none;
+    #landing-banners { display: flex; flex-direction: column; }
+    .landing-banner-item {
+      display: flex;
       background: linear-gradient(90deg, #1a7a3c, #219150);
       color: #fff;
-      padding: 13px 20px;
+      padding: 11px 20px;
       font-size: 15px;
       font-weight: 700;
       align-items: center;
       justify-content: center;
       gap: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.15);
+      animation: landingSlideIn 0.2s ease;
     }
-    #landing-banner.show { display: flex; }
-    #landing-banner-dismiss {
+    @keyframes landingSlideIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+    .landing-banner-dismiss {
       background: rgba(255,255,255,0.2);
       border: 1px solid rgba(255,255,255,0.4);
       border-radius: 6px;
@@ -753,7 +756,7 @@
       white-space: nowrap;
       flex-shrink: 0;
     }
-    #landing-banner-dismiss:hover { background: rgba(255,255,255,0.35); }
+    .landing-banner-dismiss:hover { background: rgba(255,255,255,0.35); }
 
     .office-content { padding: 18px 20px; max-width: 900px; margin: 0 auto; }
     .office-tab-content { display: none; background: var(--bg); }
@@ -1659,10 +1662,7 @@
     ⚠️ PILOT TIMER EXPIRED — <span id="alert-pilot-name"></span> has not reported landing!
   </div>
 
-  <div id="landing-banner">
-    <span id="landing-banner-text"></span>
-    <button id="landing-banner-dismiss" onclick="clearLandingBanner()">✓ Clear</button>
-  </div>
+  <div id="landing-banners"></div>
 
   <div id="office-ext-panel"></div>
 
@@ -6467,24 +6467,20 @@ function dismissAlert(pilotName) {
   document.getElementById('office-alert-banner').classList.remove('show');
 }
 
-let _landedPending = [];
 function showLandingBanner(pilotName) {
-  if (!_landedPending.includes(pilotName)) _landedPending.push(pilotName);
-  const banner = document.getElementById('landing-banner');
-  const textEl = document.getElementById('landing-banner-text');
-  if (!banner || !textEl) return;
-  const n = _landedPending.length;
-  let nameStr;
-  if (n === 1) nameStr = _landedPending[0];
-  else if (n === 2) nameStr = _landedPending[0] + ' & ' + _landedPending[1];
-  else nameStr = _landedPending.slice(0, -1).join(', ') + ' & ' + _landedPending[n - 1];
-  textEl.textContent = `🛬 ${nameStr} ${n === 1 ? 'has' : 'have'} landed`;
-  banner.classList.add('show');
+  const container = document.getElementById('landing-banners');
+  if (!container) return;
+  const id = 'lb-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+  const item = document.createElement('div');
+  item.className = 'landing-banner-item';
+  item.id = id;
+  item.innerHTML = `<span style="flex:1;text-align:center;">🛬 ${pilotName} has landed</span>
+    <button class="landing-banner-dismiss" onclick="dismissLandingBanner('${id}')">✓ Clear</button>`;
+  container.appendChild(item);
 }
-function clearLandingBanner() {
-  _landedPending = [];
-  const banner = document.getElementById('landing-banner');
-  if (banner) banner.classList.remove('show');
+function dismissLandingBanner(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
 }
 
 // Landing Acknowledgment — emoji panel removed

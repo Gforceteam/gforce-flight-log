@@ -1863,8 +1863,27 @@
               <label class="notif-switch"><input type="checkbox" id="notif-expired" onchange="setNotifPref('notif_office_expired',this.checked)"><span class="notif-slider"></span></label>
             </div>
             <div class="notif-row">
-              <div><div class="notif-label">Voice announcements</div><div class="notif-desc">Spoken alert for 10-min warnings</div></div>
+              <div><div class="notif-label">Voice announcements</div><div class="notif-desc">Spoken alert for landing warnings</div></div>
               <label class="notif-switch"><input type="checkbox" id="notif-voice" onchange="setNotifPref('notif_office_voice',this.checked)"><span class="notif-slider"></span></label>
+            </div>
+            <div style="padding:8px 0 12px;border-bottom:1px solid var(--border);margin-bottom:4px;">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:10px;">Voice Repeat Count</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;">
+                <div><div class="notif-label">10-min warning</div><div class="notif-desc">How many times the phrase is spoken</div></div>
+                <select id="voice-repeat-10min" onchange="setVoiceRepeat('voice_repeat_10min',+this.value)" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">
+                  <option value="1">× 1</option>
+                  <option value="2">× 2</option>
+                  <option value="3">× 3</option>
+                </select>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;">
+                <div><div class="notif-label">5-min warning</div><div class="notif-desc">How many times the phrase is spoken</div></div>
+                <select id="voice-repeat-5min" onchange="setVoiceRepeat('voice_repeat_5min',+this.value)" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;">
+                  <option value="1">× 1</option>
+                  <option value="2">× 2</option>
+                  <option value="3">× 3</option>
+                </select>
+              </div>
             </div>
             <div class="notif-row">
               <div><div class="notif-label">Pilot left office</div><div class="notif-desc">Toast when a pilot is sent away</div></div>
@@ -6438,7 +6457,7 @@ function updateTimers() {
                 ? groupMembers.slice(0, -1).join(', ') + ' and ' + groupMembers[groupMembers.length - 1]
                 : groupMembers[0];
               if (officeVisible) toast(`⚠️ ${nameStr} — 10 min to landing`);
-              if (notifEnabled(NOTIF_KEYS.voice)) speak(`10 minute warning for ${nameStr}`, nameStr);
+              if (notifEnabled(NOTIF_KEYS.voice)) { const p10=`10 minute warning for ${nameStr}`; speak(Array(voiceRepeat('voice_repeat_10min')).fill(p10).join(', '), nameStr); }
               officeSystemNotif('⚠️ 10 min to landing', `${nameStr} needs to land in 10 minutes.`);
             }
           }
@@ -6447,7 +6466,7 @@ function updateTimers() {
           _bellFired.add(`${p.id}:5`);
           if (officeActive && notifEnabled(NOTIF_KEYS['5min'])) {
             if (officeVisible) toast(`⚠️ ${p.name} — 5 min to landing`);
-            if (notifEnabled(NOTIF_KEYS.voice)) speak(`5 minute warning for ${p.name}, 5 minute warning for ${p.name}`, p.name);
+            if (notifEnabled(NOTIF_KEYS.voice)) { const p5=`5 minute warning for ${p.name}`; speak(Array(voiceRepeat('voice_repeat_5min')).fill(p5).join(', '), p.name); }
             officeSystemNotif('⚠️ 5 min to landing', `${p.name} needs to land in 5 minutes.`);
           }
         }
@@ -8277,11 +8296,23 @@ function toggleNotifPanel() {
   chevron.style.transform = open ? 'rotate(90deg)' : '';
   if (open) renderNotifToggles();
 }
+function voiceRepeat(key) {
+  const v = parseInt(localStorage.getItem(key), 10);
+  const def = key === 'voice_repeat_10min' ? 1 : 2;
+  return (isNaN(v) || v < 1 || v > 3) ? def : v;
+}
+function setVoiceRepeat(key, n) {
+  localStorage.setItem(key, String(Math.max(1, Math.min(3, n))));
+}
 function renderNotifToggles() {
   Object.entries(NOTIF_KEYS).forEach(([id, key]) => {
     const el = document.getElementById('notif-' + id);
     if (el) el.checked = notifEnabled(key);
   });
+  const r10 = document.getElementById('voice-repeat-10min');
+  if (r10) r10.value = String(voiceRepeat('voice_repeat_10min'));
+  const r5 = document.getElementById('voice-repeat-5min');
+  if (r5) r5.value = String(voiceRepeat('voice_repeat_5min'));
 }
 
 async function loadOfficeSettings() {

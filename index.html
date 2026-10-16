@@ -586,13 +586,12 @@
       background: #ffffff;
       box-shadow: 0 2px 12px rgba(0,0,0,0.08);
       padding: 13px 22px;
-      display: flex;
-      justify-content: space-between;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
       align-items: center;
       position: sticky;
       top: 0;
       z-index: 10;
-      gap: 12px;
     }
     .office-header::after {
       content: '';
@@ -617,11 +616,11 @@
       letter-spacing: 4px; text-transform: uppercase;
       font-family: 'Montserrat', sans-serif;
     }
-    .office-header-center { position: absolute; left: 50%; transform: translateX(-50%); pointer-events: none; }
+    .office-header-center { display: flex; justify-content: center; pointer-events: none; }
     .office-dispatch-label { font-size: 18px; font-weight: 800; font-family: 'Montserrat', sans-serif; letter-spacing: 3px; color: #111111; text-transform: uppercase; }
     @media (prefers-color-scheme: dark) { .office-dispatch-label { color: var(--text); } }
     :root[data-theme="dark"] .office-dispatch-label { color: var(--text); }
-    .office-header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .office-header-right { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
     .office-airborne-chip {
       display: none; align-items: center; gap: 6px;
       background: rgba(245,166,35,0.10); border: 1px solid rgba(245,166,35,0.28);
@@ -669,16 +668,16 @@
     }
     .office-logout-btn:hover { border-color: rgba(240,68,56,0.5); color: var(--danger); }
     @media (max-width: 600px) {
+      .office-header { padding: 10px 14px; grid-template-columns: 1fr auto; }
+      .office-header-center { display: none; }
       .office-clock { display: none; }
       .office-subtitle { display: none; }
       .office-dispatch-label { display: none; }
-      .office-header-center { display: none; }
       .office-ws-badge { display: none; }
       .office-refresh-btn { display: none; }
       .airborne-label { display: none; }
       .office-logo-icon { width: 30px; height: 30px; }
       .office-header h1 { font-size: 17px; letter-spacing: 2px; }
-      .office-header { padding: 10px 14px; }
       /* Pilot header mobile */
       .status-bar { padding: 10px 14px; gap: 8px; }
       .status-bar-logo { width: 30px; height: 30px; }

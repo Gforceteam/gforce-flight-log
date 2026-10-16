@@ -6438,7 +6438,7 @@ function updateTimers() {
                 ? groupMembers.slice(0, -1).join(', ') + ' and ' + groupMembers[groupMembers.length - 1]
                 : groupMembers[0];
               if (officeVisible) toast(`⚠️ ${nameStr} — 10 min to landing`);
-              if (notifEnabled(NOTIF_KEYS.voice)) speak(`10 minute warning for ${nameStr}, 10 minute warning for ${nameStr}, 10 minute warning for ${nameStr}`, nameStr);
+              if (notifEnabled(NOTIF_KEYS.voice)) speak(`10 minute warning for ${nameStr}`, nameStr);
               officeSystemNotif('⚠️ 10 min to landing', `${nameStr} needs to land in 10 minutes.`);
             }
           }

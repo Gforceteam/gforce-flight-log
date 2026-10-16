@@ -6447,7 +6447,7 @@ function updateTimers() {
           _bellFired.add(`${p.id}:5`);
           if (officeActive && notifEnabled(NOTIF_KEYS['5min'])) {
             if (officeVisible) toast(`⚠️ ${p.name} — 5 min to landing`);
-            playBell(5);
+            if (notifEnabled(NOTIF_KEYS.voice)) speak(`5 minute warning for ${p.name}, 5 minute warning for ${p.name}`, p.name);
             officeSystemNotif('⚠️ 5 min to landing', `${p.name} needs to land in 5 minutes.`);
           }
         }

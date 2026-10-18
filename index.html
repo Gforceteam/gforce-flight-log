@@ -5998,7 +5998,22 @@ function sortToday(col) {
 
 // ─── Flights Tab — Calendar View ──────────────────────────────────────────────
 
-function renderFlightsTab() {
+// Returns per-pilot flight counts for a given date, respecting duty sheet overrides.
+function calDayPilotCounts(dateStr) {
+  return [...officePilots]
+    .filter(p => !HIDDEN_PILOTS.includes(p.name))
+    .sort(pilotSort)
+    .map(p => {
+      const auto = allFlights.filter(f => String(f.pilot_id) === String(p.id) && f.date === dateStr && !f.did_not_fly).length;
+      const ov   = dutySheetOverrides.find(o => String(o.pilot_id) === String(p.id) && o.date === dateStr);
+      const cnt  = ov !== undefined ? ov.count : auto;
+      return { name: p.name, count: cnt || 0 };
+    })
+    .filter(r => r.count > 0);
+}
+
+async function renderFlightsTab() {
+  if (!dutySheetOverrides.length) await loadDutySheetOverrides();
   calRenderGrid();
   if (_calSelectedDate) calRenderDayDetail(_calSelectedDate);
 }
@@ -6018,21 +6033,20 @@ function calRenderGrid() {
   if (label) label.textContent = new Date(_calYear, _calMonth, 1)
     .toLocaleDateString('en-NZ', { month: 'long', year: 'numeric' });
 
+  // Build day totals from allFlights for the badge (fast — no override lookup needed)
   const monthStr = `${_calYear}-${String(_calMonth + 1).padStart(2,'0')}`;
-  const dayMap = {};
+  const dayTotals = {};
   for (const f of allFlights) {
-    if (f.date && f.date.startsWith(monthStr)) {
-      dayMap[f.date] = (dayMap[f.date] || 0) + 1;
+    if (f.date && f.date.startsWith(monthStr) && !f.did_not_fly) {
+      dayTotals[f.date] = (dayTotals[f.date] || 0) + 1;
     }
   }
 
-  const today = todayStr();
+  const today    = todayStr();
   const firstDay = new Date(_calYear, _calMonth, 1);
   const lastDay  = new Date(_calYear, _calMonth + 1, 0);
-
-  // NZ week starts Monday (Mon=0 … Sun=6)
-  let startDow = firstDay.getDay();
-  startDow = startDow === 0 ? 6 : startDow - 1;
+  let startDow   = firstDay.getDay();
+  startDow = startDow === 0 ? 6 : startDow - 1; // Mon=0 … Sun=6
 
   const dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   let html = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;">`;
@@ -6045,17 +6059,17 @@ function calRenderGrid() {
 
   for (let day = 1; day <= lastDay.getDate(); day++) {
     const dateStr = `${_calYear}-${String(_calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-    const count    = dayMap[dateStr] || 0;
-    const isToday  = dateStr === today;
-    const isSel    = dateStr === _calSelectedDate;
+    const total   = dayTotals[dateStr] || 0;
+    const isToday = dateStr === today;
+    const isSel   = dateStr === _calSelectedDate;
 
     const bg     = isSel ? 'var(--accent)' : isToday ? 'rgba(243,115,41,0.08)' : 'var(--card)';
     const border = isSel ? 'var(--accent)' : isToday ? 'var(--accent)'          : 'var(--border)';
     const numCol = isSel ? '#fff' : 'var(--text)';
     const numWt  = (isToday || isSel) ? '800' : '600';
 
-    const badge = count > 0
-      ? `<div style="margin-top:3px;font-size:10px;font-weight:700;color:${isSel ? 'rgba(255,255,255,0.9)' : 'var(--accent)'};background:${isSel ? 'rgba(255,255,255,0.2)' : 'rgba(243,115,41,0.12)'};border-radius:99px;padding:1px 5px;display:inline-block;line-height:1.5;">${count}</div>`
+    const badge = total > 0
+      ? `<div style="margin-top:3px;font-size:10px;font-weight:700;color:${isSel ? 'rgba(255,255,255,0.9)' : 'var(--accent)'};background:${isSel ? 'rgba(255,255,255,0.2)' : 'rgba(243,115,41,0.12)'};border-radius:99px;padding:1px 5px;display:inline-block;line-height:1.5;">${total}</div>`
       : `<div style="margin-top:3px;height:18px;"></div>`;
 
     html += `<button onclick="calSelectDay('${dateStr}')" style="background:${bg};border:2px solid ${border};border-radius:10px;padding:7px 2px 6px;text-align:center;cursor:pointer;transition:all 0.12s;min-height:54px;">
@@ -6086,41 +6100,32 @@ function calRenderDayDetail(dateStr) {
   const detail = document.getElementById('cal-day-detail');
   if (!detail) return;
 
-  const dayFlights = allFlights
-    .filter(f => f.date === dateStr)
-    .sort((a, b) => (Number(a.flight_num) || 0) - (Number(b.flight_num) || 0));
-
-  const d = new Date(dateStr + 'T00:00:00');
+  const rows  = calDayPilotCounts(dateStr);
+  const total = rows.reduce((s, r) => s + r.count, 0);
+  const d     = new Date(dateStr + 'T00:00:00');
   const label = d.toLocaleDateString('en-NZ', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 
   let html = `<div style="margin-top:12px;padding:16px;background:var(--card);border:1px solid var(--border);border-radius:14px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
       <div>
         <div style="font-size:15px;font-weight:800;color:var(--text);">${label}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px;">${dayFlights.length} flight${dayFlights.length===1?'':'s'} recorded</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">${total} flight${total===1?'':'s'} total</div>
       </div>
-      ${dayFlights.length > 0 ? `<button onclick="calExportDay('${dateStr}')" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">↓ Download CSV</button>` : ''}
+      ${total > 0 ? `<button onclick="calExportDay('${dateStr}')" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">↓ Download CSV</button>` : ''}
     </div>`;
 
-  if (dayFlights.length === 0) {
+  if (rows.length === 0) {
     html += `<div style="text-align:center;padding:24px 0;color:var(--muted);font-size:14px;">No flights recorded on this day</div>`;
   } else {
-    html += `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table class="flight-table" style="min-width:480px;width:100%;">
-      <thead><tr><th>Pilot</th><th>Client</th><th>#</th><th>kg</th><th>Site</th><th>Min</th><th>Notes</th><th></th></tr></thead><tbody>`;
-    for (const f of dayFlights) {
-      const pid = (f.pilot_name || '').replace(/'/g, "\\'");
-      html += `<tr>
-        <td class="pilot-col">${esc(f.pilot_name)}</td>
-        <td class="client-col">${esc(f.client_name || '—')}</td>
-        <td>${f.flight_num}</td>
-        <td>${f.weight}</td>
-        <td style="white-space:nowrap">${esc(f.takeoff)}→${esc(f.landing)}</td>
-        <td>${f.time}</td>
-        <td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.notes || '')}</td>
-        <td style="white-space:nowrap"><button class="btn-edit" onclick="officeEditFlight('${f.id}')" style="margin-right:4px;">✏️</button><button class="btn-danger" onclick="officeDeleteFlight('${f.id}','${pid}')">🗑</button></td>
-      </tr>`;
+    html += `<table class="flight-table" style="width:100%;">
+      <thead><tr><th style="text-align:left;">Pilot</th><th style="text-align:center;">Flights</th></tr></thead><tbody>`;
+    for (const r of rows) {
+      html += `<tr><td class="pilot-col">${esc(r.name)}</td><td style="text-align:center;font-weight:700;">${r.count}</td></tr>`;
     }
-    html += `</tbody></table></div>`;
+    html += `</tbody><tfoot><tr style="border-top:2px solid var(--border);">
+      <td style="font-weight:700;padding:8px 10px;">Total</td>
+      <td style="text-align:center;font-weight:800;padding:8px 10px;">${total}</td>
+    </tr></tfoot></table>`;
   }
 
   html += `</div>`;
@@ -6128,19 +6133,44 @@ function calRenderDayDetail(dateStr) {
   setTimeout(() => detail.scrollIntoView({ behavior:'smooth', block:'nearest' }), 50);
 }
 
+function calBuildFFCsv(dates) {
+  const pilots = [...officePilots].filter(p => !HIDDEN_PILOTS.includes(p.name)).sort(pilotSort);
+  const header = ['Date', ...pilots.map(p => p.name), 'Total'];
+  const rows = dates.map(dateStr => {
+    const counts = pilots.map(p => {
+      const auto = allFlights.filter(f => String(f.pilot_id) === String(p.id) && f.date === dateStr && !f.did_not_fly).length;
+      const ov   = dutySheetOverrides.find(o => String(o.pilot_id) === String(p.id) && o.date === dateStr);
+      return ov !== undefined ? (ov.count || 0) : auto;
+    });
+    const total = counts.reduce((s, c) => s + c, 0);
+    return [dateStr, ...counts, total];
+  }).filter(r => r[r.length - 1] > 0); // skip days with no flights
+  return [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+}
+
 function calExportDay(dateStr) {
-  const rows = allFlights.filter(f => f.date === dateStr);
+  const rows = calDayPilotCounts(dateStr);
   if (rows.length === 0) { toast('No flights on this day'); return; }
-  downloadCSV(buildCSV(rows), `gforce_flights_${dateStr}.csv`);
+  const total = rows.reduce((s, r) => s + r.count, 0);
+  const csv = [
+    ['"Date"','"Pilot"','"Flights"'].join(','),
+    ...rows.map(r => [`"${dateStr}"`, `"${r.name.replace(/"/g,'""')}"`, `"${r.count}"`].join(',')),
+    [`"Total"`, `""`, `"${total}"`].join(',')
+  ].join('\n');
+  downloadCSV(csv, `gforce_ff_${dateStr}.csv`);
 }
 
 function calExportMonth() {
   const monthStr = `${_calYear}-${String(_calMonth + 1).padStart(2,'0')}`;
-  const rows = allFlights.filter(f => f.date && f.date.startsWith(monthStr));
-  if (rows.length === 0) { toast('No flights this month to export'); return; }
-  const d = new Date(_calYear, _calMonth, 1);
+  const lastDay  = new Date(_calYear, _calMonth + 1, 0).getDate();
+  const dates    = Array.from({ length: lastDay }, (_, i) =>
+    `${monthStr}-${String(i + 1).padStart(2,'0')}`
+  );
+  const csv = calBuildFFCsv(dates);
+  if (!csv.includes('\n')) { toast('No flights this month to export'); return; }
+  const d    = new Date(_calYear, _calMonth, 1);
   const slug = d.toLocaleDateString('en-NZ', { month:'long', year:'numeric' }).replace(/\s/g, '_');
-  downloadCSV(buildCSV(rows), `gforce_flights_${slug}.csv`);
+  downloadCSV(csv, `gforce_ff_${slug}.csv`);
 }
 
 function officeFmtDateWithYear(s) {
@@ -6301,7 +6331,11 @@ async function exportTodayFlightsCSV() {
 
 function exportAllCSV() {
   if (allFlights.length === 0) { toast('No flights to export'); return; }
-  downloadCSV(buildCSV(allFlights), 'gforce_flights_all.csv');
+  // Build sorted unique date list from all flight records
+  const dateSet = new Set(allFlights.filter(f => !f.did_not_fly).map(f => f.date));
+  const dates   = [...dateSet].sort();
+  if (dates.length === 0) { toast('No flights to export'); return; }
+  downloadCSV(calBuildFFCsv(dates), 'gforce_ff_all.csv');
 }
 function buildCSV(flights) {
   const header = ['Date','Pilot','Client Name','Flight #','Weight (kg)','Takeoff','Landing','Time (min)','Notes','Sent Away','Logged At'];

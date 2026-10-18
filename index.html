@@ -5998,22 +5998,62 @@ function sortToday(col) {
 
 // ─── Flights Tab — Calendar View ──────────────────────────────────────────────
 
-// Returns per-pilot flight counts for a given date, respecting duty sheet overrides.
-function calDayPilotCounts(dateStr) {
-  return [...officePilots]
-    .filter(p => !HIDDEN_PILOTS.includes(p.name))
-    .sort(pilotSort)
-    .map(p => {
-      const auto = allFlights.filter(f => String(f.pilot_id) === String(p.id) && f.date === dateStr && !f.did_not_fly).length;
-      const ov   = dutySheetOverrides.find(o => String(o.pilot_id) === String(p.id) && o.date === dateStr);
-      const cnt  = ov !== undefined ? ov.count : auto;
-      return { name: p.name, count: cnt || 0 };
-    })
-    .filter(r => r.count > 0);
+// Fetch flight-info (adjustments + event log) for a set of flights in parallel.
+async function fetchFlightInfoMap(flights) {
+  const map = {};
+  await Promise.all(flights.map(async f => {
+    try {
+      const res = await officeFetch('/api/office/flight-info/' + f.id);
+      if (res && res.ok) map[f.id] = await res.json();
+    } catch (_) {}
+  }));
+  return map;
+}
+
+// Build the same CSV as exportTodayFlightsCSV but for any set of flights.
+function buildFFCsvFromFlights(flights, infoMap) {
+  const fmtNZ = ts => ts ? new Date(ts).toLocaleString('en-NZ', { timeZone: NZ_TZ, hour:'numeric', minute:'2-digit', hour12:true }) : '';
+  const durMins = (s, l) => (!s || !l) ? '' : Math.round((new Date(l) - new Date(s)) / 60000);
+  const eventLabel = { timer_expired:'Timer expired', timer_extended_30min:'Extension +30 min', timer_extended_30min_approved:'Extension approved +30 min', landed:'Pilot landed', landed_early:'Office landed pilot', landed_by_group_member:'Landed via group', did_not_fly:'Did not fly' };
+
+  const groupMap = {};
+  flights.forEach(f => {
+    if (!f.sent_away_at) return;
+    if (!groupMap[f.sent_away_at]) groupMap[f.sent_away_at] = [];
+    groupMap[f.sent_away_at].push(f);
+  });
+
+  const buildEvents = f => {
+    const info = infoMap[f.id];
+    if (!info) return '';
+    const fmtT = ts => new Date(ts).toLocaleTimeString('en-NZ', { hour:'numeric', minute:'2-digit', timeZone:NZ_TZ });
+    const parts = [];
+    if (f.sent_away_at) parts.push(`Sent away ${fmtT(f.sent_away_at)}`);
+    for (const a of (info.adjustments || [])) parts.push(`${a.delta > 0 ? '+' : ''}${a.delta} min @ ${fmtT(a.created_at)}`);
+    for (const l of (info.logs || [])) { const lb = eventLabel[l.event]; if (lb) parts.push(`${lb} @ ${fmtT(l.created_at)}`); }
+    if (f.landed_at && !(info.logs || []).some(l => ['landed','landed_early','landed_by_group_member'].includes(l.event))) parts.push(`Landed ${fmtT(f.landed_at)}`);
+    return parts.join('; ');
+  };
+
+  const buildAdj = f => {
+    const info = infoMap[f.id];
+    if (!info || !(info.adjustments || []).length) return '';
+    const total = info.adjustments.reduce((s, a) => s + a.delta, 0);
+    return info.adjustments.map(a => `${a.delta > 0 ? '+' : ''}${a.delta} min`).join(', ') + ` (net ${total > 0 ? '+' : ''}${total} min)`;
+  };
+
+  const header = ['Date', 'Pilot', 'Flight #', 'Client', 'Type', 'Sent Away', 'Landed', 'Duration (min)', 'Adjustments', 'Event Log'];
+  const sorted = [...flights].sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.sent_away_at || '').localeCompare(b.sent_away_at || '') || (a.flight_num || 0) - (b.flight_num || 0));
+  const rows = sorted.map(f => {
+    const grp = f.sent_away_at ? (groupMap[f.sent_away_at] || [f]) : [f];
+    const others = grp.filter(g => g.id !== f.id);
+    const type = grp.length > 1 ? `${grp.length}-Pax Group with ${others.map(g => `${g.pilot_name}${g.flight_num ? ` (#${g.flight_num})` : ''}`).join(' and ')}` : 'Single Pax';
+    return [f.date, f.pilot_name || '', f.flight_num || '', f.client_name || '', type, fmtNZ(f.sent_away_at), f.did_not_fly ? 'Did Not Fly' : fmtNZ(f.landed_at), f.did_not_fly ? '' : durMins(f.sent_away_at, f.landed_at), buildAdj(f), buildEvents(f)];
+  });
+  return [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
 }
 
 async function renderFlightsTab() {
-  if (!dutySheetOverrides.length) await loadDutySheetOverrides();
   calRenderGrid();
   if (_calSelectedDate) calRenderDayDetail(_calSelectedDate);
 }
@@ -6100,32 +6140,49 @@ function calRenderDayDetail(dateStr) {
   const detail = document.getElementById('cal-day-detail');
   if (!detail) return;
 
-  const rows  = calDayPilotCounts(dateStr);
-  const total = rows.reduce((s, r) => s + r.count, 0);
+  const dayFlights = allFlights
+    .filter(f => f.date === dateStr)
+    .sort((a, b) => (a.sent_away_at || '').localeCompare(b.sent_away_at || '') || (a.flight_num || 0) - (b.flight_num || 0));
+
   const d     = new Date(dateStr + 'T00:00:00');
   const label = d.toLocaleDateString('en-NZ', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+  const fmtT = ts => ts ? new Date(ts).toLocaleTimeString('en-NZ', { timeZone:NZ_TZ, hour:'numeric', minute:'2-digit', hour12:true }) : '—';
+  const durMins = (s, l) => (!s || !l) ? '—' : Math.round((new Date(l) - new Date(s)) / 60000) + ' min';
+
+  const groupMap = {};
+  dayFlights.forEach(f => { if (f.sent_away_at) { if (!groupMap[f.sent_away_at]) groupMap[f.sent_away_at] = []; groupMap[f.sent_away_at].push(f); } });
 
   let html = `<div style="margin-top:12px;padding:16px;background:var(--card);border:1px solid var(--border);border-radius:14px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
       <div>
         <div style="font-size:15px;font-weight:800;color:var(--text);">${label}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px;">${total} flight${total===1?'':'s'} total</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">${dayFlights.length} flight${dayFlights.length===1?'':'s'}</div>
       </div>
-      ${total > 0 ? `<button onclick="calExportDay('${dateStr}')" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">↓ Download CSV</button>` : ''}
+      ${dayFlights.length > 0 ? `<button onclick="calExportDay('${dateStr}')" style="padding:8px 16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">↓ Download CSV</button>` : ''}
     </div>`;
 
-  if (rows.length === 0) {
+  if (dayFlights.length === 0) {
     html += `<div style="text-align:center;padding:24px 0;color:var(--muted);font-size:14px;">No flights recorded on this day</div>`;
   } else {
-    html += `<table class="flight-table" style="width:100%;">
-      <thead><tr><th style="text-align:left;">Pilot</th><th style="text-align:center;">Flights</th></tr></thead><tbody>`;
-    for (const r of rows) {
-      html += `<tr><td class="pilot-col">${esc(r.name)}</td><td style="text-align:center;font-weight:700;">${r.count}</td></tr>`;
+    html += `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table class="flight-table" style="min-width:480px;width:100%;">
+      <thead><tr><th>Pilot</th><th>#</th><th>Client</th><th>Type</th><th>Sent Away</th><th>Landed</th><th>Duration</th></tr></thead><tbody>`;
+    for (const f of dayFlights) {
+      const grp = f.sent_away_at ? (groupMap[f.sent_away_at] || [f]) : [f];
+      const type = grp.length > 1 ? `${grp.length}-Pax` : 'Solo';
+      const landed = f.did_not_fly ? '<span style="color:var(--muted)">Did Not Fly</span>' : fmtT(f.landed_at);
+      const dur    = f.did_not_fly ? '—' : durMins(f.sent_away_at, f.landed_at);
+      html += `<tr>
+        <td class="pilot-col">${esc(f.pilot_name)}</td>
+        <td>${f.flight_num || ''}</td>
+        <td>${esc(f.client_name || '—')}</td>
+        <td style="white-space:nowrap;">${type}</td>
+        <td style="white-space:nowrap;">${fmtT(f.sent_away_at)}</td>
+        <td style="white-space:nowrap;">${landed}</td>
+        <td style="white-space:nowrap;">${dur}</td>
+      </tr>`;
     }
-    html += `</tbody><tfoot><tr style="border-top:2px solid var(--border);">
-      <td style="font-weight:700;padding:8px 10px;">Total</td>
-      <td style="text-align:center;font-weight:800;padding:8px 10px;">${total}</td>
-    </tr></tfoot></table>`;
+    html += `</tbody></table></div>`;
   }
 
   html += `</div>`;
@@ -6133,56 +6190,23 @@ function calRenderDayDetail(dateStr) {
   setTimeout(() => detail.scrollIntoView({ behavior:'smooth', block:'nearest' }), 50);
 }
 
-// Build duty-sheet style CSV matching the server's export format exactly.
-// dates: array of YYYY-MM-DD strings
-// title: first row label
-function calBuildFFCsv(dates, title) {
-  const pilots = [...officePilots].filter(p => !HIDDEN_PILOTS.includes(p.name)).sort(pilotSort);
-  const cc = v => { const s = String(v ?? ''); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g,'""')}"` : s; };
-  const row = cols => cols.map(cc).join(',');
-
-  const dateLabels = dates.map(d => new Date(d + 'T12:00:00').toLocaleDateString('en-NZ', { day:'numeric', month:'short' }));
-  const header = ['Pilot', ...dateLabels, 'Days Worked', 'Days Left'];
-  const lines  = [title, row(header)];
-  const dailyTotals = new Array(dates.length).fill(0);
-
-  pilots.forEach(p => {
-    const dayCounts = dates.map((d, i) => {
-      const auto = allFlights.filter(f => String(f.pilot_id) === String(p.id) && f.date === d && !f.did_not_fly).length;
-      const ov   = dutySheetOverrides.find(o => String(o.pilot_id) === String(p.id) && o.date === d);
-      const cnt  = ov !== undefined ? (ov.count || 0) : auto;
-      if (cnt > 0) dailyTotals[i] += cnt;
-      return cnt || '';
-    });
-    const worked = dayCounts.filter(c => c !== '').length;
-    lines.push(row([p.name, ...dayCounts, worked, 14 - worked]));
-  });
-
-  lines.push(row(['Total', ...dailyTotals.map(t => t || ''), '', '']));
-  return '﻿' + lines.join('\r\n'); // BOM for Excel
+async function calExportDay(dateStr) {
+  const dayFlights = allFlights.filter(f => f.date === dateStr);
+  if (dayFlights.length === 0) { toast('No flights on this day'); return; }
+  toast('Preparing export…');
+  const infoMap = await fetchFlightInfoMap(dayFlights);
+  downloadCSV(buildFFCsvFromFlights(dayFlights, infoMap), `gforce_ff_${dateStr}.csv`);
 }
 
-function calExportDay(dateStr) {
-  const label = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-NZ', { day:'numeric', month:'short', year:'numeric' });
-  const csv = calBuildFFCsv([dateStr], `Flight Following (${label})`);
-  // Check at least one pilot has a flight
-  const rows = calDayPilotCounts(dateStr);
-  if (rows.length === 0) { toast('No flights on this day'); return; }
-  downloadCSV(csv, `gforce_ff_${dateStr}.csv`);
-}
-
-function calExportMonth() {
-  const monthStr = `${_calYear}-${String(_calMonth + 1).padStart(2,'0')}`;
-  const lastDay  = new Date(_calYear, _calMonth + 1, 0).getDate();
-  const dates    = Array.from({ length: lastDay }, (_, i) =>
-    `${monthStr}-${String(i + 1).padStart(2,'0')}`
-  );
-  const hasFlights = allFlights.some(f => f.date && f.date.startsWith(monthStr) && !f.did_not_fly);
-  if (!hasFlights) { toast('No flights this month to export'); return; }
-  const d     = new Date(_calYear, _calMonth, 1);
-  const label = d.toLocaleDateString('en-NZ', { month:'long', year:'numeric' });
-  const slug  = label.replace(/\s/g, '_');
-  downloadCSV(calBuildFFCsv(dates, `Flight Following (${label})`), `gforce_ff_${slug}.csv`);
+async function calExportMonth() {
+  const monthStr   = `${_calYear}-${String(_calMonth + 1).padStart(2,'0')}`;
+  const monthFlights = allFlights.filter(f => f.date && f.date.startsWith(monthStr));
+  if (monthFlights.length === 0) { toast('No flights this month to export'); return; }
+  toast('Preparing export…');
+  const infoMap = await fetchFlightInfoMap(monthFlights);
+  const d    = new Date(_calYear, _calMonth, 1);
+  const slug = d.toLocaleDateString('en-NZ', { month:'long', year:'numeric' }).replace(/\s/g, '_');
+  downloadCSV(buildFFCsvFromFlights(monthFlights, infoMap), `gforce_ff_${slug}.csv`);
 }
 
 function officeFmtDateWithYear(s) {
@@ -6341,13 +6365,11 @@ async function exportTodayFlightsCSV() {
   downloadCSV(csv, `gforce_today_${today}.csv`);
 }
 
-function exportAllCSV() {
+async function exportAllCSV() {
   if (allFlights.length === 0) { toast('No flights to export'); return; }
-  const dateSet = new Set(allFlights.filter(f => !f.did_not_fly).map(f => f.date));
-  const dates   = [...dateSet].sort();
-  if (dates.length === 0) { toast('No flights to export'); return; }
-  const today = new Date().toLocaleDateString('en-NZ', { day:'numeric', month:'short', year:'numeric' });
-  downloadCSV(calBuildFFCsv(dates, `Flight Following — All Records (exported ${today})`), 'gforce_ff_all.csv');
+  toast('Preparing export…');
+  const infoMap = await fetchFlightInfoMap(allFlights);
+  downloadCSV(buildFFCsvFromFlights(allFlights, infoMap), 'gforce_ff_all.csv');
 }
 function buildCSV(flights) {
   const header = ['Date','Pilot','Client Name','Flight #','Weight (kg)','Takeoff','Landing','Time (min)','Notes','Sent Away','Logged At'];

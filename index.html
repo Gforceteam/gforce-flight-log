@@ -6133,30 +6133,41 @@ function calRenderDayDetail(dateStr) {
   setTimeout(() => detail.scrollIntoView({ behavior:'smooth', block:'nearest' }), 50);
 }
 
-function calBuildFFCsv(dates) {
+// Build duty-sheet style CSV matching the server's export format exactly.
+// dates: array of YYYY-MM-DD strings
+// title: first row label
+function calBuildFFCsv(dates, title) {
   const pilots = [...officePilots].filter(p => !HIDDEN_PILOTS.includes(p.name)).sort(pilotSort);
-  const header = ['Date', ...pilots.map(p => p.name), 'Total'];
-  const rows = dates.map(dateStr => {
-    const counts = pilots.map(p => {
-      const auto = allFlights.filter(f => String(f.pilot_id) === String(p.id) && f.date === dateStr && !f.did_not_fly).length;
-      const ov   = dutySheetOverrides.find(o => String(o.pilot_id) === String(p.id) && o.date === dateStr);
-      return ov !== undefined ? (ov.count || 0) : auto;
+  const cc = v => { const s = String(v ?? ''); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g,'""')}"` : s; };
+  const row = cols => cols.map(cc).join(',');
+
+  const dateLabels = dates.map(d => new Date(d + 'T12:00:00').toLocaleDateString('en-NZ', { day:'numeric', month:'short' }));
+  const header = ['Pilot', ...dateLabels, 'Days Worked', 'Days Left'];
+  const lines  = [title, row(header)];
+  const dailyTotals = new Array(dates.length).fill(0);
+
+  pilots.forEach(p => {
+    const dayCounts = dates.map((d, i) => {
+      const auto = allFlights.filter(f => String(f.pilot_id) === String(p.id) && f.date === d && !f.did_not_fly).length;
+      const ov   = dutySheetOverrides.find(o => String(o.pilot_id) === String(p.id) && o.date === d);
+      const cnt  = ov !== undefined ? (ov.count || 0) : auto;
+      if (cnt > 0) dailyTotals[i] += cnt;
+      return cnt || '';
     });
-    const total = counts.reduce((s, c) => s + c, 0);
-    return [dateStr, ...counts, total];
-  }).filter(r => r[r.length - 1] > 0); // skip days with no flights
-  return [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const worked = dayCounts.filter(c => c !== '').length;
+    lines.push(row([p.name, ...dayCounts, worked, 14 - worked]));
+  });
+
+  lines.push(row(['Total', ...dailyTotals.map(t => t || ''), '', '']));
+  return '﻿' + lines.join('\r\n'); // BOM for Excel
 }
 
 function calExportDay(dateStr) {
+  const label = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-NZ', { day:'numeric', month:'short', year:'numeric' });
+  const csv = calBuildFFCsv([dateStr], `Flight Following (${label})`);
+  // Check at least one pilot has a flight
   const rows = calDayPilotCounts(dateStr);
   if (rows.length === 0) { toast('No flights on this day'); return; }
-  const total = rows.reduce((s, r) => s + r.count, 0);
-  const csv = [
-    ['"Date"','"Pilot"','"Flights"'].join(','),
-    ...rows.map(r => [`"${dateStr}"`, `"${r.name.replace(/"/g,'""')}"`, `"${r.count}"`].join(',')),
-    [`"Total"`, `""`, `"${total}"`].join(',')
-  ].join('\n');
   downloadCSV(csv, `gforce_ff_${dateStr}.csv`);
 }
 
@@ -6166,11 +6177,12 @@ function calExportMonth() {
   const dates    = Array.from({ length: lastDay }, (_, i) =>
     `${monthStr}-${String(i + 1).padStart(2,'0')}`
   );
-  const csv = calBuildFFCsv(dates);
-  if (!csv.includes('\n')) { toast('No flights this month to export'); return; }
-  const d    = new Date(_calYear, _calMonth, 1);
-  const slug = d.toLocaleDateString('en-NZ', { month:'long', year:'numeric' }).replace(/\s/g, '_');
-  downloadCSV(csv, `gforce_ff_${slug}.csv`);
+  const hasFlights = allFlights.some(f => f.date && f.date.startsWith(monthStr) && !f.did_not_fly);
+  if (!hasFlights) { toast('No flights this month to export'); return; }
+  const d     = new Date(_calYear, _calMonth, 1);
+  const label = d.toLocaleDateString('en-NZ', { month:'long', year:'numeric' });
+  const slug  = label.replace(/\s/g, '_');
+  downloadCSV(calBuildFFCsv(dates, `Flight Following (${label})`), `gforce_ff_${slug}.csv`);
 }
 
 function officeFmtDateWithYear(s) {
@@ -6331,11 +6343,11 @@ async function exportTodayFlightsCSV() {
 
 function exportAllCSV() {
   if (allFlights.length === 0) { toast('No flights to export'); return; }
-  // Build sorted unique date list from all flight records
   const dateSet = new Set(allFlights.filter(f => !f.did_not_fly).map(f => f.date));
   const dates   = [...dateSet].sort();
   if (dates.length === 0) { toast('No flights to export'); return; }
-  downloadCSV(calBuildFFCsv(dates), 'gforce_ff_all.csv');
+  const today = new Date().toLocaleDateString('en-NZ', { day:'numeric', month:'short', year:'numeric' });
+  downloadCSV(calBuildFFCsv(dates, `Flight Following — All Records (exported ${today})`), 'gforce_ff_all.csv');
 }
 function buildCSV(flights) {
   const header = ['Date','Pilot','Client Name','Flight #','Weight (kg)','Takeoff','Landing','Time (min)','Notes','Sent Away','Logged At'];

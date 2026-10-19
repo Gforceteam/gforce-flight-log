@@ -7461,7 +7461,7 @@ function renderCoronetExtraForm(idx) {
   if (!el) return;
 
   // Pilot options from Loop Board (same filter as main forms)
-  const _loopPilotIds = new Set(loopBoard.filter(s => s.pilot_id).map(s => String(s.pilot_id)));
+  const _loopPilotIds = new Set(loopBoard.filter(s => s.pilot_id && !s.done).map(s => String(s.pilot_id)));
   const _availPilots = officePilots
     .filter(p => p.status !== 'airborne' && (_loopPilotIds.size === 0 || _loopPilotIds.has(String(p.id))))
     .sort(pilotSort);
@@ -7645,7 +7645,7 @@ function renderCoronetForm(van) {
   if (!el) return;
 
   // Build pilot options from Loop Board (mirrors Send Away behaviour)
-  const _loopPilotIds = new Set(loopBoard.filter(s => s.pilot_id).map(s => String(s.pilot_id)));
+  const _loopPilotIds = new Set(loopBoard.filter(s => s.pilot_id && !s.done).map(s => String(s.pilot_id)));
   const _availPilots = officePilots
     .filter(p => p.status !== 'airborne' && (_loopPilotIds.size === 0 || _loopPilotIds.has(String(p.id))))
     .sort(pilotSort);

@@ -6532,6 +6532,23 @@ function updateTimers() {
     // Use officeToken to gate audio — bells fire even when tab is in background
     const officeActive = !!officeToken;
     const officeVisible = document.getElementById('office-dashboard')?.style.display !== 'none';
+    // Pre-compute group bell reset eligibility: only reset a group key if ALL group members are above the threshold.
+    // Without this, a member still above 10 min would delete the group key that a below-threshold member just set,
+    // causing the warning to repeat every tick.
+    const _groupAbove10 = new Set();
+    const _groupAbove5 = new Set();
+    {
+      const airborneGroups = new Map();
+      officePilots.forEach(p => {
+        if (p.status !== 'airborne' || !p.timer_expires_at || !p.group_id) return;
+        if (!airborneGroups.has(p.group_id)) airborneGroups.set(p.group_id, []);
+        airborneGroups.get(p.group_id).push(new Date(p.timer_expires_at).getTime() - now);
+      });
+      airborneGroups.forEach((rems, gid) => {
+        if (rems.every(r => r >= 600000)) _groupAbove10.add(gid);
+        if (rems.every(r => r >= 300000)) _groupAbove5.add(gid);
+      });
+    }
     officePilots.forEach(p => {
       if (p.status !== 'airborne' || !p.timer_expires_at) return;
       const expires = new Date(p.timer_expires_at).getTime();
@@ -6564,8 +6581,14 @@ function updateTimers() {
         // If time was extended back above a threshold, reset that bell so it fires again on next crossing
         const bellKey10 = p.group_id ? `group:${p.group_id}:10` : `${p.id}:10`;
         const bellKey5  = p.group_id ? `group:${p.group_id}:5`  : `${p.id}:5`;
-        if (remaining >= 600000) { _bellFired.delete(bellKey10); _bellFired.delete(bellKey5); _bellFired.delete(`${p.id}:exp`); }
-        else if (remaining >= 300000) { _bellFired.delete(bellKey5); _bellFired.delete(`${p.id}:exp`); }
+        if (remaining >= 600000) {
+          if (!p.group_id || _groupAbove10.has(p.group_id)) _bellFired.delete(bellKey10);
+          if (!p.group_id || _groupAbove5.has(p.group_id)) _bellFired.delete(bellKey5);
+          _bellFired.delete(`${p.id}:exp`);
+        } else if (remaining >= 300000) {
+          if (!p.group_id || _groupAbove5.has(p.group_id)) _bellFired.delete(bellKey5);
+          _bellFired.delete(`${p.id}:exp`);
+        }
 
         if (remaining < 600000) {
           const card = document.getElementById(`pilot-card-${p.id}`);

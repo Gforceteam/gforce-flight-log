@@ -5002,8 +5002,16 @@ async function loadOfficeData() {
     if (pilotsRes.status === 401) { officeDoLogout(); return; }
     officePilots = await pilotsRes.json();
     // Clear bell flags for pilots no longer airborne so their next flight triggers fresh bells
-    const _nowAirborne = new Set(officePilots.filter(p => p.status === 'airborne').map(p => p.id));
-    for (const key of [..._bellFired]) { if (!_nowAirborne.has(key.split(':')[0])) _bellFired.delete(key); }
+    const _nowAirborne = new Set(officePilots.filter(p => p.status === 'airborne').map(p => String(p.id)));
+    const _nowAirborneGroups = new Set(officePilots.filter(p => p.status === 'airborne' && p.group_id).map(p => String(p.group_id)));
+    for (const key of [..._bellFired]) {
+      if (key.startsWith('group:')) {
+        const gid = key.split(':')[1];
+        if (!_nowAirborneGroups.has(gid)) _bellFired.delete(key);
+      } else {
+        if (!_nowAirborne.has(key.split(':')[0])) _bellFired.delete(key);
+      }
+    }
     const _airborneCount = officePilots.filter(p => p.status === 'airborne').length;
     const _chip = document.getElementById('office-airborne-chip');
     const _countEl = document.getElementById('office-airborne-count');

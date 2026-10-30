@@ -1432,6 +1432,7 @@
       <div class="pilot-tab-date" id="pilot-date-ff" style="margin-bottom:0;"></div>
       <button onclick="loadMyData()" style="padding:6px 16px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;">↻ Refresh</button>
     </div>
+    <div id="pilot-coronet-live"></div>
     <div class="dashboard-status" id="dashboard-content"></div>
   </div>
 
@@ -1794,6 +1795,7 @@
         <button id="ff-edit-btn" onclick="toggleFFEditMode()" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">✏ Edit</button>
         <button onclick="exportDutySheetCSV()" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">⬇ Export</button>
       </div>
+      <div id="office-coronet-live" style="padding:0 16px;"></div>
       <div class="ff-wrap" id="office-ff-content"><div class="empty-state">Loading…</div></div>
     </div>
 
@@ -3206,6 +3208,7 @@ async function loadMyData() {
     allTodayFlights = todayFlightsRes && todayFlightsRes.ok ? await todayFlightsRes.json() : [];
     updatePilotAirborneChip();
     renderDashboard();
+    renderCoronetLiveBanner('pilot-coronet-live', apiFetch);
     renderFlights();
     updateStatusBadge();
     setServerStatus('synced');
@@ -4734,6 +4737,7 @@ async function renderOfficeFF() {
     <td></td>
   </tr></tfoot></table>`;
   document.getElementById('office-ff-content').innerHTML = html;
+  renderCoronetLiveBanner('office-coronet-live', officeFetch);
 }
 
 async function toggleFFEditMode() {
@@ -7358,6 +7362,55 @@ function copyOwnTracksUrl(btn, url) {
 }
 
 // ─── Coronet Peak Manifests ──────────────────────────────────────────────────
+
+async function renderCoronetLiveBanner(containerId, fetchFn) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  try {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+    const res = await fetchFn(`/api/office/coronet-trips?date=${today}`);
+    if (!res || !res.ok) { el.innerHTML = ''; return; }
+    const trips = await res.json();
+    const active = trips.filter(t => t.van_left_at && !t.van_returned_at);
+    if (!active.length) { el.innerHTML = ''; return; }
+
+    const fmt = iso => iso ? new Date(iso).toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', timeZone: NZ_TZ }) : '';
+
+    const cards = active.map(t => {
+      const m = t.manifest || {};
+      const allPax = [...(m.passengers || []).filter((p, i) => i < 5 && (p.name || p.pilot))];
+      if (m.extraPilotName || m.extraPilot) allPax.push({ ref: m.extraPilotRef, name: m.extraPilotName, pilot: m.extraPilot });
+
+      const flying = t.flying_started_at && !t.landed_at;
+      const landed = !!t.landed_at;
+      const statusColor = flying ? '#16a34a' : landed ? 'var(--muted)' : 'var(--accent)';
+      const statusLabel = flying ? '🛫 All Flying' : landed ? '🛬 All Landed' : '🚐 En Route';
+
+      const stamps = [
+        t.van_left_at && `Van Left ${fmt(t.van_left_at)}`,
+        t.flying_started_at && `Flying ${fmt(t.flying_started_at)}`,
+        t.landed_at && `Landed ${fmt(t.landed_at)}`,
+      ].filter(Boolean).join(' · ');
+
+      const pilots = allPax.filter(p => p.pilot).map(p => esc(p.pilot)).join(', ');
+
+      return `<div style="padding:10px 14px 10px 13px;background:var(--card);border:1px solid var(--border);border-radius:12px;border-left:3px solid ${statusColor};margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:${stamps || pilots ? '5px' : '0'};">
+          <span style="font-size:13px;font-weight:700;color:var(--text);">🏔 ${esc(t.van_label || 'Gforce ' + t.van)}</span>
+          ${m.time ? `<span style="font-size:12px;font-weight:700;color:var(--accent);">${esc(m.time)}</span>` : ''}
+          <span style="padding:2px 8px;border-radius:100px;background:${statusColor}18;color:${statusColor};font-size:11px;font-weight:700;">${statusLabel}</span>
+        </div>
+        ${stamps ? `<div style="font-size:11px;color:var(--muted);margin-bottom:${pilots ? '3px' : '0'};">${stamps}</div>` : ''}
+        ${pilots ? `<div style="font-size:12px;color:var(--text);">Pilots: <strong>${pilots}</strong></div>` : ''}
+      </div>`;
+    }).join('');
+
+    el.innerHTML = `<div style="margin-bottom:8px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:8px;">🏔 Coronet Peak — Live</div>
+      ${cards}
+    </div>`;
+  } catch (_) { el.innerHTML = ''; }
+}
 
 // Default manifest state for one van
 function _coronetDefault() {

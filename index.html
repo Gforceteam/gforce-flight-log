@@ -7365,12 +7365,15 @@ function copyOwnTracksUrl(btn, url) {
 
 async function renderCoronetLiveBanner(containerId, fetchFn) {
   const el = document.getElementById(containerId);
+  console.log('[CoronetBanner] el:', containerId, !!el);
   if (!el) return;
   try {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
     const res = await fetchFn(`/api/office/coronet-trips?date=${today}`);
+    console.log('[CoronetBanner] res ok:', res?.ok, 'status:', res?.status);
     if (!res || !res.ok) { el.innerHTML = ''; return; }
     const trips = await res.json();
+    console.log('[CoronetBanner] trips:', trips.length, 'active:', trips.filter(t => t.van_left_at && !t.van_returned_at).length, trips.map(t => ({id:t.id, van_left_at:t.van_left_at, van_returned_at:t.van_returned_at})));
     const active = trips.filter(t => t.van_left_at && !t.van_returned_at);
     if (!active.length) { el.innerHTML = ''; return; }
 

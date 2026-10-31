@@ -3208,7 +3208,7 @@ async function loadMyData() {
     allTodayFlights = todayFlightsRes && todayFlightsRes.ok ? await todayFlightsRes.json() : [];
     updatePilotAirborneChip();
     renderDashboard();
-    renderCoronetLiveBanner('pilot-coronet-live', apiFetch);
+    renderCoronetLiveBanner('pilot-coronet-live');
     renderFlights();
     updateStatusBadge();
     setServerStatus('synced');
@@ -4992,7 +4992,7 @@ function refreshOfficeUiAfterLoad() {
     case 'loop': _loopSafeRender(); break;
     case 'today': renderTodayTab(); break;
     case 'flights': renderFlightsTab(); break;
-    case 'ff': renderOfficeFF(); renderCoronetLiveBanner('office-coronet-live', officeFetch); break;
+    case 'ff': renderOfficeFF(); renderCoronetLiveBanner('office-coronet-live'); break;
 case 'settings': break;
     default: renderGroupsTab(); renderTodayFlights(); renderOfficeTab();
   }
@@ -7180,7 +7180,7 @@ function showOfficeTab(name) {
   if (tabEl) tabEl.classList.add('active');
   const btnEl = document.getElementById(`office-tab-${name}-btn`);
   if (btnEl) btnEl.classList.add('active');
-  if (name === 'ff') { renderOfficeFF(); renderCoronetLiveBanner('office-coronet-live', officeFetch); }
+  if (name === 'ff') { renderOfficeFF(); renderCoronetLiveBanner('office-coronet-live'); }
 if (name === 'pilots') { renderAwayTab(); renderGroupsTab(); renderTodayFlights(); renderOfficeTab(); }
   if (name === 'loop') loadLoopBoard();
   if (name === 'today') renderTodayTab();
@@ -7366,17 +7366,18 @@ function copyOwnTracksUrl(btn, url) {
 
 // ─── Coronet Peak Manifests ──────────────────────────────────────────────────
 
-async function renderCoronetLiveBanner(containerId, fetchFn) {
+async function renderCoronetLiveBanner(containerId) {
   const el = document.getElementById(containerId);
-  console.log('[CoronetBanner] el:', containerId, !!el);
   if (!el) return;
   try {
+    const token = officeToken || pilotToken;
+    if (!token) { el.innerHTML = ''; return; }
     const today = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
-    const res = await fetchFn(`/api/office/coronet-trips?date=${today}`);
-    console.log('[CoronetBanner] res ok:', res?.ok, 'status:', res?.status);
+    const res = await fetch(`${API_BASE}/api/office/coronet-trips?date=${today}`, {
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+    });
     if (!res || !res.ok) { el.innerHTML = ''; return; }
     const trips = await res.json();
-    console.log('[CoronetBanner] trips:', trips.length, 'active:', trips.filter(t => t.van_left_at && !t.van_returned_at).length, trips.map(t => ({id:t.id, van_left_at:t.van_left_at, van_returned_at:t.van_returned_at})));
     const active = trips.filter(t => t.van_left_at && !t.van_returned_at);
     if (!active.length) { el.innerHTML = ''; return; }
 

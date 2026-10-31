@@ -3514,11 +3514,13 @@ function renderAllTodayFlights() {
     if (isGroup) {
       const pilotRows = grp.map(f => {
         const landedTime = fmtTime(f.landed_at);
-        const stillUp = !f.landed_at;
+        const stillUp = !f.landed_at && !f.did_not_fly;
+        const statusText = f.did_not_fly ? 'Did Not Fly' : stillUp ? 'Airborne' : `Landed ${esc(landedTime)}`;
+        const statusColor = f.did_not_fly ? 'var(--muted)' : stillUp ? 'var(--accent)' : 'var(--muted)';
         const isMe = String(f.pilot_id) === String(pilotId);
-        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);gap:8px;${isMe ? 'font-weight:700;' : ''}">
-          <span style="font-size:14px;font-weight:${isMe ? '700' : '600'};flex:1;min-width:0;">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
-          <span style="font-size:13px;color:${stillUp ? 'var(--accent)' : 'var(--muted)'};">${stillUp ? 'Airborne' : `Landed ${esc(landedTime)}`}</span>
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);gap:8px;${isMe ? 'font-weight:700;' : ''}${f.did_not_fly ? 'opacity:0.6;' : ''}">
+          <span style="font-size:14px;font-weight:${isMe ? '700' : '600'};flex:1;min-width:0;${f.did_not_fly ? 'text-decoration:line-through;' : ''}">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
+          <span style="font-size:13px;color:${statusColor};">${statusText}</span>
         </div>`;
       }).join('');
       html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;${cardBg}">
@@ -3531,15 +3533,17 @@ function renderAllTodayFlights() {
     } else {
       const f = grp[0];
       const landedTime = fmtTime(f.landed_at);
-      const stillUp = !f.landed_at;
-      html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;${cardBg}">
+      const stillUp = !f.landed_at && !f.did_not_fly;
+      const statusText = f.did_not_fly ? 'Did Not Fly' : stillUp ? 'Airborne' : `Landed ${esc(landedTime)}`;
+      const statusColor = f.did_not_fly ? 'var(--muted)' : stillUp ? 'var(--accent)' : 'var(--muted)';
+      html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;${cardBg}${f.did_not_fly ? 'opacity:0.7;' : ''}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
           <span class="tdf-group-label">Single Pax</span>
           <span style="font-size:12px;color:var(--muted);">Away ${esc(sentTime)}</span>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);gap:8px;">
-          <span class="tdf-pilot" style="flex:1;min-width:0;">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
-          <span style="font-size:13px;color:${stillUp ? 'var(--accent)' : 'var(--muted)'};">${stillUp ? 'Airborne' : `Landed ${esc(landedTime)}`}</span>
+          <span class="tdf-pilot" style="flex:1;min-width:0;${f.did_not_fly ? 'text-decoration:line-through;' : ''}">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
+          <span style="font-size:13px;color:${statusColor};">${statusText}</span>
         </div>
       </div>`;
     }

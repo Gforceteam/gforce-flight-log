@@ -1681,6 +1681,7 @@
 
   <div class="office-content">
     <div class="office-tab-content active" id="office-tab-pilots">
+      <div id="office-coronet-live" style="padding:0 16px;"></div>
       <div id="away-list"></div>
       <div id="groups-panel"></div>
       <div id="today-flights-panel"></div>
@@ -1795,7 +1796,6 @@
         <button id="ff-edit-btn" onclick="toggleFFEditMode()" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">✏ Edit</button>
         <button onclick="exportDutySheetCSV()" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:700;padding:6px 14px;cursor:pointer;">⬇ Export</button>
       </div>
-      <div id="office-coronet-live" style="padding:0 16px;"></div>
       <div class="ff-wrap" id="office-ff-content"><div class="empty-state">Loading…</div></div>
     </div>
 
@@ -4992,7 +4992,8 @@ function refreshOfficeUiAfterLoad() {
     case 'loop': _loopSafeRender(); break;
     case 'today': renderTodayTab(); break;
     case 'flights': renderFlightsTab(); break;
-    case 'ff': renderOfficeFF(); renderCoronetLiveBanner('office-coronet-live'); break;
+    case 'ff': renderOfficeFF(); break;
+    case 'pilots': renderCoronetLiveBanner('office-coronet-live'); break;
 case 'settings': break;
     default: renderGroupsTab(); renderTodayFlights(); renderOfficeTab();
   }
@@ -7180,7 +7181,8 @@ function showOfficeTab(name) {
   if (tabEl) tabEl.classList.add('active');
   const btnEl = document.getElementById(`office-tab-${name}-btn`);
   if (btnEl) btnEl.classList.add('active');
-  if (name === 'ff') { renderOfficeFF(); renderCoronetLiveBanner('office-coronet-live'); }
+  if (name === 'ff') { renderOfficeFF(); }
+  if (name === 'pilots') { renderCoronetLiveBanner('office-coronet-live'); }
 if (name === 'pilots') { renderAwayTab(); renderGroupsTab(); renderTodayFlights(); renderOfficeTab(); }
   if (name === 'loop') loadLoopBoard();
   if (name === 'today') renderTodayTab();

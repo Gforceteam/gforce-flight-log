@@ -4737,7 +4737,6 @@ async function renderOfficeFF() {
     <td></td>
   </tr></tfoot></table>`;
   document.getElementById('office-ff-content').innerHTML = html;
-  renderCoronetLiveBanner('office-coronet-live', officeFetch);
 }
 
 async function toggleFFEditMode() {
@@ -4989,7 +4988,7 @@ function refreshOfficeUiAfterLoad() {
     case 'loop': _loopSafeRender(); break;
     case 'today': renderTodayTab(); break;
     case 'flights': renderFlightsTab(); break;
-    case 'ff': renderOfficeFF(); break;
+    case 'ff': renderOfficeFF(); renderCoronetLiveBanner('office-coronet-live', officeFetch); break;
 case 'settings': break;
     default: renderGroupsTab(); renderTodayFlights(); renderOfficeTab();
   }
@@ -7177,7 +7176,7 @@ function showOfficeTab(name) {
   if (tabEl) tabEl.classList.add('active');
   const btnEl = document.getElementById(`office-tab-${name}-btn`);
   if (btnEl) btnEl.classList.add('active');
-  if (name === 'ff') renderOfficeFF();
+  if (name === 'ff') { renderOfficeFF(); renderCoronetLiveBanner('office-coronet-live', officeFetch); }
 if (name === 'pilots') { renderAwayTab(); renderGroupsTab(); renderTodayFlights(); renderOfficeTab(); }
   if (name === 'loop') loadLoopBoard();
   if (name === 'today') renderTodayTab();

@@ -1219,8 +1219,13 @@
     .loop-td-slot { text-align: center; font-weight: 800; color: var(--text); font-family: 'Montserrat', sans-serif; font-size: 17px; padding: 10px 6px; white-space: nowrap; }
     .loop-td-pilot { padding: 10px 8px 10px 6px; }
     .loop-td-tally { padding: 6px 4px; text-align: center; }
-    .loop-pilot-sel { width: 100%; background: #ffffff; color: #111111; border: 1px solid var(--border); border-radius: 7px; padding: 10px 8px; font-size: 17px; cursor: pointer; }
-    .loop-pilot-sel:focus { outline: none; border-color: var(--border); }
+    .loop-pilot-typeahead { position: relative; width: 100%; }
+    .loop-pilot-input { width: 100%; background: #ffffff; color: #111111; border: 1px solid var(--border); border-radius: 7px; padding: 10px 8px; font-size: 17px; cursor: text; box-sizing: border-box; }
+    .loop-pilot-input:focus { outline: none; border-color: var(--accent); }
+    .loop-pilot-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: var(--card); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.18); z-index: 200; max-height: 200px; overflow-y: auto; margin-top: 2px; }
+    .loop-pilot-option { padding: 10px 12px; font-size: 15px; cursor: pointer; color: var(--text); }
+    .loop-pilot-option:hover, .loop-pilot-option.lpo-active { background: var(--accent-dim); color: var(--accent); }
+    .loop-pilot-option.lpo-empty { color: var(--muted); }
     .loop-tally-sel { width: 60px; background: transparent; color: var(--text); border: 1px solid transparent; border-radius: 6px; padding: 10px 4px; font-size: 15px; text-align: center; cursor: pointer; }
     .loop-tally-sel:focus { outline: none; border-color: var(--border); }
     .loop-tally-sel.has-val { background: #ffffff; border-color: var(--border); color: #111111; font-weight: 700; }
@@ -6943,10 +6948,7 @@ function renderLoopBoard() {
             : `<span style="font-size:13px;color:var(--muted);padding:2px 6px;">—</span>`;
           html += `<td class="loop-td-pilot"><div class="loop-pilot-cell">${nameDisplay}${slot.pilot_id ? `<button class="loop-complete-btn" onclick="completeLoopPilot(${i})" title="Done for the day">×</button>` : ''}</div></td>`;
         } else {
-          const pilotOpts = available.map(p =>
-            `<option value="${p.id}" data-name="${p.name.replace(/"/g, '&quot;')}" ${slot.pilot_id === p.id ? 'selected' : ''}>${p.name}</option>`
-          ).join('');
-          html += `<td class="loop-td-pilot"><div class="loop-pilot-cell"><select class="loop-pilot-sel" onchange="setLoopSlot(${i},this)"><option value="">— empty —</option>${pilotOpts}</select>${slot.pilot_id ? `<button class="loop-complete-btn" onclick="completeLoopPilot(${i})" title="Done for the day">×</button>` : ''}</div></td>`;
+          html += `<td class="loop-td-pilot"><div class="loop-pilot-cell"><div class="loop-pilot-typeahead"><input type="text" class="loop-pilot-input" id="lpi-${i}" value="${slot.pilot_name ? slot.pilot_name.replace(/"/g,'&quot;') : ''}" placeholder="Search pilot…" autocomplete="off" oninput="filterLPD(${i})" onfocus="openLPD(${i})" onblur="setTimeout(()=>closeLPD(${i}),160)" onkeydown="keyLPD(event,${i})"><div class="loop-pilot-dropdown" id="lpd-${i}" style="display:none;"></div></div>${slot.pilot_id ? `<button class="loop-complete-btn" onclick="completeLoopPilot(${i})" title="Done for the day">×</button>` : ''}</div></td>`;
         }
         for (let c = 1; c <= 12; c++) {
           const val = tallies[c - 1] || '';
@@ -7126,9 +7128,49 @@ async function setLoopTally(slot, col, selectEl) {
   }
 }
 
-async function setLoopSlot(slot, selectEl) {
-  const pilot_id = selectEl.value || null;
-  const pilot_name = pilot_id ? (selectEl.options[selectEl.selectedIndex].dataset.name || null) : null;
+function openLPD(slot) {
+  const input = document.getElementById(`lpi-${slot}`);
+  const dd = document.getElementById(`lpd-${slot}`);
+  if (!input || !dd) return;
+  _renderLPD(slot, input.value);
+  dd.style.display = 'block';
+}
+
+function filterLPD(slot) {
+  const input = document.getElementById(`lpi-${slot}`);
+  const dd = document.getElementById(`lpd-${slot}`);
+  if (!input || !dd) return;
+  _renderLPD(slot, input.value);
+  dd.style.display = 'block';
+}
+
+function _renderLPD(slot, query) {
+  const dd = document.getElementById(`lpd-${slot}`);
+  if (!dd) return;
+  const q = (query || '').toLowerCase().trim();
+  const pilots = [...(officePilots || [])].sort(pilotSort).filter(p => !q || p.name.toLowerCase().includes(q));
+  let html = `<div class="loop-pilot-option lpo-empty" onmousedown="pickLPD(${slot},null,null)">— empty —</div>`;
+  html += pilots.map(p => `<div class="loop-pilot-option" onmousedown="pickLPD(${slot},${JSON.stringify(p.id)},${JSON.stringify(p.name)})">${esc(p.name)}</div>`).join('');
+  dd.innerHTML = html;
+}
+
+function closeLPD(slot) {
+  const dd = document.getElementById(`lpd-${slot}`);
+  if (dd) dd.style.display = 'none';
+  const saved = loopBoard.find(s => s.slot === slot);
+  const input = document.getElementById(`lpi-${slot}`);
+  if (input) input.value = saved?.pilot_name || '';
+}
+
+function keyLPD(e, slot) {
+  if (e.key === 'Escape') { document.getElementById(`lpi-${slot}`)?.blur(); }
+}
+
+async function pickLPD(slot, pilot_id, pilot_name) {
+  const dd = document.getElementById(`lpd-${slot}`);
+  if (dd) dd.style.display = 'none';
+  const input = document.getElementById(`lpi-${slot}`);
+  if (input) input.value = pilot_name || '';
   const oldSlotData = loopBoard.find(s => s.slot === slot);
   _lastLoopChange = { type: 'slot', slot, oldPilotId: oldSlotData?.pilot_id || null, oldPilotName: oldSlotData?.pilot_name || null };
   _loopApiStart();
@@ -7139,37 +7181,12 @@ async function setLoopSlot(slot, selectEl) {
       body: JSON.stringify({ slot, pilot_id, pilot_name, date: loopBoardDate })
     });
     if (!res.ok) { toast('Failed to update slot', 'err'); return; }
-    if (pilot_id) {
-      await autoFillLoopBoard(slot, pilot_id);
-    } else {
-      await loadLoopBoard();
-    }
+    await loadLoopBoard();
   } catch (_) {
     toast('Cannot reach server', 'err');
   } finally {
     _loopApiEnd();
   }
-}
-
-async function autoFillLoopBoard(fromSlot, firstPilotId) {
-  const sorted = [...(officePilots || [])].sort(pilotSort);
-  const startIdx = sorted.findIndex(p => p.id === firstPilotId);
-  if (startIdx === -1) return;
-  const count = loopBoardRows - fromSlot;
-  const toFill = Array.from({ length: count }, (_, i) => sorted[(startIdx + 1 + i) % sorted.length]);
-  _loopApiStart();
-  try {
-    await Promise.all(toFill.map((p, i) =>
-      officeFetch('/api/office/loop-board/slot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slot: fromSlot + 1 + i, pilot_id: p.id, pilot_name: p.name, date: loopBoardDate })
-      })
-    ));
-  } finally {
-    _loopApiEnd();
-  }
-  await loadLoopBoard();
 }
 
 // ─── Office Tabs ──────────────────────────────────────────────────────────────

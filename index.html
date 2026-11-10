@@ -7149,9 +7149,19 @@ function _renderLPD(slot, query) {
   if (!dd) return;
   const q = (query || '').toLowerCase().trim();
   const pilots = [...(officePilots || [])].sort(pilotSort).filter(p => !q || p.name.toLowerCase().includes(q));
-  let html = `<div class="loop-pilot-option lpo-empty" onmousedown='pickLPD(${slot},null,null)'>— empty —</div>`;
-  html += pilots.map(p => `<div class="loop-pilot-option" onmousedown='pickLPD(${slot},${JSON.stringify(p.id)},${JSON.stringify(p.name)})'>${esc(p.name)}</div>`).join('');
-  dd.innerHTML = html;
+  dd.innerHTML = '';
+  const emptyOpt = document.createElement('div');
+  emptyOpt.className = 'loop-pilot-option lpo-empty';
+  emptyOpt.textContent = '— empty —';
+  emptyOpt.addEventListener('mousedown', e => { e.preventDefault(); pickLPD(slot, null, null); });
+  dd.appendChild(emptyOpt);
+  pilots.forEach(p => {
+    const opt = document.createElement('div');
+    opt.className = 'loop-pilot-option';
+    opt.textContent = p.name;
+    opt.addEventListener('mousedown', e => { e.preventDefault(); pickLPD(slot, p.id, p.name); });
+    dd.appendChild(opt);
+  });
 }
 
 function closeLPD(slot) {

@@ -7149,8 +7149,8 @@ function _renderLPD(slot, query) {
   if (!dd) return;
   const q = (query || '').toLowerCase().trim();
   const pilots = [...(officePilots || [])].sort(pilotSort).filter(p => !q || p.name.toLowerCase().includes(q));
-  let html = `<div class="loop-pilot-option lpo-empty" onmousedown="pickLPD(${slot},null,null)">— empty —</div>`;
-  html += pilots.map(p => `<div class="loop-pilot-option" onmousedown="pickLPD(${slot},${JSON.stringify(p.id)},${JSON.stringify(p.name)})">${esc(p.name)}</div>`).join('');
+  let html = `<div class="loop-pilot-option lpo-empty" onmousedown='pickLPD(${slot},null,null)'>— empty —</div>`;
+  html += pilots.map(p => `<div class="loop-pilot-option" onmousedown='pickLPD(${slot},${JSON.stringify(p.id)},${JSON.stringify(p.name)})'>${esc(p.name)}</div>`).join('');
   dd.innerHTML = html;
 }
 

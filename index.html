@@ -7163,7 +7163,32 @@ function closeLPD(slot) {
 }
 
 function keyLPD(e, slot) {
-  if (e.key === 'Escape') { document.getElementById(`lpi-${slot}`)?.blur(); }
+  const dd = document.getElementById(`lpd-${slot}`);
+  if (!dd || dd.style.display === 'none') {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { openLPD(slot); e.preventDefault(); }
+    return;
+  }
+  const opts = [...dd.querySelectorAll('.loop-pilot-option')];
+  if (!opts.length) return;
+  const cur = opts.findIndex(o => o.classList.contains('lpo-active'));
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    const next = cur < opts.length - 1 ? cur + 1 : 0;
+    opts.forEach(o => o.classList.remove('lpo-active'));
+    opts[next].classList.add('lpo-active');
+    opts[next].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    const prev = cur > 0 ? cur - 1 : opts.length - 1;
+    opts.forEach(o => o.classList.remove('lpo-active'));
+    opts[prev].classList.add('lpo-active');
+    opts[prev].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (cur !== -1) opts[cur].dispatchEvent(new MouseEvent('mousedown'));
+  } else if (e.key === 'Escape') {
+    document.getElementById(`lpi-${slot}`)?.blur();
+  }
 }
 
 async function pickLPD(slot, pilot_id, pilot_name) {

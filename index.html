@@ -4937,11 +4937,15 @@ function _renderPilotPayContent(el, data) {
     </div>`;
   }
 
+  const containerId = el.id;
   el.innerHTML = `<div class="pp-wrap">
     <div class="pp-nav">
       <button class="pp-nav-btn" onclick="_ppNavMonth(-1)">‹</button>
       <div class="pp-month">${monthLabel}</div>
       <button class="pp-nav-btn" onclick="_ppNavMonth(1)">›</button>
+    </div>
+    <div style="text-align:center;padding-bottom:8px;">
+      <button onclick="renderPilotPayPage('${containerId}')" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-weight:700;padding:6px 16px;cursor:pointer;">↻ Refresh</button>
     </div>
     ${periodTable(period1, `Period 1 — ${pad(month)}/01 to ${pad(month)}/15`)}
     ${periodTable(period2, `Period 2 — ${pad(month)}/16 to ${pad(month)}/${pad(lastDay)}`)}

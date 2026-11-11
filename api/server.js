@@ -3014,6 +3014,23 @@ app.get('/api/office/loop-board/payments', verifyOffice, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.get('/api/office/loop-board/payments/range', verifyOffice, async (req, res) => {
+  try {
+    const { from, to } = req.query;
+    if (!from || !to) return res.status(400).json({ error: 'from and to required' });
+    const rows = await queryAll(`
+      SELECT lbv.date, lbv.pilot_id, lbv.pilot_name,
+             COALESCE(lbp.photo80, 0) AS photo80,
+             COALESCE(lbp.photo60, 0) AS photo60,
+             COALESCE(lbp.cp_drives, 0) AS cp_drives
+      FROM loop_board_v2 lbv
+      LEFT JOIN loop_board_payments lbp ON lbp.date = lbv.date AND lbp.slot = lbv.slot
+      WHERE lbv.date >= ? AND lbv.date <= ? AND lbv.pilot_id IS NOT NULL
+    `, [from, to]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post('/api/office/loop-board/payments', verifyOffice, async (req, res) => {
   try {
     const { date: reqDate, slot: slotRaw, field, value } = req.body;

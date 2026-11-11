@@ -483,6 +483,19 @@ function verifyPilotOrOffice(req, res, next) {
   }
 }
 
+function verifyManager(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) return res.status(401).json({ error: 'No token provided' });
+  try {
+    const decoded = jwt.verify(auth.slice(7), JWT_SECRET, { algorithms: ['HS256'] });
+    if (!decoded.is_manager) return res.status(403).json({ error: 'Manager access required' });
+    req.user = decoded;
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+}
+
 const MAX_AVATAR_BYTES = 320 * 1024;
 
 /** Returns validated data URL string, or null to clear. Throws on invalid input. */
@@ -3056,6 +3069,56 @@ app.post('/api/office/loop-board/payments', verifyOffice, async (req, res) => {
     );
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Manager Routes ───────────────────────────────────────────────────────────
+app.get('/api/manager/pilot-pay', verifyManager, async (req, res) => {
+  try {
+    const { year, month } = req.query;
+    const y = parseInt(year), m = parseInt(month);
+    if (!y || !m || m < 1 || m > 12) return res.status(400).json({ error: 'Invalid year/month' });
+    const lastDay = new Date(y, m, 0).getDate();
+    const pad = n => String(n).padStart(2, '0');
+    const p1From = `${y}-${pad(m)}-01`, p1To = `${y}-${pad(m)}-15`;
+    const p2From = `${y}-${pad(m)}-16`, p2To = `${y}-${pad(m)}-${pad(lastDay)}`;
+
+    const flightQ = `
+      SELECT p.name AS pilot_name, COUNT(f.id) AS flights
+      FROM flights f JOIN pilots p ON f.pilot_id = p.id
+      WHERE f.date >= ? AND f.date <= ? AND (f.did_not_fly IS NULL OR f.did_not_fly = 0)
+      GROUP BY f.pilot_id ORDER BY p.name`;
+
+    const payQ = `
+      SELECT lbv.pilot_name,
+        COALESCE(SUM(lbp.photo80), 0) AS photo80,
+        COALESCE(SUM(lbp.photo60), 0) AS photo60,
+        COALESCE(SUM(lbp.cp_drives), 0) AS cp_drives
+      FROM loop_board_v2 lbv
+      JOIN loop_board_payments lbp ON lbv.date = lbp.date AND lbv.slot = lbp.slot
+      WHERE lbv.date >= ? AND lbv.date <= ? AND lbv.pilot_name IS NOT NULL
+      GROUP BY lbv.pilot_name ORDER BY lbv.pilot_name`;
+
+    const [f1, f2, pay1, pay2] = await Promise.all([
+      queryAll(flightQ, [p1From, p1To]),
+      queryAll(flightQ, [p2From, p2To]),
+      queryAll(payQ, [p1From, p1To]),
+      queryAll(payQ, [p2From, p2To]),
+    ]);
+
+    function merge(flights, payments) {
+      const map = {};
+      flights.forEach(r => { map[r.pilot_name] = { pilot_name: r.pilot_name, flights: r.flights, photo80: 0, photo60: 0, cp_drives: 0 }; });
+      payments.forEach(r => {
+        if (!map[r.pilot_name]) map[r.pilot_name] = { pilot_name: r.pilot_name, flights: 0, photo80: 0, photo60: 0, cp_drives: 0 };
+        map[r.pilot_name].photo80 = r.photo80;
+        map[r.pilot_name].photo60 = r.photo60;
+        map[r.pilot_name].cp_drives = r.cp_drives;
+      });
+      return Object.values(map).sort((a, b) => a.pilot_name.localeCompare(b.pilot_name));
+    }
+
+    res.json({ period1: merge(f1, pay1), period2: merge(f2, pay2), lastDay, year: y, month: m });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to load pilot pay' }); }
 });
 
 scheduleDailyBackup();

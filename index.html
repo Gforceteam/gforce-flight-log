@@ -1219,6 +1219,22 @@
     .loop-td-slot { text-align: center; font-weight: 800; color: var(--text); font-family: 'Montserrat', sans-serif; font-size: 17px; padding: 10px 6px; white-space: nowrap; }
     .loop-td-pilot { padding: 10px 8px 10px 6px; }
     .loop-td-tally { padding: 6px 4px; text-align: center; }
+    .manager-only { display: none !important; }
+    .is-manager .manager-only { display: flex !important; }
+    .pp-wrap { padding: 0 0 32px; }
+    .pp-nav { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 14px 16px 10px; }
+    .pp-nav-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 18px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .pp-nav-btn:active { background: var(--accent-dim); }
+    .pp-month { font-size: 15px; font-weight: 700; color: var(--text); min-width: 140px; text-align: center; }
+    .pp-period { margin: 0 0 20px; }
+    .pp-period-heading { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); padding: 0 14px 8px; }
+    .pp-table { border-collapse: collapse; width: 100%; }
+    .pp-th { font-size: 12px; font-weight: 700; color: var(--muted); padding: 6px 10px; text-align: center; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .pp-th-pilot { text-align: left; padding-left: 14px; }
+    .pp-td { padding: 7px 10px; text-align: center; border-bottom: 1px solid var(--border); font-size: 14px; color: var(--text); }
+    .pp-td-pilot { padding: 7px 14px; font-size: 14px; font-weight: 600; color: var(--text); border-bottom: 1px solid var(--border); }
+    .pp-td-zero { color: var(--muted); }
+    .pp-totals td { font-weight: 700; font-size: 13px; padding-top: 10px; border-top: 2px solid var(--border); border-bottom: none; }
     .lbp-wrap { border-top: 2px solid var(--border); margin-top: 8px; padding: 12px 0 24px; }
     .lbp-heading { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); padding: 0 12px 10px; }
     .lbp-table { border-collapse: collapse; width: 100%; }
@@ -1440,6 +1456,7 @@
     <div class="pilot-menu-item" onclick="closePilotMenu(); showSubPage('roster')"><span class="pilot-menu-icon">📋</span>Roster</div>
     <div class="pilot-menu-item" onclick="closePilotMenu(); showSubPage('coronet')"><span class="pilot-menu-icon">🏔</span>Coronet</div>
     <div class="pilot-menu-item" onclick="closePilotMenu(); showPilotTab('settings')"><span class="pilot-menu-icon">⚙️</span>Settings</div>
+    <div class="pilot-menu-item manager-only" onclick="closePilotMenu(); showSubPage('pay')"><span class="pilot-menu-icon">💰</span>Pilot Pay</div>
   </div>
 
   <!-- Main pilot tab bar -->
@@ -1504,6 +1521,11 @@
     <div style="text-align:center;padding:20px 16px 32px;">
       <button onclick="renderPilotFF()" style="padding:10px 28px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;">↻ Refresh</button>
     </div>
+  </div>
+
+  <div class="page" id="page-pay">
+    <button class="pilot-back-btn" onclick="showPilotTab('ff')">← Back</button>
+    <div id="pilot-pay-content"></div>
   </div>
 
   <div class="page" id="page-coronet">
@@ -1686,6 +1708,7 @@
     <div class="pilot-menu-item" onclick="closeOfficeMenu(); showOfficeTab('ff')"><span class="pilot-menu-icon">📅</span>Duty Sheet</div>
     <div class="pilot-menu-item" onclick="closeOfficeMenu(); showOfficeTab('flights')"><span class="pilot-menu-icon">📋</span>Flight Log</div>
     <div class="pilot-menu-item" onclick="closeOfficeMenu(); showOfficeTab('settings')"><span class="pilot-menu-icon">⚙️</span>Settings</div>
+    <div class="pilot-menu-item manager-only" onclick="closeOfficeMenu(); showOfficeTab('pay')"><span class="pilot-menu-icon">💰</span>Pilot Pay</div>
     <div class="pilot-menu-item" onclick="closeOfficeMenu(); officeDoLogout()" style="color:var(--danger);margin-top:auto;"><span class="pilot-menu-icon">🚪</span>Sign Out</div>
   </div>
 
@@ -2035,6 +2058,10 @@
       </div>
     </div>
 
+    <div class="office-tab-content" id="office-tab-pay">
+      <div id="office-pay-content"></div>
+    </div>
+
     <div class="office-tab-content" id="office-tab-flights">
       <div style="padding:16px 20px 40px;max-width:700px;margin:0 auto;">
 
@@ -2255,6 +2282,7 @@ function _decodeJwtPayload(token) {
 function _syncManagerFlag() {
   const token = officeToken || pilotToken;
   isManager = token ? !!_decodeJwtPayload(token).is_manager : false;
+  document.body.classList.toggle('is-manager', isManager);
 }
 
 // ─── Office State ─────────────────────────────────────────────────────────────
@@ -4393,6 +4421,7 @@ function showSubPage(name) {
   if (name === 'ff') renderPilotFF();
   if (name === 'roster') { rosterCalMonth = null; rosterSelectedDate = null; loadRosterCalendar(); }
   if (name === 'coronet') { loadPilotCoronetManifests(); }
+  if (name === 'pay') { renderPilotPayPage('pilot-pay-content'); }
 }
 
 function showPage(name) {
@@ -4821,6 +4850,103 @@ async function renderOfficeFF() {
   </tr></tfoot></table>`;
   document.getElementById('office-ff-content').innerHTML = html;
   renderOfficeFfPayments(dates);
+}
+
+function managerFetch(path, opts) {
+  return officeToken ? officeFetch(path, opts) : apiFetch(path, opts);
+}
+
+let _ppYear = null, _ppMonth = null;
+
+async function renderPilotPayPage(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: NZ_TZ }));
+  if (_ppYear === null) { _ppYear = now.getFullYear(); _ppMonth = now.getMonth() + 1; }
+  el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:40px 0;">Loading…</div>';
+  try {
+    const res = await managerFetch(`/api/manager/pilot-pay?year=${_ppYear}&month=${_ppMonth}`);
+    if (!res || !res.ok) { el.innerHTML = '<div style="color:var(--danger);padding:24px 16px;">Failed to load data</div>'; return; }
+    const data = await res.json();
+    _renderPilotPayContent(el, data);
+  } catch (_) { el.innerHTML = '<div style="color:var(--danger);padding:24px 16px;">Cannot reach server</div>'; }
+}
+
+function _renderPilotPayContent(el, data) {
+  const { period1, period2, lastDay, year, month } = data;
+  const pad = n => String(n).padStart(2, '0');
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const monthLabel = `${monthNames[month - 1]} ${year}`;
+
+  function periodTable(rows, label) {
+    if (!rows.length) return `<div class="pp-period"><div class="pp-period-heading">${label}</div><div style="color:var(--muted);font-size:13px;padding:0 14px 12px;">No data</div></div>`;
+    // Sort by PILOT_ORDER then alphabetically
+    rows = [...rows].sort((a, b) => {
+      const ai = PILOT_ORDER.indexOf(a.pilot_name), bi = PILOT_ORDER.indexOf(b.pilot_name);
+      if (ai !== -1 && bi !== -1) return ai - bi;
+      if (ai !== -1) return -1; if (bi !== -1) return 1;
+      return a.pilot_name.localeCompare(b.pilot_name);
+    });
+    let totalFlights = 0, totalPhoto80 = 0, totalPhoto60 = 0, totalDrives = 0, totalPay = 0;
+    let rowsHtml = '';
+    rows.forEach(r => {
+      const flights = r.flights || 0;
+      const p80 = r.photo80 || 0, p60 = r.photo60 || 0, drives = r.cp_drives || 0;
+      const pay = p80 * 80 + p60 * 60;
+      totalFlights += flights; totalPhoto80 += p80; totalPhoto60 += p60; totalDrives += drives; totalPay += pay;
+      rowsHtml += `<tr>
+        <td class="pp-td-pilot">${r.pilot_name}</td>
+        <td class="pp-td${!flights ? ' pp-td-zero' : ''}">${flights || '—'}</td>
+        <td class="pp-td${!p80 ? ' pp-td-zero' : ''}">${p80 || '—'}</td>
+        <td class="pp-td${!p60 ? ' pp-td-zero' : ''}">${p60 || '—'}</td>
+        <td class="pp-td${!drives ? ' pp-td-zero' : ''}">${drives || '—'}</td>
+        <td class="pp-td" style="font-weight:700;">${pay ? '$' + pay : '—'}</td>
+      </tr>`;
+    });
+    return `<div class="pp-period">
+      <div class="pp-period-heading">${label}</div>
+      <table class="pp-table">
+        <thead><tr>
+          <th class="pp-th pp-th-pilot">Pilot</th>
+          <th class="pp-th">Flights</th>
+          <th class="pp-th">$80 Photo</th>
+          <th class="pp-th">$60 Photo</th>
+          <th class="pp-th">CP Drives</th>
+          <th class="pp-th">Pay $</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+        <tfoot><tr class="pp-totals">
+          <td class="pp-td-pilot">Total</td>
+          <td class="pp-td">${totalFlights}</td>
+          <td class="pp-td">${totalPhoto80}</td>
+          <td class="pp-td">${totalPhoto60}</td>
+          <td class="pp-td">${totalDrives}</td>
+          <td class="pp-td">$${totalPay}</td>
+        </tr></tfoot>
+      </table>
+    </div>`;
+  }
+
+  el.innerHTML = `<div class="pp-wrap">
+    <div class="pp-nav">
+      <button class="pp-nav-btn" onclick="_ppNavMonth(-1)">‹</button>
+      <div class="pp-month">${monthLabel}</div>
+      <button class="pp-nav-btn" onclick="_ppNavMonth(1)">›</button>
+    </div>
+    ${periodTable(period1, `Period 1 — ${pad(month)}/01 to ${pad(month)}/15`)}
+    ${periodTable(period2, `Period 2 — ${pad(month)}/16 to ${pad(month)}/${pad(lastDay)}`)}
+  </div>`;
+}
+
+function _ppNavMonth(dir) {
+  _ppMonth += dir;
+  if (_ppMonth > 12) { _ppMonth = 1; _ppYear++; }
+  if (_ppMonth < 1) { _ppMonth = 12; _ppYear--; }
+  // Re-render whichever container is currently active
+  const officeEl = document.getElementById('office-pay-content');
+  const pilotEl = document.getElementById('pilot-pay-content');
+  if (officeEl && officeEl.closest('#office-tab-pay')?.classList.contains('active')) renderPilotPayPage('office-pay-content');
+  else if (pilotEl && pilotEl.closest('#page-pay')?.classList.contains('active')) renderPilotPayPage('pilot-pay-content');
 }
 
 async function renderOfficeFfPayments(dates) {
@@ -7493,6 +7619,7 @@ if (name === 'pilots') { renderAwayTab(); renderGroupsTab(); renderTodayFlights(
   if (name === 'coronet') { initCoronetTab(); }
   if (name === 'roster') { _officeRosterEditMode = false; officeRosterCalMonth = null; officeRosterSelectedDate = null; loadOfficeRosterCalendar(); }
   if (name === 'settings') { populateOfficeResetPilots(); populateOfficeDeletePilots(); populateOfficeRenamePilots(); loadOfficeSettings(); loadTrackerEnabledState(); }
+  if (name === 'pay') { renderPilotPayPage('office-pay-content'); }
 }
 
 let _officePushEnabled = false;

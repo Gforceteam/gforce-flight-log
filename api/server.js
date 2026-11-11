@@ -277,6 +277,8 @@ async function createTables() {
   try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN slot INTEGER'); } catch (_) {}
   try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN tallies TEXT'); } catch (_) {}
   try { await db.execute('ALTER TABLE loop_board_v2 ADD COLUMN done INTEGER DEFAULT 0'); } catch (_) {}
+  try { await db.execute('ALTER TABLE pilots ADD COLUMN is_manager INTEGER DEFAULT 0'); } catch (_) {}
+  await db.execute("UPDATE pilots SET is_manager = 1 WHERE name IN ('Georges', 'Gavin')");
   await db.execute(`CREATE TABLE IF NOT EXISTS loop_board_payments (
     date TEXT NOT NULL,
     slot INTEGER NOT NULL,
@@ -616,7 +618,7 @@ app.post('/api/auth/pilot', async (req, res) => {
       return res.status(401).json({ error: 'Invalid name or password' });
     }
     clearRateLimit(ip); // reset on successful login
-    const token = jwt.sign({ id: pilot.id, name: pilot.name, type: 'pilot' }, JWT_SECRET, { expiresIn: '24h' });
+    const token = jwt.sign({ id: pilot.id, name: pilot.name, type: 'pilot', is_manager: pilot.is_manager ? true : false }, JWT_SECRET, { expiresIn: '24h' });
     const refreshToken = uuidv4();
     await run('UPDATE pilots SET refresh_token = ? WHERE id = ?', [refreshToken, pilot.id]);
     res.json({ token, refresh_token: refreshToken, pilot: { id: pilot.id, name: pilot.name } });
@@ -674,7 +676,7 @@ app.post('/api/auth/office', async (req, res) => {
       return res.status(401).json({ error: 'Invalid password' });
     }
     clearRateLimit(ip);
-    const token = jwt.sign({ type: 'office', tv: _officeTv }, JWT_SECRET, { expiresIn: '8h' });
+    const token = jwt.sign({ type: 'office', tv: _officeTv, is_manager: true }, JWT_SECRET, { expiresIn: '8h' });
     res.json({ token, refresh_token: _officeRefreshSecret });
   } catch (e) {
     console.error(e);
@@ -691,7 +693,7 @@ app.post('/api/auth/refresh-pilot', async (req, res) => {
     const pilot = await queryOne('SELECT * FROM pilots WHERE refresh_token = ?', [refresh_token]);
     if (!pilot) return res.status(401).json({ error: 'Invalid refresh token' });
     // Issue new access token (24h)
-    const token = jwt.sign({ id: pilot.id, name: pilot.name, type: 'pilot' }, JWT_SECRET, { expiresIn: '24h' });
+    const token = jwt.sign({ id: pilot.id, name: pilot.name, type: 'pilot', is_manager: pilot.is_manager ? true : false }, JWT_SECRET, { expiresIn: '24h' });
     res.json({ token });
   } catch (e) {
     console.error(e);
@@ -706,7 +708,7 @@ app.post('/api/auth/refresh-office', async (req, res) => {
     if (!_officeRefreshSecret || !safeCompare(refresh_token, _officeRefreshSecret)) {
       return res.status(401).json({ error: 'Invalid refresh token' });
     }
-    const token = jwt.sign({ type: 'office', tv: _officeTv }, JWT_SECRET, { expiresIn: '8h' });
+    const token = jwt.sign({ type: 'office', tv: _officeTv, is_manager: true }, JWT_SECRET, { expiresIn: '8h' });
     res.json({ token });
   } catch (e) {
     console.error(e);

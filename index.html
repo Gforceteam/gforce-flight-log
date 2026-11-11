@@ -2248,6 +2248,15 @@ function audioDestination() {
 document.addEventListener('touchstart', () => { ensureAudioCtx(); }, { once: true, passive: true });
 document.addEventListener('click', () => { ensureAudioCtx(); }, { once: true });
 
+let isManager = false;
+function _decodeJwtPayload(token) {
+  try { return JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); } catch(_) { return {}; }
+}
+function _syncManagerFlag() {
+  const token = officeToken || pilotToken;
+  isManager = token ? !!_decodeJwtPayload(token).is_manager : false;
+}
+
 // ─── Office State ─────────────────────────────────────────────────────────────
 let officeToken = (() => {
   const t = localStorage.getItem('gforce_office_token');
@@ -2609,6 +2618,7 @@ function setupGliderSettingsEvents() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  _syncManagerFlag();
   if (pilotToken && pilotId) {
     showApp(pilotName);
   } else if (officeToken) {
@@ -2693,6 +2703,7 @@ async function doLogin() {
         officeToken = data.token;
         localStorage.setItem('gforce_office_token', officeToken);
         if (data.refresh_token) localStorage.setItem('gforce_office_refresh', data.refresh_token);
+        _syncManagerFlag();
         _officeSessionActive = true;
         showOfficeDashboard();
       } else {
@@ -2723,6 +2734,7 @@ async function doLogin() {
       localStorage.setItem('gforce_pilot_id', pilotId);
       localStorage.setItem('gforce_pilot_name', pilotName);
       if (data.refresh_token) localStorage.setItem('gforce_pilot_refresh', data.refresh_token);
+      _syncManagerFlag();
       showApp(pilotName);
     } else {
       document.getElementById('login-error').textContent = res.status === 429 ? data.error : 'Incorrect password. Try again.';
@@ -2980,6 +2992,7 @@ async function apiRefresh(path, opts = {}) {
     pilotToken = data.token;
     localStorage.setItem('gforce_pilot_token', pilotToken);
     if (data.refresh_token) localStorage.setItem('gforce_pilot_refresh', data.refresh_token);
+    _syncManagerFlag();
     return fetch(`${API_BASE}${path}`, {
       ...opts,
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${pilotToken}`, ...opts.headers }
@@ -5046,6 +5059,7 @@ async function officeApiRefresh(path, opts = {}) {
     officeToken = data.token;
     localStorage.setItem('gforce_office_token', officeToken);
     if (data.refresh_token) localStorage.setItem('gforce_office_refresh', data.refresh_token);
+    _syncManagerFlag();
     return fetch(`${API_BASE}${path}`, {
       ...opts,
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${officeToken}`, ...opts.headers }
@@ -9074,6 +9088,7 @@ function connectWS() {
             if (data.token) {
               officeToken = data.token;
               localStorage.setItem('gforce_office_token', officeToken);
+              _syncManagerFlag();
             }
           }
         } catch (_) {}
@@ -9089,7 +9104,7 @@ function connectWS() {
           });
           if (r.ok) {
             const d = await r.json();
-            if (d.token) { pilotToken = d.token; localStorage.setItem('gforce_pilot_token', pilotToken); }
+            if (d.token) { pilotToken = d.token; localStorage.setItem('gforce_pilot_token', pilotToken); _syncManagerFlag(); }
           }
         } catch (_) {}
         if (pilotToken) connectWS();
@@ -10128,6 +10143,7 @@ async function submitOfficeCpw() {
       officeToken = loginData.token;
       localStorage.setItem('gforce_office_token', officeToken);
       if (loginData.refresh_token) localStorage.setItem('gforce_office_refresh', loginData.refresh_token);
+      _syncManagerFlag();
     }
     toast('Password changed — all other sessions have been logged out');
   } catch (e) {

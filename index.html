@@ -4902,8 +4902,19 @@ function _renderPilotPayContent(el, data) {
         <td class="pp-td${!drives ? ' pp-td-zero' : ''}">${drives || '—'}</td>
       </tr>`;
     });
+    const csvRows = [
+      ['Pilot','Flights','$80 Photo','$60 Photo','CP Drives'],
+      ...rows.map(r => [r.pilot_name, r.flights||0, r.photo80||0, r.photo60||0, r.cp_drives||0]),
+      ['Total', totalFlights, totalPhoto80, totalPhoto60, totalDrives]
+    ];
+    const csvData = csvRows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const csvB64 = btoa(unescape(encodeURIComponent(csvData)));
+    const filename = `pilot-pay-${label.replace(/[^a-z0-9]/gi,'-').toLowerCase()}.csv`;
     return `<div class="pp-period">
-      <div class="pp-period-heading">${label}</div>
+      <div class="pp-period-heading" style="display:flex;align-items:center;justify-content:space-between;padding-right:14px;">
+        <span>${label}</span>
+        <a href="data:text/csv;base64,${csvB64}" download="${filename}" style="font-size:11px;font-weight:700;color:var(--accent);text-decoration:none;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;">↓ Export CSV</a>
+      </div>
       <table class="pp-table">
         <thead><tr>
           <th class="pp-th pp-th-pilot">Pilot</th>

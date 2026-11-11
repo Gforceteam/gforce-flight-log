@@ -3139,11 +3139,16 @@ app.get('/api/manager/pilot-pay', verifyManager, async (req, res) => {
     const p1From = `${y}-${pad(m)}-01`, p1To = `${y}-${pad(m)}-15`;
     const p2From = `${y}-${pad(m)}-16`, p2To = `${y}-${pad(m)}-${pad(lastDay)}`;
 
-    const flightQ = `
-      SELECT p.name AS pilot_name, COUNT(f.id) AS flights
+    const autoFlightQ = `
+      SELECT f.date, f.pilot_id, p.name AS pilot_name, COUNT(f.id) AS cnt
       FROM flights f JOIN pilots p ON f.pilot_id = p.id
       WHERE f.date >= ? AND f.date <= ? AND (f.did_not_fly IS NULL OR f.did_not_fly = 0)
-      GROUP BY f.pilot_id ORDER BY p.name`;
+      GROUP BY f.date, f.pilot_id`;
+
+    const overrideQ = `
+      SELECT dso.date, dso.pilot_id, p.name AS pilot_name, dso.count AS cnt
+      FROM duty_sheet_overrides dso JOIN pilots p ON dso.pilot_id = p.id
+      WHERE dso.date >= ? AND dso.date <= ?`;
 
     const payQ = `
       SELECT p.name AS pilot_name,
@@ -3155,16 +3160,40 @@ app.get('/api/manager/pilot-pay', verifyManager, async (req, res) => {
       WHERE pdp.date >= ? AND pdp.date <= ?
       GROUP BY pdp.pilot_id ORDER BY p.name`;
 
-    const [f1, f2, pay1, pay2] = await Promise.all([
-      queryAll(flightQ, [p1From, p1To]),
-      queryAll(flightQ, [p2From, p2To]),
+    const [af1, af2, ov1, ov2, pay1, pay2] = await Promise.all([
+      queryAll(autoFlightQ, [p1From, p1To]),
+      queryAll(autoFlightQ, [p2From, p2To]),
+      queryAll(overrideQ, [p1From, p1To]),
+      queryAll(overrideQ, [p2From, p2To]),
       queryAll(payQ, [p1From, p1To]),
       queryAll(payQ, [p2From, p2To]),
     ]);
 
-    function merge(flights, payments) {
+    // Apply overrides: for each pilot+date, use override.count if present, else auto count
+    function effectiveFlights(autoRows, ovRows) {
+      const map = {}; // pilot_name -> total flights
+      const processed = new Set();
+      // Apply overrides first (they take precedence over auto counts)
+      ovRows.forEach(r => {
+        const key = `${r.pilot_id}:${r.date}`;
+        processed.add(key);
+        map[r.pilot_name] = (map[r.pilot_name] || 0) + (Number(r.cnt) || 0);
+      });
+      // Add auto counts only for pilot+date not covered by an override
+      autoRows.forEach(r => {
+        const key = `${r.pilot_id}:${r.date}`;
+        if (!processed.has(key)) {
+          map[r.pilot_name] = (map[r.pilot_name] || 0) + (Number(r.cnt) || 0);
+        }
+      });
+      return map; // { pilot_name -> total }
+    }
+
+    function merge(flightMap, payments) {
       const map = {};
-      flights.forEach(r => { map[r.pilot_name] = { pilot_name: r.pilot_name, flights: r.flights, photo80: 0, photo60: 0, cp_drives: 0 }; });
+      Object.entries(flightMap).forEach(([name, flights]) => {
+        map[name] = { pilot_name: name, flights, photo80: 0, photo60: 0, cp_drives: 0 };
+      });
       payments.forEach(r => {
         if (!map[r.pilot_name]) map[r.pilot_name] = { pilot_name: r.pilot_name, flights: 0, photo80: 0, photo60: 0, cp_drives: 0 };
         map[r.pilot_name].photo80 = r.photo80;
@@ -3174,7 +3203,11 @@ app.get('/api/manager/pilot-pay', verifyManager, async (req, res) => {
       return Object.values(map).sort((a, b) => a.pilot_name.localeCompare(b.pilot_name));
     }
 
-    res.json({ period1: merge(f1, pay1), period2: merge(f2, pay2), lastDay, year: y, month: m });
+    res.json({
+      period1: merge(effectiveFlights(af1, ov1), pay1),
+      period2: merge(effectiveFlights(af2, ov2), pay2),
+      lastDay, year: y, month: m
+    });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Failed to load pilot pay' }); }
 });
 

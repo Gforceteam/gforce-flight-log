@@ -7057,28 +7057,36 @@ function renderLoopBoardPayments() {
     </tr></tfoot></table></div>`;
     el.innerHTML = html;
   } else {
-    // View mode
+    // View mode — table matching loop board style
     let t80 = 0, t60 = 0, tcp = 0;
-    const rows = pilots.map(s => {
+    let rows = '';
+    pilots.forEach(s => {
       const v80 = getVal(s.slot, 'photo80'), v60 = getVal(s.slot, 'photo60'), vcp = getVal(s.slot, 'cp_drives');
       t80 += v80; t60 += v60; tcp += vcp;
-      if (!v80 && !v60 && !vcp) return '';
-      const pills = [
-        v80 ? `<span class="lbp-pill lbp-pill-80">$80 ×${v80}</span>` : '',
-        v60 ? `<span class="lbp-pill lbp-pill-60">$60 ×${v60}</span>` : '',
-        vcp ? `<span class="lbp-pill lbp-pill-cp">CP ×${vcp}</span>` : '',
-      ].filter(Boolean).join('');
-      return `<div class="lbp-view-row"><span class="lbp-view-name">${esc(s.pilot_name)}</span>${pills}</div>`;
-    }).filter(Boolean).join('');
-    if (!rows && !t80 && !t60 && !tcp) { el.innerHTML = ''; return; }
+      rows += `<tr>
+        <td class="lbp-td-pilot">${esc(s.pilot_name)}</td>
+        <td class="lbp-td" style="font-size:15px;font-weight:${v80 ? '700' : '400'};color:${v80 ? 'var(--text)' : 'var(--muted)'};">${v80 || '—'}</td>
+        <td class="lbp-td" style="font-size:15px;font-weight:${v60 ? '700' : '400'};color:${v60 ? 'var(--text)' : 'var(--muted)'};">${v60 || '—'}</td>
+        <td class="lbp-td" style="font-size:15px;font-weight:${vcp ? '700' : '400'};color:${vcp ? 'var(--text)' : 'var(--muted)'};">${vcp || '—'}</td>
+      </tr>`;
+    });
     el.innerHTML = `<div class="lbp-wrap">
       <div class="lbp-heading">Payments & Drives</div>
-      ${rows || '<div style="padding:8px 14px;font-size:13px;color:var(--muted);">None recorded</div>'}
-      <div style="display:flex;gap:12px;padding:10px 14px 2px;flex-wrap:wrap;">
-        <span class="lbp-pill lbp-pill-80">$80 Total: ${t80}</span>
-        <span class="lbp-pill lbp-pill-60">$60 Total: ${t60}</span>
-        <span class="lbp-pill lbp-pill-cp">CP Total: ${tcp}</span>
-      </div>
+      <table class="lbp-table">
+        <thead><tr>
+          <th class="lbp-th lbp-th-pilot">Pilot</th>
+          <th class="lbp-th">$80 Photo</th>
+          <th class="lbp-th">$60 Photo</th>
+          <th class="lbp-th">CP Drives</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr class="lbp-totals">
+          <td class="lbp-td-pilot">Total</td>
+          <td class="lbp-td">${t80 || '—'}</td>
+          <td class="lbp-td">${t60 || '—'}</td>
+          <td class="lbp-td">${tcp || '—'}</td>
+        </tr></tfoot>
+      </table>
     </div>`;
   }
 }

@@ -1845,6 +1845,7 @@
       </div>
       <div class="ff-wrap" id="office-ff-content"><div class="empty-state">Loading…</div></div>
       <div id="ff-payments-content"></div>
+      <div id="ff-month-calendar" class="manager-only"></div>
     </div>
 
     <div class="office-tab-content" id="office-tab-today">
@@ -4851,6 +4852,7 @@ async function renderOfficeFF() {
   </tr></tfoot></table>`;
   document.getElementById('office-ff-content').innerHTML = html;
   renderOfficeFfPayments(dates);
+  if (isManager) renderManagerMonthCalendar();
 }
 
 function managerFetch(path, opts) {
@@ -5016,6 +5018,96 @@ async function renderOfficeFfPayments(dates) {
     outerHtml += `</div>`;
     el.innerHTML = outerHtml;
   } catch (_) { el.innerHTML = ''; }
+}
+
+let _dsCalYear = null, _dsCalMonth = null;
+
+async function renderManagerMonthCalendar() {
+  const el = document.getElementById('ff-month-calendar');
+  if (!el) return;
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: NZ_TZ }));
+  if (_dsCalYear === null) { _dsCalYear = now.getFullYear(); _dsCalMonth = now.getMonth() + 1; }
+  el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:24px 0;">Loading…</div>';
+  try {
+    const res = await managerFetch(`/api/manager/flights/month?year=${_dsCalYear}&month=${_dsCalMonth}`);
+    if (!res || !res.ok) { el.innerHTML = ''; return; }
+    const data = await res.json();
+    _renderDsCalendar(el, data);
+  } catch (_) { el.innerHTML = ''; }
+}
+
+function _renderDsCalendar(el, data) {
+  const { rows, overrides, lastDay, year, month } = data;
+  const pad = n => String(n).padStart(2, '0');
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const today = todayStr();
+  const days = Array.from({ length: lastDay }, (_, i) => `${year}-${pad(month)}-${pad(i + 1)}`);
+
+  // Build per-pilot per-day counts, respecting overrides
+  const getCount = (pilotId, date) => {
+    const ov = overrides.find(o => String(o.pilot_id) === String(pilotId) && o.date === date);
+    if (ov !== undefined) return ov.count ?? 0;
+    const r = rows.find(r => String(r.pilot_id) === String(pilotId) && r.date === date);
+    return r ? Number(r.flights) : 0;
+  };
+
+  // Build sorted pilot list from those with any data + all non-hidden active pilots
+  const seenIds = new Set();
+  const calPilots = [];
+  [...(officePilots || [])].filter(p => !HIDDEN_PILOTS.includes(p.name)).sort(pilotSort).forEach(p => {
+    if (!seenIds.has(p.id)) { seenIds.add(p.id); calPilots.push(p); }
+  });
+  rows.forEach(r => {
+    if (!seenIds.has(r.pilot_id)) { seenIds.add(r.pilot_id); calPilots.push({ id: r.pilot_id, name: r.pilot_name }); }
+  });
+
+  const dailyTotals = {};
+  days.forEach(d => { dailyTotals[d] = 0; });
+
+  let bodyHtml = '';
+  calPilots.forEach(p => {
+    let pilotTotal = 0;
+    const cells = days.map(d => {
+      const cnt = getCount(p.id, d);
+      if (cnt > 0) { dailyTotals[d] += cnt; pilotTotal += cnt; }
+      const todayCls = d === today ? 'ff-today-col' : '';
+      return `<td class="${todayCls}" style="text-align:center;">${cnt > 0 ? `<span class="ff-day-val">${cnt}</span>` : ''}</td>`;
+    }).join('');
+    if (pilotTotal > 0) {
+      bodyHtml += `<tr><td class="ff-pilot-name">${esc(p.name)}</td>${cells}<td class="ff-total">${pilotTotal}</td></tr>`;
+    }
+  });
+
+  if (!bodyHtml) { el.innerHTML = `<div style="border-top:2px solid var(--border);margin-top:16px;padding:16px 14px;color:var(--muted);font-size:13px;">No flights recorded for ${monthNames[month-1]} ${year}</div>`; return; }
+
+  const totalsRow = `<tr style="border-top:2px solid var(--border);">
+    <td class="ff-pilot-name" style="font-weight:700;">Total</td>
+    ${days.map(d => `<td class="${d === today ? 'ff-today-col' : ''}" style="font-weight:700;text-align:center;">${dailyTotals[d] || ''}</td>`).join('')}
+    <td></td>
+  </tr>`;
+
+  el.innerHTML = `<div style="border-top:2px solid var(--border);margin-top:16px;padding-bottom:24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 14px 4px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);">Monthly Flight Summary</div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button onclick="_dsCalNav(-1)" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:16px;width:30px;height:30px;cursor:pointer;display:flex;align-items:center;justify-content:center;">‹</button>
+        <span style="font-size:14px;font-weight:700;color:var(--text);min-width:120px;text-align:center;">${monthNames[month-1]} ${year}</span>
+        <button onclick="_dsCalNav(1)" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:16px;width:30px;height:30px;cursor:pointer;display:flex;align-items:center;justify-content:center;">›</button>
+      </div>
+    </div>
+    <div class="ff-wrap"><table class="ff-table"><thead><tr>
+      <th class="ff-pilot-name">Pilot</th>
+      ${days.map((d, i) => `<th class="${d === today ? 'ff-today-col' : ''}">${i + 1}</th>`).join('')}
+      <th>Total</th>
+    </tr></thead><tbody>${bodyHtml}</tbody><tfoot>${totalsRow}</tfoot></table></div>
+  </div>`;
+}
+
+function _dsCalNav(dir) {
+  _dsCalMonth += dir;
+  if (_dsCalMonth > 12) { _dsCalMonth = 1; _dsCalYear++; }
+  if (_dsCalMonth < 1) { _dsCalMonth = 12; _dsCalYear--; }
+  renderManagerMonthCalendar();
 }
 
 async function savePilotDayPayment(pilotId, date, field, rawVal) {

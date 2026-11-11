@@ -3107,6 +3107,28 @@ app.post('/api/office/loop-board/payments', verifyOffice, async (req, res) => {
 });
 
 // ─── Manager Routes ───────────────────────────────────────────────────────────
+app.get('/api/manager/flights/month', verifyManager, async (req, res) => {
+  try {
+    const { year, month } = req.query;
+    const y = parseInt(year), m = parseInt(month);
+    if (!y || !m || m < 1 || m > 12) return res.status(400).json({ error: 'Invalid year/month' });
+    const pad = n => String(n).padStart(2, '0');
+    const from = `${y}-${pad(m)}-01`;
+    const lastDay = new Date(y, m, 0).getDate();
+    const to = `${y}-${pad(m)}-${pad(lastDay)}`;
+    const rows = await queryAll(`
+      SELECT f.date, f.pilot_id, p.name AS pilot_name, COUNT(f.id) AS flights
+      FROM flights f JOIN pilots p ON f.pilot_id = p.id
+      WHERE f.date >= ? AND f.date <= ? AND (f.did_not_fly IS NULL OR f.did_not_fly = 0)
+      GROUP BY f.date, f.pilot_id ORDER BY p.name, f.date
+    `, [from, to]);
+    const overrides = await queryAll(
+      'SELECT pilot_id, date, count FROM duty_sheet_overrides WHERE date >= ? AND date <= ?',
+      [from, to]
+    );
+    res.json({ rows, overrides, lastDay, year: y, month: m });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Failed' }); }
+});
 app.get('/api/manager/pilot-pay', verifyManager, async (req, res) => {
   try {
     const { year, month } = req.query;

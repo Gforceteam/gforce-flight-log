@@ -3014,6 +3014,14 @@ app.get('/api/office/loop-board/payments', verifyOffice, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.get('/api/pilot/loop-board/payments', verifyPilotOrOffice, async (req, res) => {
+  try {
+    const date = req.query.date || nzToday();
+    const rows = await queryAll('SELECT slot, photo80, photo60, cp_drives FROM loop_board_payments WHERE date = ?', [date]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/office/loop-board/payments/range', verifyOffice, async (req, res) => {
   try {
     const { from, to } = req.query;

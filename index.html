@@ -2281,7 +2281,8 @@ function _decodeJwtPayload(token) {
 }
 function _syncManagerFlag() {
   const token = officeToken || pilotToken;
-  isManager = token ? !!_decodeJwtPayload(token).is_manager : false;
+  const payload = token ? _decodeJwtPayload(token) : {};
+  isManager = !!(payload.is_manager || payload.type === 'office');
   document.body.classList.toggle('is-manager', isManager);
 }
 

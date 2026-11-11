@@ -4963,25 +4963,12 @@ async function renderOfficeFfPayments(dates) {
   const today = todayStr();
   try {
     const from = dates[0], to = dates[dates.length - 1];
-    const res = await officeFetch(`/api/office/loop-board/payments/range?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    const res = await officeFetch(`/api/office/pilot-day-payments/range?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
     if (!res || !res.ok) { el.innerHTML = ''; return; }
     const rows = await res.json();
-    if (!rows.length) { el.innerHTML = ''; return; }
 
-    // Build pilot list from PILOT_ORDER sorted pilots that appear in results
-    const seenIds = new Set();
-    const pilots = [];
-    [...(officePilots || [])].sort(pilotSort).forEach(p => {
-      if (rows.some(r => String(r.pilot_id) === String(p.id))) {
-        if (!seenIds.has(p.id)) { seenIds.add(p.id); pilots.push(p); }
-      }
-    });
-    // Also catch any pilot_name entries without matching officePilots (edge case)
-    rows.forEach(r => {
-      if (r.pilot_id && !seenIds.has(r.pilot_id)) {
-        seenIds.add(r.pilot_id); pilots.push({ id: r.pilot_id, name: r.pilot_name });
-      }
-    });
+    // Show all non-hidden pilots (not just those with data) so edit mode works for everyone
+    const pilots = [...(officePilots || [])].filter(p => !HIDDEN_PILOTS.includes(p.name)).sort(pilotSort);
     if (!pilots.length) { el.innerHTML = ''; return; }
 
     const getVal = (pilotId, date, field) => {
@@ -5006,7 +4993,11 @@ async function renderOfficeFfPayments(dates) {
           const v = getVal(p.id, d, field);
           if (v) dailyTotals[d] += v;
           total += v;
-          return `<td class="${d === today ? 'ff-today-col' : ''}" style="text-align:center;">${v ? `<span class="ff-day-val">${v}</span>` : ''}</td>`;
+          const todayCls = d === today ? 'ff-today-col' : '';
+          if (ffEditMode) {
+            return `<td class="${todayCls}"><input type="number" min="0" max="99" value="${v || ''}" class="ff-edit-input" onchange="savePilotDayPayment('${p.id}','${d}','${field}',this.value)"></td>`;
+          }
+          return `<td class="${todayCls}" style="text-align:center;">${v ? `<span class="ff-day-val">${v}</span>` : ''}</td>`;
         }).join('');
         bodyRows += `<tr><td class="ff-pilot-name">${esc(p.name)}</td>${cells}<td class="ff-total">${total || ''}</td></tr>`;
       });
@@ -5025,6 +5016,17 @@ async function renderOfficeFfPayments(dates) {
     outerHtml += `</div>`;
     el.innerHTML = outerHtml;
   } catch (_) { el.innerHTML = ''; }
+}
+
+async function savePilotDayPayment(pilotId, date, field, rawVal) {
+  const value = Math.max(0, parseInt(rawVal) || 0);
+  try {
+    await officeFetch('/api/office/pilot-day-payments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date, pilot_id: pilotId, field, value })
+    });
+  } catch (_) { toast('Could not save payment', 'err'); }
 }
 
 async function toggleFFEditMode() {

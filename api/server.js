@@ -287,6 +287,14 @@ async function createTables() {
     cp_drives INTEGER DEFAULT 0,
     PRIMARY KEY (date, slot)
   )`);
+  await db.execute(`CREATE TABLE IF NOT EXISTS pilot_day_payments (
+    date TEXT NOT NULL,
+    pilot_id TEXT NOT NULL,
+    photo80 INTEGER DEFAULT 0,
+    photo60 INTEGER DEFAULT 0,
+    cp_drives INTEGER DEFAULT 0,
+    PRIMARY KEY (date, pilot_id)
+  )`);
   await db.execute(`CREATE TABLE IF NOT EXISTS pilot_location_consent (
     pilot_id    TEXT NOT NULL,
     date        TEXT NOT NULL,
@@ -2260,6 +2268,33 @@ app.post('/api/office/duty-sheet/override', verifyOffice, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.get('/api/office/pilot-day-payments/range', verifyOffice, async (req, res) => {
+  try {
+    const { from, to } = req.query;
+    if (!from || !to) return res.status(400).json({ error: 'from and to required' });
+    const rows = await queryAll(
+      'SELECT date, pilot_id, photo80, photo60, cp_drives FROM pilot_day_payments WHERE date >= ? AND date <= ?',
+      [from, to]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/office/pilot-day-payments', verifyOffice, async (req, res) => {
+  try {
+    const { date, pilot_id, field, value } = req.body;
+    if (!date || !pilot_id) return res.status(400).json({ error: 'date and pilot_id required' });
+    if (!['photo80', 'photo60', 'cp_drives'].includes(field)) return res.status(400).json({ error: 'Invalid field' });
+    const v = Math.max(0, parseInt(value) || 0);
+    await run(
+      `INSERT INTO pilot_day_payments (date, pilot_id, ${field}) VALUES (?, ?, ?)
+       ON CONFLICT(date, pilot_id) DO UPDATE SET ${field} = excluded.${field}`,
+      [date, String(pilot_id), v]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/office/export/duty-sheet', verifyOfficeQuery, async (req, res) => {
   try {
     const today = nzToday();
@@ -3089,14 +3124,14 @@ app.get('/api/manager/pilot-pay', verifyManager, async (req, res) => {
       GROUP BY f.pilot_id ORDER BY p.name`;
 
     const payQ = `
-      SELECT lbv.pilot_name,
-        COALESCE(SUM(lbp.photo80), 0) AS photo80,
-        COALESCE(SUM(lbp.photo60), 0) AS photo60,
-        COALESCE(SUM(lbp.cp_drives), 0) AS cp_drives
-      FROM loop_board_v2 lbv
-      JOIN loop_board_payments lbp ON lbv.date = lbp.date AND lbv.slot = lbp.slot
-      WHERE lbv.date >= ? AND lbv.date <= ? AND lbv.pilot_name IS NOT NULL
-      GROUP BY lbv.pilot_name ORDER BY lbv.pilot_name`;
+      SELECT p.name AS pilot_name,
+        COALESCE(SUM(pdp.photo80), 0) AS photo80,
+        COALESCE(SUM(pdp.photo60), 0) AS photo60,
+        COALESCE(SUM(pdp.cp_drives), 0) AS cp_drives
+      FROM pilot_day_payments pdp
+      JOIN pilots p ON pdp.pilot_id = p.id
+      WHERE pdp.date >= ? AND pdp.date <= ?
+      GROUP BY pdp.pilot_id ORDER BY p.name`;
 
     const [f1, f2, pay1, pay2] = await Promise.all([
       queryAll(flightQ, [p1From, p1To]),

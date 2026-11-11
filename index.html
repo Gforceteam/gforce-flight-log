@@ -7272,7 +7272,7 @@ let loopBoardPayments = [];
 
 async function loadLoopBoardPayments() {
   try {
-    const res = await officeFetch(`/api/office/loop-board/payments?date=${encodeURIComponent(loopBoardDate)}`);
+    const res = await officeFetch(`/api/office/pilot-day-payments/range?from=${encodeURIComponent(loopBoardDate)}&to=${encodeURIComponent(loopBoardDate)}`);
     if (!res || !res.ok) return;
     loopBoardPayments = await res.json();
   } catch (_) {}
@@ -7287,8 +7287,8 @@ function renderLoopBoardPayments() {
   const isPast = loopBoardDate < todayStr();
   const isEdit = !isPast && loopBoardViewMode === 'edit';
 
-  const getVal = (slot, field) => {
-    const row = loopBoardPayments.find(r => r.slot === slot);
+  const getVal = (pilotId, field) => {
+    const row = loopBoardPayments.find(r => String(r.pilot_id) === String(pilotId));
     return (row && row[field]) ? Number(row[field]) : 0;
   };
 
@@ -7304,7 +7304,7 @@ function renderLoopBoardPayments() {
         </tr></thead><tbody>`;
     let t80 = 0, t60 = 0, tcp = 0;
     pilots.forEach(s => {
-      const v80 = getVal(s.slot, 'photo80'), v60 = getVal(s.slot, 'photo60'), vcp = getVal(s.slot, 'cp_drives');
+      const v80 = getVal(s.pilot_id, 'photo80'), v60 = getVal(s.pilot_id, 'photo60'), vcp = getVal(s.pilot_id, 'cp_drives');
       t80 += v80; t60 += v60; tcp += vcp;
       html += `<tr>
         <td class="lbp-td-pilot">${esc(s.pilot_name)}</td>
@@ -7325,7 +7325,7 @@ function renderLoopBoardPayments() {
     let t80 = 0, t60 = 0, tcp = 0;
     let rows = '';
     pilots.forEach(s => {
-      const v80 = getVal(s.slot, 'photo80'), v60 = getVal(s.slot, 'photo60'), vcp = getVal(s.slot, 'cp_drives');
+      const v80 = getVal(s.pilot_id, 'photo80'), v60 = getVal(s.pilot_id, 'photo60'), vcp = getVal(s.pilot_id, 'cp_drives');
       t80 += v80; t60 += v60; tcp += vcp;
       rows += `<tr>
         <td class="lbp-td-pilot">${esc(s.pilot_name)}</td>
@@ -7357,15 +7357,17 @@ function renderLoopBoardPayments() {
 
 async function setLoopPayment(slot, field, rawVal) {
   const value = Math.max(0, parseInt(rawVal) || 0);
+  const slotData = loopBoard.find(s => s.slot === slot);
+  if (!slotData || !slotData.pilot_id) return;
   try {
-    await officeFetch('/api/office/loop-board/payments', {
+    await officeFetch('/api/office/pilot-day-payments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slot, field, value, date: loopBoardDate })
+      body: JSON.stringify({ date: loopBoardDate, pilot_id: slotData.pilot_id, field, value })
     });
-    const row = loopBoardPayments.find(r => r.slot === slot);
+    const row = loopBoardPayments.find(r => String(r.pilot_id) === String(slotData.pilot_id));
     if (row) row[field] = value;
-    else loopBoardPayments.push({ slot, photo80: 0, photo60: 0, cp_drives: 0, [field]: value });
+    else loopBoardPayments.push({ pilot_id: slotData.pilot_id, photo80: 0, photo60: 0, cp_drives: 0, [field]: value });
   } catch (_) { toast('Could not save', 'err'); }
 }
 

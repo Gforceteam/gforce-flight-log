@@ -1219,6 +1219,23 @@
     .loop-td-slot { text-align: center; font-weight: 800; color: var(--text); font-family: 'Montserrat', sans-serif; font-size: 17px; padding: 10px 6px; white-space: nowrap; }
     .loop-td-pilot { padding: 10px 8px 10px 6px; }
     .loop-td-tally { padding: 6px 4px; text-align: center; }
+    .lbp-wrap { border-top: 2px solid var(--border); margin-top: 8px; padding: 12px 0 24px; }
+    .lbp-heading { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); padding: 0 12px 10px; }
+    .lbp-table { border-collapse: collapse; width: 100%; }
+    .lbp-th { font-size: 12px; font-weight: 700; color: var(--muted); padding: 6px 10px; text-align: center; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .lbp-th-pilot { text-align: left; padding-left: 14px; }
+    .lbp-td { padding: 7px 10px; text-align: center; border-bottom: 1px solid var(--border); }
+    .lbp-td-pilot { padding: 7px 14px; font-size: 14px; font-weight: 600; color: var(--text); border-bottom: 1px solid var(--border); }
+    .lbp-num { width: 56px; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; padding: 7px 4px; font-size: 15px; font-weight: 700; text-align: center; color: var(--text); -moz-appearance: textfield; }
+    .lbp-num::-webkit-inner-spin-button, .lbp-num::-webkit-outer-spin-button { -webkit-appearance: none; }
+    .lbp-num:focus { outline: none; border-color: var(--accent); }
+    .lbp-view-row { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .lbp-view-name { font-size: 14px; font-weight: 700; color: var(--text); min-width: 70px; }
+    .lbp-pill { padding: 3px 10px; border-radius: 100px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .lbp-pill-80 { background: rgba(16,185,129,0.12); color: #059669; }
+    .lbp-pill-60 { background: rgba(99,102,241,0.12); color: var(--accent); }
+    .lbp-pill-cp { background: rgba(245,158,11,0.12); color: #d97706; }
+    .lbp-totals td { font-weight: 700; color: var(--text); font-size: 13px; padding-top: 10px; border-top: 2px solid var(--border); border-bottom: none; }
     .loop-pilot-typeahead { position: relative; width: 100%; }
     .loop-pilot-input { width: 100%; background: #ffffff; color: #111111; border: 1px solid var(--border); border-radius: 7px; padding: 10px 8px; font-size: 17px; cursor: text; box-sizing: border-box; }
     .loop-pilot-input:focus { outline: none; border-color: var(--accent); }
@@ -1694,6 +1711,7 @@
 
     <div class="office-tab-content" id="office-tab-loop">
       <div class="loop-board" id="loop-board-list"><p style="color:var(--muted);padding:20px;text-align:center;">Loading...</p></div>
+      <div id="loop-board-payments"></div>
     </div>
 
     <div class="office-tab-content" id="office-tab-tracker">
@@ -6726,6 +6744,7 @@ async function loadLoopBoard() {
     const maxPopulated = loopBoard.reduce((max, s) => s.pilot_id ? Math.max(max, s.slot) : max, 0);
     if (maxPopulated > loopBoardRows) _setLoopRows(loopBoardDate, maxPopulated);
     if (officeActiveTab === 'loop') renderLoopBoard();
+    if (officeActiveTab === 'loop') loadLoopBoardPayments();
     // Refresh Coronet pilot dropdowns if that tab is open (they filter by Loop Board)
     if (officeActiveTab === 'coronet') { renderCoronetForm(1); renderCoronetForm(2); }
     reconcileLoopBoardTallies();
@@ -6981,6 +7000,101 @@ function renderLoopBoard() {
     }
   }
   el.innerHTML = html;
+  renderLoopBoardPayments();
+}
+
+// ─── Loop Board Payments ─────────────────────────────────────────────────────
+let loopBoardPayments = [];
+
+async function loadLoopBoardPayments() {
+  try {
+    const res = await officeFetch(`/api/office/loop-board/payments?date=${encodeURIComponent(loopBoardDate)}`);
+    if (!res || !res.ok) return;
+    loopBoardPayments = await res.json();
+  } catch (_) {}
+  renderLoopBoardPayments();
+}
+
+function renderLoopBoardPayments() {
+  const el = document.getElementById('loop-board-payments');
+  if (!el) return;
+  const pilots = loopBoard.filter(s => s.pilot_name);
+  if (!pilots.length) { el.innerHTML = ''; return; }
+  const isPast = loopBoardDate < todayStr();
+  const isEdit = !isPast && loopBoardViewMode === 'edit';
+
+  const getVal = (slot, field) => {
+    const row = loopBoardPayments.find(r => r.slot === slot);
+    return (row && row[field]) ? Number(row[field]) : 0;
+  };
+
+  if (isEdit) {
+    let html = `<div class="lbp-wrap">
+      <div class="lbp-heading">Payments & Drives</div>
+      <table class="lbp-table">
+        <thead><tr>
+          <th class="lbp-th lbp-th-pilot">Pilot</th>
+          <th class="lbp-th">$80 Photo</th>
+          <th class="lbp-th">$60 Photo</th>
+          <th class="lbp-th">CP Drives</th>
+        </tr></thead><tbody>`;
+    let t80 = 0, t60 = 0, tcp = 0;
+    pilots.forEach(s => {
+      const v80 = getVal(s.slot, 'photo80'), v60 = getVal(s.slot, 'photo60'), vcp = getVal(s.slot, 'cp_drives');
+      t80 += v80; t60 += v60; tcp += vcp;
+      html += `<tr>
+        <td class="lbp-td-pilot">${esc(s.pilot_name)}</td>
+        <td class="lbp-td"><input type="number" class="lbp-num" min="0" value="${v80}" onchange="setLoopPayment(${s.slot},'photo80',this.value)"></td>
+        <td class="lbp-td"><input type="number" class="lbp-num" min="0" value="${v60}" onchange="setLoopPayment(${s.slot},'photo60',this.value)"></td>
+        <td class="lbp-td"><input type="number" class="lbp-num" min="0" value="${vcp}" onchange="setLoopPayment(${s.slot},'cp_drives',this.value)"></td>
+      </tr>`;
+    });
+    html += `</tbody><tfoot><tr class="lbp-totals">
+      <td class="lbp-td-pilot">Total</td>
+      <td class="lbp-td">${t80}</td>
+      <td class="lbp-td">${t60}</td>
+      <td class="lbp-td">${tcp}</td>
+    </tr></tfoot></table></div>`;
+    el.innerHTML = html;
+  } else {
+    // View mode
+    let t80 = 0, t60 = 0, tcp = 0;
+    const rows = pilots.map(s => {
+      const v80 = getVal(s.slot, 'photo80'), v60 = getVal(s.slot, 'photo60'), vcp = getVal(s.slot, 'cp_drives');
+      t80 += v80; t60 += v60; tcp += vcp;
+      if (!v80 && !v60 && !vcp) return '';
+      const pills = [
+        v80 ? `<span class="lbp-pill lbp-pill-80">$80 ×${v80}</span>` : '',
+        v60 ? `<span class="lbp-pill lbp-pill-60">$60 ×${v60}</span>` : '',
+        vcp ? `<span class="lbp-pill lbp-pill-cp">CP ×${vcp}</span>` : '',
+      ].filter(Boolean).join('');
+      return `<div class="lbp-view-row"><span class="lbp-view-name">${esc(s.pilot_name)}</span>${pills}</div>`;
+    }).filter(Boolean).join('');
+    if (!rows && !t80 && !t60 && !tcp) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div class="lbp-wrap">
+      <div class="lbp-heading">Payments & Drives</div>
+      ${rows || '<div style="padding:8px 14px;font-size:13px;color:var(--muted);">None recorded</div>'}
+      <div style="display:flex;gap:12px;padding:10px 14px 2px;flex-wrap:wrap;">
+        <span class="lbp-pill lbp-pill-80">$80 Total: ${t80}</span>
+        <span class="lbp-pill lbp-pill-60">$60 Total: ${t60}</span>
+        <span class="lbp-pill lbp-pill-cp">CP Total: ${tcp}</span>
+      </div>
+    </div>`;
+  }
+}
+
+async function setLoopPayment(slot, field, rawVal) {
+  const value = Math.max(0, parseInt(rawVal) || 0);
+  try {
+    await officeFetch('/api/office/loop-board/payments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slot, field, value, date: loopBoardDate })
+    });
+    const row = loopBoardPayments.find(r => r.slot === slot);
+    if (row) row[field] = value;
+    else loopBoardPayments.push({ slot, photo80: 0, photo60: 0, cp_drives: 0, [field]: value });
+  } catch (_) { toast('Could not save', 'err'); }
 }
 
 async function undoLoopChange() {
@@ -7236,7 +7350,7 @@ function showOfficeTab(name) {
   if (name === 'ff') { renderOfficeFF(); }
   if (name === 'pilots') { renderCoronetLiveBanner('office-coronet-live'); }
 if (name === 'pilots') { renderAwayTab(); renderGroupsTab(); renderTodayFlights(); renderOfficeTab(); }
-  if (name === 'loop') loadLoopBoard();
+  if (name === 'loop') { loadLoopBoard(); loadLoopBoardPayments(); }
   if (name === 'today') renderTodayTab();
   if (name === 'flights') renderFlightsTab();
   if (name === 'tracker') { loadTrackerTab(); }

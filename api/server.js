@@ -277,6 +277,14 @@ async function createTables() {
   try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN slot INTEGER'); } catch (_) {}
   try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN tallies TEXT'); } catch (_) {}
   try { await db.execute('ALTER TABLE loop_board_v2 ADD COLUMN done INTEGER DEFAULT 0'); } catch (_) {}
+  await db.execute(`CREATE TABLE IF NOT EXISTS loop_board_payments (
+    date TEXT NOT NULL,
+    slot INTEGER NOT NULL,
+    photo80 INTEGER DEFAULT 0,
+    photo60 INTEGER DEFAULT 0,
+    cp_drives INTEGER DEFAULT 0,
+    PRIMARY KEY (date, slot)
+  )`);
   await db.execute(`CREATE TABLE IF NOT EXISTS pilot_location_consent (
     pilot_id    TEXT NOT NULL,
     date        TEXT NOT NULL,
@@ -2996,6 +3004,31 @@ app.post('/api/office/loop-board/uncomplete', verifyOffice, async (req, res) => 
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+app.get('/api/office/loop-board/payments', verifyOffice, async (req, res) => {
+  try {
+    const date = req.query.date || nzToday();
+    const rows = await queryAll('SELECT slot, photo80, photo60, cp_drives FROM loop_board_payments WHERE date = ?', [date]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/office/loop-board/payments', verifyOffice, async (req, res) => {
+  try {
+    const { date: reqDate, slot: slotRaw, field, value } = req.body;
+    const date = reqDate || nzToday();
+    const slot = parseInt(slotRaw, 10);
+    if (!slot || slot < 1 || slot > 20) return res.status(400).json({ error: 'Invalid slot' });
+    if (!['photo80', 'photo60', 'cp_drives'].includes(field)) return res.status(400).json({ error: 'Invalid field' });
+    const v = Math.max(0, parseInt(value) || 0);
+    await run(
+      `INSERT INTO loop_board_payments (date, slot, ${field}) VALUES (?, ?, ?)
+       ON CONFLICT(date, slot) DO UPDATE SET ${field} = excluded.${field}`,
+      [date, slot, v]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 scheduleDailyBackup();

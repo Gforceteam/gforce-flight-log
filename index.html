@@ -4888,20 +4888,18 @@ function _renderPilotPayContent(el, data) {
       if (ai !== -1) return -1; if (bi !== -1) return 1;
       return a.pilot_name.localeCompare(b.pilot_name);
     });
-    let totalFlights = 0, totalPhoto80 = 0, totalPhoto60 = 0, totalDrives = 0, totalPay = 0;
+    let totalFlights = 0, totalPhoto80 = 0, totalPhoto60 = 0, totalDrives = 0;
     let rowsHtml = '';
     rows.forEach(r => {
       const flights = r.flights || 0;
       const p80 = r.photo80 || 0, p60 = r.photo60 || 0, drives = r.cp_drives || 0;
-      const pay = p80 * 80 + p60 * 60;
-      totalFlights += flights; totalPhoto80 += p80; totalPhoto60 += p60; totalDrives += drives; totalPay += pay;
+      totalFlights += flights; totalPhoto80 += p80; totalPhoto60 += p60; totalDrives += drives;
       rowsHtml += `<tr>
         <td class="pp-td-pilot">${r.pilot_name}</td>
         <td class="pp-td${!flights ? ' pp-td-zero' : ''}">${flights || '—'}</td>
         <td class="pp-td${!p80 ? ' pp-td-zero' : ''}">${p80 || '—'}</td>
         <td class="pp-td${!p60 ? ' pp-td-zero' : ''}">${p60 || '—'}</td>
         <td class="pp-td${!drives ? ' pp-td-zero' : ''}">${drives || '—'}</td>
-        <td class="pp-td" style="font-weight:700;">${pay ? '$' + pay : '—'}</td>
       </tr>`;
     });
     return `<div class="pp-period">
@@ -4913,7 +4911,6 @@ function _renderPilotPayContent(el, data) {
           <th class="pp-th">$80 Photo</th>
           <th class="pp-th">$60 Photo</th>
           <th class="pp-th">CP Drives</th>
-          <th class="pp-th">Pay $</th>
         </tr></thead>
         <tbody>${rowsHtml}</tbody>
         <tfoot><tr class="pp-totals">
@@ -4922,7 +4919,6 @@ function _renderPilotPayContent(el, data) {
           <td class="pp-td">${totalPhoto80}</td>
           <td class="pp-td">${totalPhoto60}</td>
           <td class="pp-td">${totalDrives}</td>
-          <td class="pp-td">$${totalPay}</td>
         </tr></tfoot>
       </table>
     </div>`;

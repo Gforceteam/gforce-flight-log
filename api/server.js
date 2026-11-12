@@ -1847,6 +1847,7 @@ app.get('/api/flying', verifyToken, async (req, res) => {
       SELECT p.name, at.client_name, at.started_at, at.expires_at, at.group_id
       FROM active_timers at
       JOIN pilots p ON at.pilot_id = p.id
+      WHERE at.cp_mode = 0 OR at.cp_mode IS NULL
       ORDER BY at.started_at ASC
     `);
     res.json(rows);

@@ -1616,31 +1616,61 @@ app.post('/api/pilot/land', verifyToken, async (req, res) => {
   }
 });
 
-// ─── CP Mode: start timer for self (solo=true) or all group members not yet flying ─
+// ─── CP Mode: list all active CP mode flights (any pilot can see) ──────────────
+app.get('/api/pilot/cp-active', verifyToken, async (req, res) => {
+  try {
+    const timers = await queryAll(
+      'SELECT at.pilot_id, p.name AS pilot_name, at.group_id, at.started_at, at.expires_at, at.flying_started_at FROM active_timers at JOIN pilots p ON at.pilot_id = p.id WHERE at.cp_mode = 1 ORDER BY at.started_at ASC',
+      []
+    );
+    // Group by group_id (or solo)
+    const groupMap = new Map();
+    for (const t of timers) {
+      const key = t.group_id || `_solo_${t.pilot_id}`;
+      if (!groupMap.has(key)) groupMap.set(key, { group_id: t.group_id || null, pilots: [] });
+      groupMap.get(key).pilots.push({ pilot_id: t.pilot_id, pilot_name: t.pilot_name, flying_started_at: t.flying_started_at || null, expires_at: t.expires_at || null, started_at: t.started_at });
+    }
+    res.json([...groupMap.values()]);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── CP Mode: start timer for one pilot or all in a group (any pilot can call) ─
 app.patch('/api/pilot/cp-all-flying', verifyToken, async (req, res) => {
   try {
-    const timer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
-    if (!timer) return res.status(404).json({ error: 'No active timer' });
-    if (!Number(timer.cp_mode)) return res.status(400).json({ error: 'Not a CP mode flight' });
-
-    const { solo } = req.body || {};
+    const { solo, group_id: bodyGroupId, pilot_id: bodyPilotId } = req.body || {};
     const now = new Date();
     const expires = new Date(now.getTime() + 60 * 60 * 1000);
     const nowIso = now.toISOString();
     const expiresIso = expires.toISOString();
 
-    if (solo || !timer.group_id) {
-      // Start only this pilot's timer
+    // If called for a specific single pilot (bodyPilotId), just start that one
+    if (bodyPilotId) {
+      const target = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ? AND cp_mode = 1', [bodyPilotId]);
+      if (!target) return res.status(404).json({ error: 'No active CP timer for that pilot' });
+      if (target.flying_started_at) return res.status(409).json({ error: 'Already flying' });
+      await run('UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE pilot_id = ?', [nowIso, expiresIso, bodyPilotId]);
+      broadcast({ type: 'CP_ALL_FLYING', pilot_ids: [bodyPilotId], group_id: target.group_id || null, flying_started_at: nowIso, expires_at: expiresIso });
+      return res.json({ ok: true, flying_started_at: nowIso, expires_at: expiresIso });
+    }
+
+    // Determine which group to act on
+    const timer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
+    const groupId = bodyGroupId || (timer && timer.group_id) || null;
+
+    if (solo || !groupId) {
+      // Start only the requesting pilot's timer
+      if (!timer || !Number(timer.cp_mode)) return res.status(400).json({ error: 'Not a CP mode flight' });
       if (timer.flying_started_at) return res.status(409).json({ error: 'Already flying' });
-      await run('UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE pilot_id = ?',
-        [nowIso, expiresIso, req.pilot.id]);
-      broadcast({ type: 'CP_ALL_FLYING', pilot_ids: [req.pilot.id], group_id: timer.group_id || null, flying_started_at: nowIso, expires_at: expiresIso });
+      await run('UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE pilot_id = ?', [nowIso, expiresIso, req.pilot.id]);
+      broadcast({ type: 'CP_ALL_FLYING', pilot_ids: [req.pilot.id], group_id: groupId, flying_started_at: nowIso, expires_at: expiresIso });
     } else {
-      // Start timer for all group members not yet flying
-      await run('UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE group_id = ? AND (flying_started_at IS NULL)',
-        [nowIso, expiresIso, timer.group_id]);
-      const updated = await queryAll('SELECT pilot_id FROM active_timers WHERE group_id = ?', [timer.group_id]);
-      broadcast({ type: 'CP_ALL_FLYING', pilot_ids: updated.map(r => r.pilot_id), group_id: timer.group_id, flying_started_at: nowIso, expires_at: expiresIso });
+      // Start timer for all in the group not yet flying
+      await run('UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE group_id = ? AND cp_mode = 1 AND (flying_started_at IS NULL)', [nowIso, expiresIso, groupId]);
+      const updated = await queryAll('SELECT pilot_id FROM active_timers WHERE group_id = ?', [groupId]);
+      broadcast({ type: 'CP_ALL_FLYING', pilot_ids: updated.map(r => r.pilot_id), group_id: groupId, flying_started_at: nowIso, expires_at: expiresIso });
     }
 
     res.json({ ok: true, flying_started_at: nowIso, expires_at: expiresIso });
@@ -1650,16 +1680,13 @@ app.patch('/api/pilot/cp-all-flying', verifyToken, async (req, res) => {
   }
 });
 
-// ─── CP Mode: start timer for a specific group member ─────────────────────────
+// ─── CP Mode: start timer for a specific pilot (any authenticated pilot) ───────
 app.patch('/api/pilot/cp-flying-member', verifyToken, async (req, res) => {
   try {
     const { pilot_id } = req.body;
     if (!pilot_id) return res.status(400).json({ error: 'pilot_id required' });
-    const myTimer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
-    if (!myTimer || !myTimer.group_id) return res.status(403).json({ error: 'Not in an active group' });
-    if (!Number(myTimer.cp_mode)) return res.status(400).json({ error: 'Not a CP mode flight' });
-    const targetTimer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ? AND group_id = ?', [pilot_id, myTimer.group_id]);
-    if (!targetTimer) return res.status(404).json({ error: 'Pilot not found in your group' });
+    const targetTimer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ? AND cp_mode = 1', [pilot_id]);
+    if (!targetTimer) return res.status(404).json({ error: 'No active CP timer for that pilot' });
     if (targetTimer.flying_started_at) return res.status(409).json({ error: 'Already flying' });
 
     const now = new Date();
@@ -1667,11 +1694,75 @@ app.patch('/api/pilot/cp-flying-member', verifyToken, async (req, res) => {
     const nowIso = now.toISOString();
     const expiresIso = expires.toISOString();
 
-    await run('UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE pilot_id = ?',
-      [nowIso, expiresIso, pilot_id]);
-
-    broadcast({ type: 'CP_ALL_FLYING', pilot_ids: [pilot_id], group_id: myTimer.group_id, flying_started_at: nowIso, expires_at: expiresIso });
+    await run('UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE pilot_id = ?', [nowIso, expiresIso, pilot_id]);
+    broadcast({ type: 'CP_ALL_FLYING', pilot_ids: [pilot_id], group_id: targetTimer.group_id || null, flying_started_at: nowIso, expires_at: expiresIso });
     res.json({ ok: true, flying_started_at: nowIso, expires_at: expiresIso });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── CP Mode: land a specific pilot (any authenticated pilot) ──────────────────
+app.post('/api/pilot/cp-land-pilot', verifyToken, async (req, res) => {
+  try {
+    const { pilot_id } = req.body;
+    if (!pilot_id) return res.status(400).json({ error: 'pilot_id required' });
+    const targetTimer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ? AND cp_mode = 1', [pilot_id]);
+    if (!targetTimer) return res.status(404).json({ error: 'No active CP timer for that pilot' });
+    const pilot = await queryOne('SELECT * FROM pilots WHERE id = ?', [pilot_id]);
+    if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
+
+    const now = new Date().toISOString();
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+    const flightId = uuidv4();
+    const todayCount = await queryOne('SELECT COUNT(*) as c FROM flights WHERE pilot_id = ? AND date = ? AND (did_not_fly IS NULL OR did_not_fly = 0)', [pilot_id, today]);
+    const flightNum = (Number(todayCount?.c) || 0) + 1;
+    const pilotRec = await queryOne('SELECT current_wing FROM pilots WHERE id = ?', [pilot_id]);
+
+    await run(
+      `INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, sent_away_at, wing_reg)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [flightId, pilot_id, targetTimer.client_name || '', today, flightNum,
+       0, '', '', 0, 0, 'PENDING_PILOT_FILL', now, targetTimer.started_at || null, pilotRec?.current_wing || null]
+    );
+    await run('DELETE FROM active_timers WHERE pilot_id = ?', [pilot_id]);
+    await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'cp_landed', now]);
+    broadcast({ type: 'LANDED_EARLY', pilot_id, pilot_name: pilot.name, landed_at: now, flight_id: flightId });
+    res.json({ flight_id: flightId });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── CP Mode: land all pilots in a group (any authenticated pilot) ─────────────
+app.post('/api/pilot/cp-land-group', verifyToken, async (req, res) => {
+  try {
+    const { group_id } = req.body;
+    if (!group_id) return res.status(400).json({ error: 'group_id required' });
+    const groupTimers = await queryAll('SELECT at.*, p.name AS pilot_name FROM active_timers at JOIN pilots p ON at.pilot_id = p.id WHERE at.group_id = ? AND at.cp_mode = 1', [group_id]);
+    if (!groupTimers.length) return res.status(404).json({ error: 'No active CP timers in that group' });
+
+    const now = new Date().toISOString();
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: NZ_TZ });
+    const flightIds = [];
+    for (const t of groupTimers) {
+      const flightId = uuidv4();
+      const todayCount = await queryOne('SELECT COUNT(*) as c FROM flights WHERE pilot_id = ? AND date = ? AND (did_not_fly IS NULL OR did_not_fly = 0)', [t.pilot_id, today]);
+      const flightNum = (Number(todayCount?.c) || 0) + 1;
+      const pilotRec = await queryOne('SELECT current_wing FROM pilots WHERE id = ?', [t.pilot_id]);
+      await run(
+        `INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, sent_away_at, wing_reg)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [flightId, t.pilot_id, t.client_name || '', today, flightNum, 0, '', '', 0, 0, 'PENDING_PILOT_FILL', now, t.started_at || null, pilotRec?.current_wing || null]
+      );
+      await run('DELETE FROM active_timers WHERE pilot_id = ?', [t.pilot_id]);
+      await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), t.pilot_id, 'cp_landed', now]);
+      broadcast({ type: 'LANDED_EARLY', pilot_id: t.pilot_id, pilot_name: t.pilot_name, landed_at: now, flight_id: flightId });
+      flightIds.push(flightId);
+    }
+    res.json({ flight_ids: flightIds });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Internal server error' });

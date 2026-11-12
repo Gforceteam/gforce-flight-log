@@ -1472,6 +1472,7 @@
       <button onclick="loadMyData()" style="padding:6px 16px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;">↻ Refresh</button>
     </div>
     <div id="pilot-coronet-live"></div>
+    <div id="pilot-cp-flights"></div>
     <div class="dashboard-status" id="dashboard-content"></div>
   </div>
 
@@ -2199,6 +2200,7 @@ let myFlights = [];
 let allTodayFlights = []; // all pilots' flights today — shown in pilot FF page
 let myDrives = [];
 let flyingPilots = []; // pilots currently airborne — shown on dashboard
+let cpActiveFlights = []; // active CP mode groups — shown to all pilots
 let statsMonthOffset = 0; // 0 = current month, -1 = last month, etc.
 let myStatus = { status: 'in_office', client_name: null, timer_expires_at: null };
 /** 0 signed out, 1 available, 2 down bottom */
@@ -3249,12 +3251,13 @@ async function loadMyData() {
   try {
     migrateLegacyGliderKeys();
     migrateLegacyPilotFullName();
-    const [statusRes, flightsRes, drivesRes, flyingRes, todayFlightsRes] = await Promise.all([
+    const [statusRes, flightsRes, drivesRes, flyingRes, todayFlightsRes, cpRes] = await Promise.all([
       apiFetch('/api/my-status'),
       apiFetch('/api/flights'),
       apiFetch('/api/drives'),
       apiFetch('/api/flying'),
-      apiFetch('/api/today-flights')
+      apiFetch('/api/today-flights'),
+      apiFetch('/api/pilot/cp-active')
     ]);
     if (!statusRes || !flightsRes) { doLogout(); return; }
     if (statusRes.status === 401 || flightsRes.status === 401) { doLogout(); return; }
@@ -3274,8 +3277,10 @@ async function loadMyData() {
     myDrives = drivesRes.ok ? await drivesRes.json() : [];
     flyingPilots = flyingRes.ok ? await flyingRes.json() : [];
     allTodayFlights = todayFlightsRes && todayFlightsRes.ok ? await todayFlightsRes.json() : [];
+    cpActiveFlights = cpRes && cpRes.ok ? await cpRes.json() : [];
     updatePilotAirborneChip();
     renderDashboard();
+    renderCpFlightsPanel();
     renderCoronetLiveBanner('pilot-coronet-live');
     renderFlights();
     updateStatusBadge();
@@ -3482,12 +3487,89 @@ async function pilotCpFlyingMember(pilotId, name) {
 }
 
 async function pilotCpAllLanded() {
-  // For a group, land all; for solo, land self
   if (myStatus.group_pilots && myStatus.group_pilots.length > 0) {
     await pilotLandGroupAll();
   } else {
     await pilotLand();
   }
+}
+
+// Land a CP pilot from the shared panel (any pilot can call)
+async function cpLandPilot(pilotId, name, btnEl) {
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Landing…'; }
+  try {
+    const res = await apiFetch('/api/pilot/cp-land-pilot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pilot_id: pilotId }) });
+    if (!res || !res.ok) { const e = await res?.json().catch(() => ({})); toast(e.error || 'Could not land pilot', 'err'); if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Landed'; } return; }
+    toast(`${name} landed`);
+  } catch (e) { toast('Error: ' + e.message, 'err'); if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Landed'; } }
+}
+
+// Land all pilots in a CP group from the shared panel
+async function cpLandGroup(groupId, btnEl) {
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Landing…'; }
+  try {
+    const res = await apiFetch('/api/pilot/cp-land-group', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ group_id: groupId }) });
+    if (!res || !res.ok) { const e = await res?.json().catch(() => ({})); toast(e.error || 'Could not land group', 'err'); if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'All Landed'; } return; }
+    toast('Group landed');
+  } catch (e) { toast('Error: ' + e.message, 'err'); if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'All Landed'; } }
+}
+
+// Start flying for a CP pilot from the shared panel (any pilot can call)
+async function cpStartFlyingPilot(pilotId, btnEl) {
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Starting…'; }
+  try {
+    const res = await apiFetch('/api/pilot/cp-all-flying', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pilot_id: pilotId }) });
+    if (!res || !res.ok) { const e = await res?.json().catch(() => ({})); toast(e.error || 'Could not start timer', 'err'); if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Flying'; } }
+  } catch (e) { toast('Error: ' + e.message, 'err'); if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Flying'; } }
+}
+
+// Start flying for all in a CP group from the shared panel
+async function cpStartFlyingGroup(groupId, btnEl) {
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Starting…'; }
+  try {
+    const res = await apiFetch('/api/pilot/cp-all-flying', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ group_id: groupId }) });
+    if (!res || !res.ok) { const e = await res?.json().catch(() => ({})); toast(e.error || 'Could not start timers', 'err'); if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'All Flying'; } }
+  } catch (e) { toast('Error: ' + e.message, 'err'); if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'All Flying'; } }
+}
+
+function renderCpFlightsPanel() {
+  const el = document.getElementById('pilot-cp-flights');
+  if (!el) return;
+
+  // Filter out groups the current pilot is personally part of (they see those in their own dashboard card)
+  const externalGroups = cpActiveFlights.filter(g =>
+    !g.pilots.some(p => String(p.pilot_id) === String(pilotId))
+  );
+
+  if (!externalGroups.length) { el.innerHTML = ''; return; }
+
+  const cards = externalGroups.map(g => {
+    const anyFlying = g.pilots.some(p => p.flying_started_at);
+    const allFlying = g.pilots.every(p => p.flying_started_at);
+    const groupId = g.group_id;
+
+    const pilotRows = g.pilots.map(p => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-top:1px solid var(--border);gap:8px;">
+        <span style="font-size:13px;font-weight:600;color:var(--text);flex:1;">${esc(p.pilot_name)}</span>
+        ${p.flying_started_at
+          ? `<span style="font-size:11px;font-weight:700;color:#16a34a;margin-right:4px;">Flying ✓</span>
+             <button onclick="cpLandPilot('${p.pilot_id}','${esc(p.pilot_name)}',this)" style="padding:5px 12px;background:var(--surface);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;">Landed</button>`
+          : `<span style="font-size:11px;color:var(--muted);margin-right:4px;">En Route</span>
+             <button onclick="cpStartFlyingPilot('${p.pilot_id}',this)" style="padding:5px 12px;background:var(--accent);border:none;border-radius:7px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">Flying</button>`
+        }
+      </div>`).join('');
+
+    return `<div style="margin-bottom:12px;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:14px;border-left:3px solid ${anyFlying ? '#16a34a' : 'var(--warning)'};">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:2px;">CP Mode Flight</div>
+      ${pilotRows}
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        ${!allFlying ? `<button onclick="cpStartFlyingGroup('${groupId}',this)" style="flex:1;padding:10px;background:var(--accent);border:none;border-radius:9px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">All Flying</button>` : ''}
+        <button onclick="cpLandGroup('${groupId}',this)" style="flex:1;padding:10px;background:${allFlying ? 'var(--accent)' : 'var(--surface)'};border:1px solid ${allFlying ? 'var(--accent)' : 'var(--border)'};border-radius:9px;color:${allFlying ? '#fff' : 'var(--text)'};font-size:13px;font-weight:700;cursor:pointer;">All Landed</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `<div style="padding-top:12px;">${cards}</div>`;
 }
 
 async function pilotLand() {
@@ -9523,6 +9605,7 @@ function connectWS() {
       case 'LEFT_OFFICE':
         if (notifEnabled(NOTIF_KEYS.left)) toast(`${data.pilot_name} left office${data.cp_mode ? ' (CP Mode)' : ''}`);
         loadOfficeData();
+        if (pilotId && data.cp_mode) loadMyData(); // refresh cp-active for all pilots
         if (pilotId && data.pilot_id === pilotId) {
           myStatus.status = 'airborne';
           myStatus.timer_expires_at = data.expires_at;
@@ -9536,6 +9619,7 @@ function connectWS() {
       case 'GROUP_LEFT_OFFICE':
         toast(`Group away: ${data.pilot_names.join(', ')}${data.cp_mode ? ' (CP Mode)' : ''}`);
         loadOfficeData();
+        if (pilotId && data.cp_mode) loadMyData(); // refresh cp-active for all pilots
         if (pilotId && data.pilot_ids.includes(pilotId)) {
           myStatus.status = 'airborne';
           myStatus.timer_expires_at = data.expires_at;
@@ -9558,14 +9642,21 @@ function connectWS() {
             myStatus.flying_started_at = data.flying_started_at;
             myStatus.timer_expires_at = data.expires_at;
           }
-          // Update group_pilots flying status
           if (myStatus.group_pilots) {
             myStatus.group_pilots = myStatus.group_pilots.map(p =>
               affectedIds.includes(String(p.id)) ? { ...p, flying_started_at: data.flying_started_at } : p
             );
           }
+          // Update cpActiveFlights cache
+          cpActiveFlights = cpActiveFlights.map(g => ({
+            ...g,
+            pilots: g.pilots.map(p =>
+              affectedIds.includes(String(p.pilot_id)) ? { ...p, flying_started_at: data.flying_started_at, expires_at: data.expires_at } : p
+            )
+          }));
           _lastDashboardKey = null;
           renderDashboard();
+          renderCpFlightsPanel();
           if (myStatus.flying_started_at) startDashboardCountdown(myStatus.timer_expires_at);
         }
         break;
@@ -9588,7 +9679,12 @@ function connectWS() {
         showLandingBanner(data.pilot_name);
         playLandingPing();
         loadOfficeData();
-        if (pilotId) refreshPilotTodayFlights();
+        if (pilotId) {
+          // Remove landed pilot from cpActiveFlights cache
+          cpActiveFlights = cpActiveFlights.map(g => ({ ...g, pilots: g.pilots.filter(p => p.pilot_id !== data.pilot_id) })).filter(g => g.pilots.length > 0);
+          renderCpFlightsPanel();
+          refreshPilotTodayFlights();
+        }
         break;
       case 'FLIGHT_UPDATED':
         loadOfficeData();

@@ -5024,7 +5024,7 @@ async function renderOfficeFfPayments(dates) {
   } catch (_) { el.innerHTML = ''; }
 }
 
-let _dsCalYear = null, _dsCalMonth = null;
+let _dsCalYear = null, _dsCalMonth = null, _dsCalLastData = null;
 
 async function renderManagerMonthCalendar() {
   const el = document.getElementById('ff-month-calendar');
@@ -5055,7 +5055,7 @@ function _renderDsCalendar(el, data) {
     return r ? Number(r.flights) : 0;
   };
 
-  // Build sorted pilot list from those with any data + all non-hidden active pilots
+  // Build sorted pilot list — all non-hidden active pilots
   const seenIds = new Set();
   const calPilots = [];
   [...(officePilots || [])].filter(p => !HIDDEN_PILOTS.includes(p.name)).sort(pilotSort).forEach(p => {
@@ -5068,18 +5068,30 @@ function _renderDsCalendar(el, data) {
   const dailyTotals = {};
   days.forEach(d => { dailyTotals[d] = 0; });
 
-  let bodyHtml = '';
-  calPilots.forEach(p => {
-    let pilotTotal = 0;
-    const cells = days.map(d => {
+  // Compute counts for all pilots (including zeros) for export
+  const pilotCounts = calPilots.map(p => {
+    const counts = {};
+    let total = 0;
+    days.forEach(d => {
       const cnt = getCount(p.id, d);
-      if (cnt > 0) { dailyTotals[d] += cnt; pilotTotal += cnt; }
+      counts[d] = cnt;
+      if (cnt > 0) { dailyTotals[d] += cnt; total += cnt; }
+    });
+    return { pilot: p, counts, total };
+  });
+
+  // Cache for CSV export
+  _dsCalLastData = { year, month, days, pilotCounts, dailyTotals, monthNames };
+
+  let bodyHtml = '';
+  pilotCounts.forEach(({ pilot: p, counts, total }) => {
+    if (total === 0) return;
+    const cells = days.map(d => {
+      const cnt = counts[d];
       const todayCls = d === today ? 'ff-today-col' : '';
       return `<td class="${todayCls}" style="text-align:center;">${cnt > 0 ? `<span class="ff-day-val">${cnt}</span>` : ''}</td>`;
     }).join('');
-    if (pilotTotal > 0) {
-      bodyHtml += `<tr><td class="ff-pilot-name">${esc(p.name)}</td>${cells}<td class="ff-total">${pilotTotal}</td></tr>`;
-    }
+    bodyHtml += `<tr><td class="ff-pilot-name">${esc(p.name)}</td>${cells}<td class="ff-total">${total}</td></tr>`;
   });
 
   if (!bodyHtml) { el.innerHTML = `<div style="border-top:2px solid var(--border);margin-top:16px;padding:16px 14px;color:var(--muted);font-size:13px;">No flights recorded for ${monthNames[month-1]} ${year}</div>`; return; }
@@ -5094,6 +5106,7 @@ function _renderDsCalendar(el, data) {
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 14px 4px;">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);">Monthly Flight Summary</div>
       <div style="display:flex;align-items:center;gap:10px;">
+        <button onclick="_dsCalExportCsv()" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;padding:0 10px;height:30px;cursor:pointer;">Export CSV</button>
         <button onclick="_dsCalNav(-1)" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:16px;width:30px;height:30px;cursor:pointer;display:flex;align-items:center;justify-content:center;">‹</button>
         <span style="font-size:14px;font-weight:700;color:var(--text);min-width:120px;text-align:center;">${monthNames[month-1]} ${year}</span>
         <button onclick="_dsCalNav(1)" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:16px;width:30px;height:30px;cursor:pointer;display:flex;align-items:center;justify-content:center;">›</button>
@@ -5105,6 +5118,42 @@ function _renderDsCalendar(el, data) {
       <th>Total</th>
     </tr></thead><tbody>${bodyHtml}</tbody><tfoot>${totalsRow}</tfoot></table></div>
   </div>`;
+}
+
+function _dsCalExportCsv() {
+  if (!_dsCalLastData) return;
+  const { year, month, days, pilotCounts, dailyTotals, monthNames } = _dsCalLastData;
+  const pad = n => String(n).padStart(2, '0');
+  const csvEsc = v => (String(v).includes(',') || String(v).includes('"')) ? `"${String(v).replace(/"/g,'""')}"` : String(v);
+
+  const header = [csvEsc(`${monthNames[month-1]} ${year}`), ...Array.from({ length: 31 }, (_, i) => i + 1), 'TOTAL'];
+  const rows = [header.join(',')];
+
+  pilotCounts.forEach(({ pilot: p, counts, total }) => {
+    const dayCells = Array.from({ length: 31 }, (_, i) => {
+      const dateStr = `${year}-${pad(month)}-${pad(i + 1)}`;
+      if (i + 1 > days.length) return '';
+      const cnt = counts[dateStr];
+      return cnt > 0 ? cnt : '';
+    });
+    rows.push([csvEsc(p.name), ...dayCells, total || ''].join(','));
+  });
+
+  const totalsRow = [csvEsc('Total'), ...Array.from({ length: 31 }, (_, i) => {
+    if (i + 1 > days.length) return '';
+    const dateStr = `${year}-${pad(month)}-${pad(i + 1)}`;
+    return dailyTotals[dateStr] || '';
+  }), Object.values(dailyTotals).reduce((s, v) => s + v, 0) || ''].join(',');
+  rows.push(totalsRow);
+
+  const csv = rows.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `flights-${monthNames[month-1].toLowerCase()}-${year}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function _dsCalNav(dir) {

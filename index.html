@@ -3446,26 +3446,39 @@ async function pilotLandGroupAll() {
   } catch (e) { toast('Error: ' + e.message, 'err'); }
 }
 
-async function pilotCpAllFlying() {
-  const btn = document.querySelector('.btn-log-flight');
-  if (btn) { btn.disabled = true; btn.textContent = 'Starting…'; }
+async function _cpStartFlying(url, body, btnEl, btnLabel) {
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Starting…'; }
   try {
-    const res = await apiFetch('/api/pilot/cp-all-flying', { method: 'PATCH' });
+    const res = await apiFetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
     if (!res || !res.ok) {
       const err = await res?.json().catch(() => ({}));
       toast(err.error || 'Could not start timer');
-      if (btn) { btn.disabled = false; btn.textContent = 'All Flying'; }
+      if (btnEl) { btnEl.disabled = false; btnEl.textContent = btnLabel; }
       return;
     }
     const data = await res.json();
     myStatus.flying_started_at = data.flying_started_at;
     myStatus.timer_expires_at = data.expires_at;
-    _lastDashboardKey = null; // force re-render
+    _lastDashboardKey = null;
     renderDashboard();
   } catch (e) {
     toast('Error: ' + e.message);
-    if (btn) { btn.disabled = false; btn.textContent = 'All Flying'; }
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = btnLabel; }
   }
+}
+
+function pilotCpAllFlying() {
+  _cpStartFlying('/api/pilot/cp-all-flying', {}, document.getElementById('cp-btn-all-flying'), 'All Flying');
+}
+
+function pilotCpSoloFlying() {
+  _cpStartFlying('/api/pilot/cp-all-flying', { solo: true }, document.getElementById('cp-btn-self-flying'), 'Flying');
+}
+
+async function pilotCpFlyingMember(pilotId, name) {
+  const btnId = `cp-btn-fly-${pilotId}`;
+  const btn = document.getElementById(btnId);
+  _cpStartFlying('/api/pilot/cp-flying-member', { pilot_id: pilotId }, btn, 'Flying');
 }
 
 async function pilotCpAllLanded() {
@@ -3523,52 +3536,46 @@ function renderDashboard() {
     const flightNumLabel = (() => { const n = parseInt(myStatus.client_name); return (!isNaN(n) && n >= 1) ? n : _curFlightNum; })();
     const groupPax = myStatus.group_pilots && myStatus.group_pilots.length;
 
-    if (myStatus.cp_mode && !myStatus.flying_started_at) {
-      // ── CP Mode: En Route (timer not yet started) ────────────────────────
-      el.innerHTML = `
-        <div class="ff-status-card" style="border-color:rgba(245,166,35,0.3);background:rgba(245,166,35,0.07);">
-          <div class="ff-status-pill" style="background:rgba(245,166,35,0.15);color:var(--warning);">CP Mode — En Route</div>
-          <div style="font-size:14px;color:var(--muted);text-align:center;margin-top:-8px;margin-bottom:16px;">Timer starts when you tap All Flying</div>
-          ${groupPax ? `
-            <div class="ff-group-pilots" style="margin-top:4px;margin-bottom:12px;">
-              <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px;">Group of ${myStatus.group_pilots.length + 1} Pax</div>
-              ${myStatus.group_pilots.map(p => `
-                <div style="padding:4px 0;border-top:1px solid var(--border);font-size:13px;color:var(--text);">${esc(p.name)}</div>`).join('')}
-            </div>` : ''}
-          <button onclick="pilotCpAllFlying()" style="width:100%;padding:14px;background:var(--accent);border:none;border-radius:12px;color:#fff;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:10px;">All Flying</button>
-          <div class="ff-secondary-actions">
-            <button class="btn-extend" id="btn-dnf" onclick="didNotFly()" style="border-color:var(--muted);color:var(--muted);">✕ Did Not Fly</button>
-          </div>
-        </div>
-        ${renderFlyingList(true)}
-        <div id="pilot-all-today-flights">${renderAllTodayFlights()}</div>
-      `;
+    if (myStatus.cp_mode) {
+      // Build pilot list: self + group members, each with flying status
+      const selfFlying = !!myStatus.flying_started_at;
+      const allPilots = [
+        { id: null, name: pilotName || 'You', flying: selfFlying, isSelf: true },
+        ...(myStatus.group_pilots || []).map(p => ({ id: p.id, name: p.name, flying: !!p.flying_started_at, isSelf: false }))
+      ];
+      const anyFlying = allPilots.some(p => p.flying);
+      const allFlying = allPilots.every(p => p.flying);
 
-    } else if (myStatus.cp_mode && myStatus.flying_started_at) {
-      // ── CP Mode: In Flight (timer running, All Landed button) ────────────
+      const pilotRows = allPilots.map(p => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-top:1px solid var(--border);gap:8px;">
+          <span style="font-size:13px;font-weight:600;color:var(--text);flex:1;">${esc(p.name)}${p.isSelf ? ' <span style="font-size:11px;color:var(--muted);">(you)</span>' : ''}</span>
+          ${p.flying
+            ? `<span style="font-size:11px;font-weight:700;color:#16a34a;">Flying ✓</span>
+               <button onclick="${p.isSelf ? 'pilotLand()' : `pilotLandGroupMember('${p.id}','${esc(p.name)}')`}" style="padding:5px 12px;background:var(--surface);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;">Landed</button>`
+            : `<span style="font-size:11px;color:var(--muted);">En Route</span>
+               <button id="${p.isSelf ? 'cp-btn-self-flying' : `cp-btn-fly-${p.id}`}" onclick="${p.isSelf ? 'pilotCpSoloFlying()' : `pilotCpFlyingMember('${p.id}','${esc(p.name)}')`}" style="padding:5px 12px;background:var(--accent);border:none;border-radius:7px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">Flying</button>`
+          }
+        </div>`).join('');
+
       el.innerHTML = `
-        <div class="ff-status-card ff-status-flying">
-          <div class="ff-status-pill flying">CP — Flying</div>
-          <div style="font-size:15px;font-weight:700;color:var(--text);margin-top:-10px;margin-bottom:8px;">Flight #${flightNumLabel}</div>
-          ${groupPax ? `
-            <div class="ff-group-pilots" style="margin-top:8px;">
-              <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:6px;">Group of ${myStatus.group_pilots.length + 1} Pax</div>
-              ${myStatus.group_pilots.map(p => `
-                <div style="padding:4px 0;border-top:1px solid var(--border);font-size:13px;color:var(--text);">${esc(p.name)}</div>`).join('')}
-            </div>` : ''}
-          <div class="dashboard-timer" id="dashboard-timer">--:--</div>
-          <div style="margin-top:4px;">
-            <button class="btn-log-flight btn-land-pilot" style="width:100%;" onclick="pilotCpAllLanded()">All Landed</button>
+        <div class="ff-status-card ${selfFlying ? 'ff-status-flying' : ''}" style="${!selfFlying ? 'border-color:rgba(245,166,35,0.3);background:rgba(245,166,35,0.07);' : ''}">
+          <div class="ff-status-pill ${selfFlying ? 'flying' : ''}" style="${!selfFlying ? 'background:rgba(245,166,35,0.15);color:var(--warning);' : ''}">CP Mode${selfFlying ? ' — Flying' : ' — En Route'}</div>
+          ${selfFlying ? `<div style="font-size:15px;font-weight:700;color:var(--text);margin-top:-10px;margin-bottom:4px;">Flight #${flightNumLabel}</div>` : `<div style="font-size:13px;color:var(--muted);text-align:center;margin-top:-8px;margin-bottom:4px;">Tap Flying when each pilot is ready</div>`}
+          ${allPilots.length > 1 ? `<div style="margin-bottom:4px;">${pilotRows}</div>` : ''}
+          ${selfFlying ? `<div class="dashboard-timer" id="dashboard-timer">--:--</div>` : ''}
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            ${!allFlying ? `<button id="cp-btn-all-flying" onclick="pilotCpAllFlying()" style="flex:1;padding:11px;background:var(--accent);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">All Flying</button>` : ''}
+            <button onclick="pilotCpAllLanded()" class="btn-land-pilot" style="flex:1;padding:11px;background:${allFlying ? 'var(--accent)' : 'var(--surface)'};border:1px solid ${allFlying ? 'var(--accent)' : 'var(--border)'};border-radius:10px;color:${allFlying ? '#fff' : 'var(--text)'};font-size:14px;font-weight:700;cursor:pointer;">All Landed</button>
           </div>
-          <div class="ff-secondary-actions">
+          <div class="ff-secondary-actions" style="margin-top:8px;">
             <button class="btn-extend" id="btn-dnf" onclick="didNotFly()" style="border-color:var(--muted);color:var(--muted);">✕ Did Not Fly</button>
-            <button class="btn-extend" onclick="showFlightInfo()" style="border-color:var(--border);color:var(--muted);">ℹ️ Flight Info</button>
+            ${selfFlying ? `<button class="btn-extend" onclick="showFlightInfo()" style="border-color:var(--border);color:var(--muted);">ℹ️ Flight Info</button>` : ''}
           </div>
         </div>
         ${renderFlyingList(true)}
         <div id="pilot-all-today-flights">${renderAllTodayFlights()}</div>
       `;
-      startDashboardCountdown(myStatus.timer_expires_at);
+      if (selfFlying) startDashboardCountdown(myStatus.timer_expires_at);
 
     } else {
     // ── Regular Flying ──────────────────────────────────────────────────────
@@ -9533,11 +9540,21 @@ function connectWS() {
         break;
       case 'CP_ALL_FLYING':
         loadOfficeData();
-        if (pilotId && (data.pilot_id === pilotId || (myStatus.group_id && data.group_id === myStatus.group_id))) {
-          myStatus.flying_started_at = data.flying_started_at;
-          myStatus.timer_expires_at = data.expires_at;
+        if (pilotId) {
+          const affectedIds = data.pilot_ids || (data.pilot_id ? [data.pilot_id] : []);
+          if (affectedIds.includes(String(pilotId)) || affectedIds.includes(pilotId)) {
+            myStatus.flying_started_at = data.flying_started_at;
+            myStatus.timer_expires_at = data.expires_at;
+          }
+          // Update group_pilots flying status
+          if (myStatus.group_pilots) {
+            myStatus.group_pilots = myStatus.group_pilots.map(p =>
+              affectedIds.includes(String(p.id)) ? { ...p, flying_started_at: data.flying_started_at } : p
+            );
+          }
+          _lastDashboardKey = null;
           renderDashboard();
-          startDashboardCountdown(data.expires_at);
+          if (myStatus.flying_started_at) startDashboardCountdown(myStatus.timer_expires_at);
         }
         break;
       case 'PILOT_ADDED_TO_GROUP':

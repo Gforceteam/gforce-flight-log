@@ -212,6 +212,9 @@ async function createTables() {
   try { await db.execute('ALTER TABLE active_timers ADD COLUMN cancelled_at TEXT'); } catch (_) {}
   // Add office_adjustments column to track cumulative time adjustments
   try { await db.execute('ALTER TABLE active_timers ADD COLUMN office_adjustments INTEGER DEFAULT 0'); } catch (_) {}
+  // CP Mode: timer starts on pilot's "All Flying" tap, not at Send Away
+  try { await db.execute('ALTER TABLE active_timers ADD COLUMN cp_mode INTEGER DEFAULT 0'); } catch (_) {}
+  try { await db.execute('ALTER TABLE active_timers ADD COLUMN flying_started_at TEXT DEFAULT NULL'); } catch (_) {}
   // Flag flights cancelled as "Did Not Fly" — excluded from counts but visible in history
   try { await db.execute('ALTER TABLE flights ADD COLUMN did_not_fly INTEGER DEFAULT 0'); } catch (_) {}
   // Per-event adjustment log so pilots can see what the office changed
@@ -763,6 +766,8 @@ app.get('/api/pilots', verifyPilotOrOffice, async (req, res) => {
         timer_started_at: timer ? timer.started_at : null,
         timer_expires_at: timer ? timer.expires_at : null,
         group_id: timer ? timer.group_id : null,
+        cp_mode: timer ? (Number(timer.cp_mode) === 1) : false,
+        flying_started_at: timer ? (timer.flying_started_at || null) : null,
         last_landed_at: lastL ? lastL.last_landed : null,
         last_seen: p.last_seen || null
       };
@@ -808,6 +813,8 @@ app.get('/api/my-status', verifyToken, async (req, res) => {
       client_name: timer ? timer.client_name : null,
       timer_started_at: timer ? timer.started_at : null,
       timer_expires_at: timer ? timer.expires_at : null,
+      cp_mode: timer ? (Number(timer.cp_mode) === 1) : false,
+      flying_started_at: timer ? (timer.flying_started_at || null) : null,
       current_wing: pilot ? pilot.current_wing : null,
       presence,
       available: presence === 1,
@@ -1609,6 +1616,48 @@ app.post('/api/pilot/land', verifyToken, async (req, res) => {
   }
 });
 
+// ─── CP Mode: pilot taps All Flying → starts 60-min timer for whole group ─────
+app.patch('/api/pilot/cp-all-flying', verifyToken, async (req, res) => {
+  try {
+    const timer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
+    if (!timer) return res.status(404).json({ error: 'No active timer' });
+    if (!Number(timer.cp_mode)) return res.status(400).json({ error: 'Not a CP mode flight' });
+    if (timer.flying_started_at) return res.status(409).json({ error: 'Already flying' });
+
+    const now = new Date();
+    const expires = new Date(now.getTime() + 60 * 60 * 1000);
+    const nowIso = now.toISOString();
+    const expiresIso = expires.toISOString();
+
+    // Update timer for this pilot and all group members
+    if (timer.group_id) {
+      await run(
+        'UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE group_id = ?',
+        [nowIso, expiresIso, timer.group_id]
+      );
+    } else {
+      await run(
+        'UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE pilot_id = ?',
+        [nowIso, expiresIso, req.pilot.id]
+      );
+    }
+
+    broadcast({
+      type: 'CP_ALL_FLYING',
+      pilot_id: req.pilot.id,
+      pilot_name: req.pilot.name,
+      group_id: timer.group_id || null,
+      flying_started_at: nowIso,
+      expires_at: expiresIso
+    });
+
+    res.json({ ok: true, flying_started_at: nowIso, expires_at: expiresIso });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ─── Daily Hours Worked — stored on last flight of the day ───────────────────
 app.put('/api/pilot/hours', verifyToken, async (req, res) => {
   const { date, hours } = req.body;
@@ -1762,7 +1811,7 @@ app.get('/api/flight-following', verifyToken, async (req, res) => {
 // ─── Office Routes ────────────────────────────────────────────────────────────
 app.post('/api/office/leave', verifyOffice, async (req, res) => {
   try {
-    const { pilot_id, client_name } = req.body;
+    const { pilot_id, client_name, cp_mode } = req.body;
     if (!pilot_id) return res.status(400).json({ error: 'pilot_id required' });
     const pilot = await queryOne('SELECT * FROM pilots WHERE id = ?', [pilot_id]);
     if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
@@ -1770,11 +1819,13 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
     if (existing) return res.status(409).json({ error: `${pilot.name} is already away` });
 
     const now = new Date();
-    const expires = new Date(now.getTime() + 60 * 60 * 1000);
+    const isCp = cp_mode ? 1 : 0;
+    // CP mode: no expiry until pilot taps All Flying
+    const expires = isCp ? null : new Date(now.getTime() + 60 * 60 * 1000);
     const cleanClientName = sanitize(client_name, 100);
 
-    await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at) VALUES (?, ?, ?, ?)',
-      [pilot_id, cleanClientName || null, now.toISOString(), expires.toISOString()]);
+    await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, cp_mode) VALUES (?, ?, ?, ?, ?)',
+      [pilot_id, cleanClientName || null, now.toISOString(), expires ? expires.toISOString() : null, isCp]);
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'left_office', new Date().toISOString()]);
 
     broadcast({
@@ -1783,17 +1834,19 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
       pilot_name: pilot.name,
       client_name: cleanClientName || null,
       started_at: now.toISOString(),
-      expires_at: expires.toISOString()
+      expires_at: expires ? expires.toISOString() : null,
+      cp_mode: isCp === 1
     });
 
-    // Push notification to pilot's device (works even when app is closed)
     await sendPushToPilot(pilot_id, {
       title: '🪂 GForce — YOU\'RE AWAY!',
-      body: cleanClientName ? `Client: ${cleanClientName}. Timer started — 60 minutes.` : 'Office has started your timer. Have a great flight!',
+      body: isCp
+        ? (cleanClientName ? `Client: ${cleanClientName}. CP Mode — tap All Flying when ready.` : 'CP Mode — tap All Flying when you\'re at the top.')
+        : (cleanClientName ? `Client: ${cleanClientName}. Timer started — 60 minutes.` : 'Office has started your timer. Have a great flight!'),
       tag: 'pilot-sent-away'
     });
 
-    res.json({ message: `Timer started for ${pilot.name}`, expires_at: expires.toISOString() });
+    res.json({ message: `Timer started for ${pilot.name}`, expires_at: expires ? expires.toISOString() : null });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Internal server error' });
@@ -1802,12 +1855,14 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
 
 app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
   try {
-    const { group_name, pilot_ids, pilot_nums, is_peak_trip } = req.body;
+    const { group_name, pilot_ids, pilot_nums, is_peak_trip, cp_mode } = req.body;
     if (!Array.isArray(pilot_ids) || !pilot_ids.length) return res.status(400).json({ error: 'pilot_ids required' });
 
     const now = new Date();
-    const duration = is_peak_trip ? 120 : 60; // peak trips get 2 hours, standard 1 hour
-    const expires = new Date(now.getTime() + duration * 60 * 1000);
+    const isCp = cp_mode ? 1 : 0;
+    const duration = is_peak_trip ? 120 : 60;
+    // CP mode: no expiry until pilot taps All Flying
+    const expires = isCp ? null : new Date(now.getTime() + duration * 60 * 1000);
     const groupId = uuidv4();
 
     // Guard: reject if any pilot is already away
@@ -1826,18 +1881,24 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
       if (!pilot) continue;
       const clientName = pilot_nums ? (sanitize(pilot_nums[pid], 20) || null) : (group_name || null);
       cleanedPilotNums[pid] = clientName;
-      await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, group_id) VALUES (?, ?, ?, ?, ?)',
-        [pid, clientName, now.toISOString(), expires.toISOString(), groupId]);
+      await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, group_id, cp_mode) VALUES (?, ?, ?, ?, ?, ?)',
+        [pid, clientName, now.toISOString(), expires ? expires.toISOString() : null, groupId, isCp]);
       await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pid, 'group_left_office', new Date().toISOString()]);
       pilotNames.push(pilot.name);
       pilotMap.push({ id: pid, name: pilot.name });
     }
-    // Push notification to each pilot in parallel — tells them who else is in the group
     await Promise.all(pilotMap.map(p => {
       const others = pilotNames.filter(n => n !== p.name);
-      const body = others.length
-        ? `Flying with ${others.join(', ')} — ${duration} min timer started.`
-        : `Timer started — ${duration} minutes.`;
+      let body;
+      if (isCp) {
+        body = others.length
+          ? `CP Mode with ${others.join(', ')} — tap All Flying when ready.`
+          : 'CP Mode — tap All Flying when you\'re at the top.';
+      } else {
+        body = others.length
+          ? `Flying with ${others.join(', ')} — ${duration} min timer started.`
+          : `Timer started — ${duration} minutes.`;
+      }
       return sendPushToPilot(p.id, {
         title: `🪂 GForce — YOU'RE AWAY!`,
         body,
@@ -1853,7 +1914,8 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
       pilot_names: pilotNames,
       pilot_nums: cleanedPilotNums,
       started_at: now.toISOString(),
-      expires_at: expires.toISOString(),
+      expires_at: expires ? expires.toISOString() : null,
+      cp_mode: isCp === 1,
       is_peak_trip: !!is_peak_trip
     });
 

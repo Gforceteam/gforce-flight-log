@@ -5571,9 +5571,14 @@ let _sendAwayPilotOpts = '';
 function renderGroupsTab() {
   const el = document.getElementById('groups-panel');
   if (!el) return;
-  // Skip re-render if user is actively filling in the send-away form
+  // Skip re-render if user has modified the send-away form
   const rows = document.getElementById('send-away-rows');
-  if (rows && rows.contains(document.activeElement)) return;
+  if (rows) {
+    const focusInForm = el.contains(document.activeElement);
+    const extraRows = rows.querySelectorAll('.send-away-row').length > 3;
+    const anySelected = [...rows.querySelectorAll('.send-away-sel')].some(s => s.value);
+    if (focusInForm || extraRows || anySelected) return;
+  }
   const loopPilotIds = new Set(loopBoard.filter(s => s.pilot_id && !s.done).map(s => String(s.pilot_id)));
   const notAirborne = officePilots
     .filter(p => p.status !== 'airborne' && (loopPilotIds.size === 0 || loopPilotIds.has(String(p.id))))
@@ -5614,6 +5619,13 @@ function renderGroupsTab() {
       </div>
     </div>`;
   updateMOUToggleUI();
+  // Restore CP mode toggle visual if it was on before re-render
+  if (_cpModeOn) {
+    const t = document.getElementById('cp-mode-toggle');
+    const k = document.getElementById('cp-mode-knob');
+    if (t) t.style.background = 'var(--accent)';
+    if (k) k.style.transform = 'translateX(18px)';
+  }
 }
 
 function renderTodayFlights() {

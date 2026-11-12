@@ -1617,7 +1617,7 @@ app.post('/api/pilot/land', verifyToken, async (req, res) => {
 });
 
 // ─── CP Mode: list all active CP mode flights (any pilot can see) ──────────────
-app.get('/api/pilot/cp-active', verifyToken, async (req, res) => {
+app.get('/api/pilot/cp-active', verifyPilotOrOffice, async (req, res) => {
   try {
     const timers = await queryAll(
       'SELECT at.pilot_id, p.name AS pilot_name, at.group_id, at.started_at, at.expires_at, at.flying_started_at FROM active_timers at JOIN pilots p ON at.pilot_id = p.id WHERE at.cp_mode = 1 ORDER BY at.started_at ASC',
@@ -1638,7 +1638,7 @@ app.get('/api/pilot/cp-active', verifyToken, async (req, res) => {
 });
 
 // ─── CP Mode: start timer for one pilot or all in a group (any pilot can call) ─
-app.patch('/api/pilot/cp-all-flying', verifyToken, async (req, res) => {
+app.patch('/api/pilot/cp-all-flying', verifyPilotOrOffice, async (req, res) => {
   try {
     const { solo, group_id: bodyGroupId, pilot_id: bodyPilotId } = req.body || {};
     const now = new Date();
@@ -1656,18 +1656,25 @@ app.patch('/api/pilot/cp-all-flying', verifyToken, async (req, res) => {
       return res.json({ ok: true, flying_started_at: nowIso, expires_at: expiresIso });
     }
 
-    // Determine which group to act on
+    // If a group_id was provided, start all in that group
+    if (bodyGroupId) {
+      await run('UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE group_id = ? AND cp_mode = 1 AND (flying_started_at IS NULL)', [nowIso, expiresIso, bodyGroupId]);
+      const updated = await queryAll('SELECT pilot_id FROM active_timers WHERE group_id = ?', [bodyGroupId]);
+      broadcast({ type: 'CP_ALL_FLYING', pilot_ids: updated.map(r => r.pilot_id), group_id: bodyGroupId, flying_started_at: nowIso, expires_at: expiresIso });
+      return res.json({ ok: true, flying_started_at: nowIso, expires_at: expiresIso });
+    }
+
+    // Pilot-only paths (solo or implicit group via req.pilot.id)
+    if (!req.pilot) return res.status(400).json({ error: 'pilot_id or group_id required' });
     const timer = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
-    const groupId = bodyGroupId || (timer && timer.group_id) || null;
+    const groupId = timer && timer.group_id;
 
     if (solo || !groupId) {
-      // Start only the requesting pilot's timer
       if (!timer || !Number(timer.cp_mode)) return res.status(400).json({ error: 'Not a CP mode flight' });
       if (timer.flying_started_at) return res.status(409).json({ error: 'Already flying' });
       await run('UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE pilot_id = ?', [nowIso, expiresIso, req.pilot.id]);
-      broadcast({ type: 'CP_ALL_FLYING', pilot_ids: [req.pilot.id], group_id: groupId, flying_started_at: nowIso, expires_at: expiresIso });
+      broadcast({ type: 'CP_ALL_FLYING', pilot_ids: [req.pilot.id], group_id: groupId || null, flying_started_at: nowIso, expires_at: expiresIso });
     } else {
-      // Start timer for all in the group not yet flying
       await run('UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE group_id = ? AND cp_mode = 1 AND (flying_started_at IS NULL)', [nowIso, expiresIso, groupId]);
       const updated = await queryAll('SELECT pilot_id FROM active_timers WHERE group_id = ?', [groupId]);
       broadcast({ type: 'CP_ALL_FLYING', pilot_ids: updated.map(r => r.pilot_id), group_id: groupId, flying_started_at: nowIso, expires_at: expiresIso });
@@ -1681,7 +1688,7 @@ app.patch('/api/pilot/cp-all-flying', verifyToken, async (req, res) => {
 });
 
 // ─── CP Mode: start timer for a specific pilot (any authenticated pilot) ───────
-app.patch('/api/pilot/cp-flying-member', verifyToken, async (req, res) => {
+app.patch('/api/pilot/cp-flying-member', verifyPilotOrOffice, async (req, res) => {
   try {
     const { pilot_id } = req.body;
     if (!pilot_id) return res.status(400).json({ error: 'pilot_id required' });
@@ -1704,7 +1711,7 @@ app.patch('/api/pilot/cp-flying-member', verifyToken, async (req, res) => {
 });
 
 // ─── CP Mode: land a specific pilot (any authenticated pilot) ──────────────────
-app.post('/api/pilot/cp-land-pilot', verifyToken, async (req, res) => {
+app.post('/api/pilot/cp-land-pilot', verifyPilotOrOffice, async (req, res) => {
   try {
     const { pilot_id } = req.body;
     if (!pilot_id) return res.status(400).json({ error: 'pilot_id required' });
@@ -1737,7 +1744,7 @@ app.post('/api/pilot/cp-land-pilot', verifyToken, async (req, res) => {
 });
 
 // ─── CP Mode: land all pilots in a group (any authenticated pilot) ─────────────
-app.post('/api/pilot/cp-land-group', verifyToken, async (req, res) => {
+app.post('/api/pilot/cp-land-group', verifyPilotOrOffice, async (req, res) => {
   try {
     const { group_id } = req.body;
     if (!group_id) return res.status(400).json({ error: 'group_id required' });

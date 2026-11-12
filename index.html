@@ -6036,13 +6036,24 @@ function renderAwayTab() {
   // Sort entries by least time remaining first
   entries.sort((a, b) => a.minExpiry - b.minExpiry);
 
-  const actionBtns = p => `
-    <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
+  const actionBtns = p => {
+    if (p.cp_mode) {
+      const isFlying = !!p.flying_started_at;
+      const safeId = p.id;
+      const safeName = p.name.replace(/'/g, "\\'");
+      return `<div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
+        ${!isFlying ? `<button onclick="officeCpStartFlyingPilot('${safeId}',this)" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:12px;font-weight:700;padding:5px 12px;touch-action:manipulation;">Flying</button>` : ''}
+        ${isFlying ? `<button onclick="officeCpLandPilot('${safeId}','${safeName}',this)" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:12px;font-weight:700;padding:5px 12px;touch-action:manipulation;">Landed</button>` : ''}
+        <button class="btn-danger" onclick="confirmCancelFF('${safeId}','${safeName}')">✕</button>
+      </div>`;
+    }
+    return `<div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
       <button onclick="adjustPilotTimer('${p.id}',-10)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 8px;touch-action:manipulation;">−10</button>
       <button onclick="adjustPilotTimer('${p.id}',10)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 8px;touch-action:manipulation;">+10</button>
       <button onclick="doLandPilot('${p.id}','${p.name.replace(/'/g,"\\'")}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:12px;padding:5px 12px;font-weight:700;touch-action:manipulation;">Land</button>
       <button class="btn-danger" onclick="confirmCancelFF('${p.id}','${p.name.replace(/'/g,"\\'")}')">✕</button>
     </div>`;
+  };
 
   let html = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -6057,39 +6068,45 @@ function renderAwayTab() {
       html += `
         <div class="tdf-card tdf-card-group" id="pilot-card-${p.id}" style="padding:12px 14px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px;">
-            <span class="tdf-group-label">Single Pax</span>
+            <span class="tdf-group-label">${p.cp_mode ? 'CP Mode' : 'Single Pax'}</span>
             <div style="display:flex;align-items:center;gap:6px;">
-              <button onclick="showConvertToGroupModal('${p.id}','${p.name.replace(/'/g,"\\'")}' )" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:16px;font-weight:700;padding:2px 10px;cursor:pointer;line-height:1.4;touch-action:manipulation;" title="Add pilot — make group">+</button>
+              ${!p.cp_mode ? `<button onclick="showConvertToGroupModal('${p.id}','${p.name.replace(/'/g,"\\'")}' )" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:16px;font-weight:700;padding:2px 10px;cursor:pointer;line-height:1.4;touch-action:manipulation;" title="Add pilot — make group">+</button>` : ''}
             </div>
           </div>
           <div style="border-top:1px solid var(--border);padding-top:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
             <span class="tdf-pilot">${esc(p.name)}<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">(#${flightNumFor(p)})</span></span>
             <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-              <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="margin:0;">--:--</div>
+              ${!p.cp_mode ? `<div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="margin:0;">--:--</div>` : ''}
               ${actionBtns(p)}
             </div>
           </div>
         </div>`;
     } else {
       const gid = entry.pilots[0].group_id;
+      const isCpGroup = entry.pilots[0].cp_mode;
+      const allFlying = isCpGroup && entry.pilots.every(p => !!p.flying_started_at);
       const gname = esc(entry.groupName || 'Group');
       const pilotRows = entry.pilots.map(p => `
         <div id="pilot-card-${p.id}" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--border);gap:8px;">
           <span style="font-size:14px;font-weight:700;color:var(--text);flex:1;min-width:0;">${esc(p.name)}<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">(#${flightNumFor(p)})</span></span>
-          <div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="margin:0;flex-shrink:0;">--:--</div>
+          ${isCpGroup ? '' : `<div class="timer-display" id="timer-${p.id}" data-expires="${esc(p.timer_expires_at||'')}" style="margin:0;flex-shrink:0;">--:--</div>`}
           ${actionBtns(p)}
         </div>`).join('');
       const pilotsData = esc(JSON.stringify(entry.pilots.map(p => ({ id: p.id, name: p.name }))));
+      const groupBtns = isCpGroup
+        ? `${!allFlying ? `<button onclick="officeCpStartFlyingGroup('${gid}',this)" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:700;padding:5px 10px;cursor:pointer;touch-action:manipulation;">All Flying</button>` : ''}
+           <button onclick="officeCpLandGroup('${gid}',this)" style="background:${allFlying ? 'var(--accent)' : 'var(--surface)'};border:1px solid ${allFlying ? 'var(--accent)' : 'var(--border)'};border-radius:6px;color:${allFlying ? '#fff' : 'var(--text)'};font-size:12px;font-weight:700;padding:5px 10px;cursor:pointer;touch-action:manipulation;">All Landed</button>`
+        : `<button data-pilots="${pilotsData}" onclick="adjustGroupTimer(JSON.parse(this.dataset.pilots),-10)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 8px;touch-action:manipulation;">−10</button>
+           <button data-pilots="${pilotsData}" onclick="adjustGroupTimer(JSON.parse(this.dataset.pilots),10)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 8px;touch-action:manipulation;">+10</button>
+           <button data-pilots="${pilotsData}" onclick="landAllGroup(JSON.parse(this.dataset.pilots))" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:700;padding:5px 10px;cursor:pointer;touch-action:manipulation;">Land All</button>
+           <button onclick="showAddToGroupModal('${gid}','${gname}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:16px;font-weight:700;padding:2px 10px;cursor:pointer;line-height:1.4;touch-action:manipulation;" title="Add pilot to group">+</button>`;
       html += `
         <div class="tdf-card tdf-card-group" style="padding:12px 14px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px;">
-            <span class="tdf-group-label">${entry.pilots.length}-Pax Group</span>
+            <span class="tdf-group-label">${isCpGroup ? 'CP Mode' : `${entry.pilots.length}-Pax Group`}</span>
             <div style="display:flex;align-items:center;gap:6px;">
               ${entry.groupName ? `<span style="font-size:12px;color:var(--accent);font-weight:600;">${gname}</span>` : ''}
-              <button data-pilots="${pilotsData}" onclick="adjustGroupTimer(JSON.parse(this.dataset.pilots),-10)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 8px;touch-action:manipulation;">−10</button>
-              <button data-pilots="${pilotsData}" onclick="adjustGroupTimer(JSON.parse(this.dataset.pilots),10)" style="background:var(--surface);border:1px solid var(--border-hi);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;padding:5px 8px;touch-action:manipulation;">+10</button>
-              <button data-pilots="${pilotsData}" onclick="landAllGroup(JSON.parse(this.dataset.pilots))" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:700;padding:5px 10px;cursor:pointer;touch-action:manipulation;">Land All</button>
-              <button onclick="showAddToGroupModal('${gid}','${gname}')" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:16px;font-weight:700;padding:2px 10px;cursor:pointer;line-height:1.4;touch-action:manipulation;" title="Add pilot to group">+</button>
+              ${groupBtns}
             </div>
           </div>
           ${pilotRows}
@@ -6364,6 +6381,48 @@ async function landAllGroup(pilots) {
   if (errors) toast(`${pilots.length - errors} landed, ${errors} failed`);
   else toast(`All ${pilots.length} pilots landed`);
   await loadOfficeData();
+}
+
+async function officeCpStartFlyingPilot(pilotId, btnEl) {
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = '…'; }
+  try {
+    const res = await officeFetch('/api/pilot/cp-all-flying', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pilot_id: pilotId }) });
+    if (!res.ok) { const d = await res.json(); toast(d.error || 'Error', 'err'); }
+    await loadOfficeData();
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
+  finally { if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Flying'; } }
+}
+
+async function officeCpStartFlyingGroup(groupId, btnEl) {
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = '…'; }
+  try {
+    const res = await officeFetch('/api/pilot/cp-all-flying', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ group_id: groupId }) });
+    if (!res.ok) { const d = await res.json(); toast(d.error || 'Error', 'err'); }
+    await loadOfficeData();
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
+  finally { if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'All Flying'; } }
+}
+
+async function officeCpLandPilot(pilotId, name, btnEl) {
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = '…'; }
+  try {
+    const res = await officeFetch('/api/pilot/cp-land-pilot', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pilot_id: pilotId }) });
+    if (!res.ok) { const d = await res.json(); toast(d.error || 'Error', 'err'); return; }
+    toast(`${name} landed`);
+    await loadOfficeData();
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
+  finally { if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'Landed'; } }
+}
+
+async function officeCpLandGroup(groupId, btnEl) {
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = '…'; }
+  try {
+    const res = await officeFetch('/api/pilot/cp-land-group', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ group_id: groupId }) });
+    if (!res.ok) { const d = await res.json(); toast(d.error || 'Error', 'err'); return; }
+    toast('Group landed');
+    await loadOfficeData();
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
+  finally { if (btnEl) { btnEl.disabled = false; btnEl.textContent = 'All Landed'; } }
 }
 
 function confirmCancelFF(pilotId, pilotName) {

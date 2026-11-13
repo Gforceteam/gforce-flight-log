@@ -8159,7 +8159,9 @@ function calcLOBTime() {
     // Civil twilight end UTC → subtract 1 hr for LOB → format in NZ time
     const lobUTC = solarNoon + Math.acos(cosHA) * deg / 15 - 1;
     const lobDate = new Date(Date.UTC(y, m - 1, d) + lobUTC * 3600000);
-    const t = lobDate.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Pacific/Auckland', hour12: false });
+    let t = lobDate.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', timeZone: 'Pacific/Auckland', hour12: false });
+    // Cap at 19:30
+    if (t > '19:30') t = '19:30';
     return 'LOB ' + t;
   } catch (_) { return 'LOB —'; }
 }

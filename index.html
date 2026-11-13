@@ -4830,7 +4830,7 @@ function renderPilotLoopBoard() {
   };
 
   // Build one compact pilot row: slot# | name | tally (right-aligned)
-  const pilotRow = (slotNum, name, talliesJson, isCompleted) => {
+  const pilotRow = (slotNum, name, talliesJson, isCompleted, cpDrives) => {
     const tallies   = parseTallies(talliesJson);
     const isMe      = name && name === pilotName;
     const rowBg     = isMe && !isCompleted ? 'background:rgba(243,115,41,0.07);' : '';
@@ -4840,6 +4840,7 @@ function renderPilotLoopBoard() {
     const nameDeco  = isCompleted ? 'text-decoration:line-through;' : '';
     const markCol   = isMe && !isCompleted ? 'var(--accent)' : isCompleted ? 'var(--muted)' : 'var(--text)';
     const markOp    = isCompleted ? 'opacity:0.5;' : '';
+    const cp        = Number(cpDrives) || 0;
 
     return `
       <div style="display:flex;align-items:center;padding:9px 14px 9px 11px;gap:10px;${rowBg}${accent}">
@@ -4850,6 +4851,7 @@ function renderPilotLoopBoard() {
           ${name ? esc(name) : '<span style="color:var(--muted);">—</span>'}
         </div>
         <div style="flex-shrink:0;display:flex;justify-content:flex-start;${markOp}">${tallyMarksSVG(tallies, markCol)}</div>
+        ${cp ? `<div style="flex-shrink:0;font-size:13px;font-weight:700;color:var(--accent);margin-left:4px;">CP×${cp}</div>` : ''}
       </div>`;
   };
 
@@ -4857,9 +4859,9 @@ function renderPilotLoopBoard() {
 
   let html = '<div style="border-radius:12px;border:1px solid var(--border);overflow:hidden;margin:4px 0;">';
   for (let i = 1; i <= maxSlot; i++) {
-    const s = board.find(s => s.slot === i) || { slot: i, pilot_name: null, tallies: null, done: 0 };
+    const s = board.find(s => s.slot === i) || { slot: i, pilot_name: null, tallies: null, done: 0, cp_drives: 0 };
     if (i > 1) html += divider;
-    html += pilotRow(i, s.pilot_name, s.tallies, !!s.done);
+    html += pilotRow(i, s.pilot_name, s.tallies, !!s.done, s.cp_drives);
   }
   html += '</div>';
 
@@ -7663,10 +7665,12 @@ function renderLoopBoard() {
     html += '<table class="loop-table"><thead><tr>';
     html += '<th class="loop-th-slot">#</th><th class="loop-th-pilot">Pilot</th>';
     for (let c = 1; c <= 12; c++) html += `<th class="loop-th-tally">${c}</th>`;
+    html += '<th class="loop-th-tally" style="color:var(--accent);">CP</th>';
     html += '</tr></thead><tbody>';
     for (let i = 1; i <= loopBoardRows; i++) {
-      const slot = loopBoard.find(s => s.slot === i) || { slot: i, pilot_id: null, pilot_name: null, tallies: null, done: 0 };
+      const slot = loopBoard.find(s => s.slot === i) || { slot: i, pilot_id: null, pilot_name: null, tallies: null, done: 0, cp_drives: 0 };
       const isDone = !!slot.done;
+      const cpDrives = Number(slot.cp_drives) || 0;
       let tallies = Array(12).fill('');
       try { const t = JSON.parse(slot.tallies || '[]'); if (Array.isArray(t)) tallies = t; } catch (_) {}
       while (tallies.length < 12) tallies.push('');
@@ -7679,6 +7683,7 @@ function renderLoopBoard() {
           const val = tallies[c - 1] || '';
           html += `<td class="loop-td-tally"><span class="loop-tally-static${val ? (val === 'L' ? ' has-val has-val-L' : val === 'ML' ? ' has-val has-val-ML' : val === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}">${val || '–'}</span></td>`;
         }
+        html += `<td class="loop-td-tally"><span class="loop-tally-static${cpDrives ? ' has-val' : ''}" style="${cpDrives ? 'color:var(--accent);' : ''}">${cpDrives || '–'}</span></td>`;
         html += '</tr>';
       } else if (isDone) {
         // Done pilot — greyed name, tally dropdowns still editable, × button to undo
@@ -7690,6 +7695,7 @@ function renderLoopBoard() {
           const tOpts = tallyOpts.map(v => `<option value="${v}" ${val === v ? 'selected' : ''}>${v || '–'}</option>`).join('');
           html += `<td class="loop-td-tally"><select class="loop-tally-sel${val ? (val === 'L' ? ' has-val has-val-L' : val === 'ML' ? ' has-val has-val-ML' : val === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" onchange="setLoopTally(${i},${c},this)">${tOpts}</select></td>`;
         }
+        html += `<td class="loop-td-tally"><span class="loop-tally-static${cpDrives ? ' has-val' : ''}" style="${cpDrives ? 'color:var(--accent);' : ''}">${cpDrives || '–'}</span></td>`;
         html += '</tr>';
       } else {
         html += `<tr><td class="loop-td-slot">${i}</td>`;
@@ -7706,6 +7712,7 @@ function renderLoopBoard() {
           const tOpts = tallyOpts.map(v => `<option value="${v}" ${val === v ? 'selected' : ''}>${v || '–'}</option>`).join('');
           html += `<td class="loop-td-tally"><select class="loop-tally-sel${val ? (val === 'L' ? ' has-val has-val-L' : val === 'ML' ? ' has-val has-val-ML' : val === 'IF' ? ' has-val has-val-IF' : ' has-val') : ''}" onchange="setLoopTally(${i},${c},this)">${tOpts}</select></td>`;
         }
+        html += `<td class="loop-td-tally"><span class="loop-tally-static${cpDrives ? ' has-val' : ''}" style="${cpDrives ? 'color:var(--accent);' : ''}">${cpDrives || '–'}</span></td>`;
         html += '</tr>';
       }
     }

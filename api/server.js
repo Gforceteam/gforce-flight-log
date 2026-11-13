@@ -283,6 +283,8 @@ async function createTables() {
   try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN slot INTEGER'); } catch (_) {}
   try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN tallies TEXT'); } catch (_) {}
   try { await db.execute('ALTER TABLE loop_board_v2 ADD COLUMN done INTEGER DEFAULT 0'); } catch (_) {}
+  try { await db.execute('ALTER TABLE loop_board_v2 ADD COLUMN cp_drives INTEGER DEFAULT 0'); } catch (_) {}
+  try { await db.execute('ALTER TABLE loop_board_completed ADD COLUMN cp_drives INTEGER DEFAULT 0'); } catch (_) {}
   try { await db.execute('ALTER TABLE pilots ADD COLUMN is_manager INTEGER DEFAULT 0'); } catch (_) {}
   await db.execute("UPDATE pilots SET is_manager = 1 WHERE name IN ('Georges', 'Gavin')");
   await db.execute(`CREATE TABLE IF NOT EXISTS loop_board_payments (
@@ -1744,7 +1746,10 @@ app.post('/api/pilot/cp-land-pilot', verifyPilotOrOffice, async (req, res) => {
     );
     await run('DELETE FROM active_timers WHERE pilot_id = ?', [pilot_id]);
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'cp_landed', now]);
+    await run('UPDATE loop_board_v2 SET cp_drives = COALESCE(cp_drives,0) + 1 WHERE date = ? AND pilot_id = ?', [today, pilot_id]);
+    const lbBoard = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done, COALESCE(cp_drives,0) as cp_drives FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [today]);
     broadcast({ type: 'LANDED_EARLY', pilot_id, pilot_name: pilot.name, landed_at: now, flight_id: flightId });
+    broadcast({ type: 'LOOP_BOARD_UPDATE', board: lbBoard, date: today });
     res.json({ flight_id: flightId });
   } catch (e) {
     console.error(e);
@@ -1775,9 +1780,12 @@ app.post('/api/pilot/cp-land-group', verifyPilotOrOffice, async (req, res) => {
       );
       await run('DELETE FROM active_timers WHERE pilot_id = ?', [t.pilot_id]);
       await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), t.pilot_id, 'cp_landed', now]);
+      await run('UPDATE loop_board_v2 SET cp_drives = COALESCE(cp_drives,0) + 1 WHERE date = ? AND pilot_id = ?', [today, t.pilot_id]);
       broadcast({ type: 'LANDED_EARLY', pilot_id: t.pilot_id, pilot_name: t.pilot_name, landed_at: now, flight_id: flightId });
       flightIds.push(flightId);
     }
+    const lbBoard = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done, COALESCE(cp_drives,0) as cp_drives FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [today]);
+    broadcast({ type: 'LOOP_BOARD_UPDATE', board: lbBoard, date: today });
     res.json({ flight_ids: flightIds });
   } catch (e) {
     console.error(e);
@@ -3071,8 +3079,8 @@ app.get('/api/pilot/loop-board', verifyPilotOrOffice, async (req, res) => {
   try {
     const date = nzToday();
     await ensureLoopBoardDate(date);
-    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
-    const completed = await queryAll('SELECT id, pilot_id, pilot_name, completed_at, slot, tallies FROM loop_board_completed WHERE date = ? ORDER BY completed_at ASC', [date]);
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done, COALESCE(cp_drives,0) as cp_drives FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    const completed = await queryAll('SELECT id, pilot_id, pilot_name, completed_at, slot, tallies, COALESCE(cp_drives,0) as cp_drives FROM loop_board_completed WHERE date = ? ORDER BY completed_at ASC', [date]);
     res.json({ board, completed });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -3083,8 +3091,8 @@ app.get('/api/office/loop-board', verifyOffice, async (req, res) => {
   try {
     const date = req.query.date || nzToday();
     await ensureLoopBoardDate(date);
-    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
-    const completed = await queryAll('SELECT id, pilot_id, pilot_name, completed_at, slot, tallies FROM loop_board_completed WHERE date = ? ORDER BY completed_at ASC', [date]);
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done, COALESCE(cp_drives,0) as cp_drives FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    const completed = await queryAll('SELECT id, pilot_id, pilot_name, completed_at, slot, tallies, COALESCE(cp_drives,0) as cp_drives FROM loop_board_completed WHERE date = ? ORDER BY completed_at ASC', [date]);
     const lockRow = await queryOne("SELECT value FROM app_settings WHERE key = ?", [`loop_board_order_${date}`]);
     const locked_order = lockRow ? JSON.parse(lockRow.value) : null;
     res.json({ board, completed, locked_order });
@@ -3132,7 +3140,7 @@ app.post('/api/office/loop-board/slot', verifyOffice, async (req, res) => {
       'UPDATE loop_board_v2 SET pilot_id = ?, pilot_name = ?, done = 0 WHERE date = ? AND slot = ?',
       [pilot_id || null, pilot_name || null, date, slot]
     );
-    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done, COALESCE(cp_drives,0) as cp_drives FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
     broadcast({ type: 'LOOP_BOARD_UPDATE', board, date });
     res.json({ ok: true });
   } catch (e) {
@@ -3145,7 +3153,7 @@ app.post('/api/office/loop-board/reset', verifyOffice, async (req, res) => {
     const { date: reqDate } = req.body || {};
     const date = reqDate || nzToday();
     await run('UPDATE loop_board_v2 SET pilot_id = NULL, pilot_name = NULL, tallies = NULL, done = 0 WHERE date = ?', [date]);
-    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done, COALESCE(cp_drives,0) as cp_drives FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
     broadcast({ type: 'LOOP_BOARD_UPDATE', board, date });
     res.json({ ok: true });
   } catch (e) {
@@ -3169,7 +3177,7 @@ app.post('/api/office/loop-board/tally', verifyOffice, async (req, res) => {
     while (tallies.length < 12) tallies.push('');
     tallies[col - 1] = value || '';
     await run('UPDATE loop_board_v2 SET tallies = ? WHERE date = ? AND slot = ?', [JSON.stringify(tallies), date, slot]);
-    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done, COALESCE(cp_drives,0) as cp_drives FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
     broadcast({ type: 'LOOP_BOARD_UPDATE', board, date });
     res.json({ ok: true });
   } catch (e) {
@@ -3195,7 +3203,7 @@ app.post('/api/office/loop-board/complete', verifyOffice, async (req, res) => {
       [uuidv4(), date, targetRow.pilot_id, targetRow.pilot_name, new Date().toISOString(), slot, targetRow.tallies || null]
     );
 
-    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done, COALESCE(cp_drives,0) as cp_drives FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
     broadcast({ type: 'LOOP_BOARD_UPDATE', board, date });
     res.json({ ok: true });
   } catch (e) {
@@ -3242,7 +3250,7 @@ app.post('/api/office/loop-board/uncomplete', verifyOffice, async (req, res) => 
     // Remove matching completed log entry if one exists
     await run('DELETE FROM loop_board_completed WHERE date = ? AND slot = ?', [date, slot]);
 
-    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
+    const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done, COALESCE(cp_drives,0) as cp_drives FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
     broadcast({ type: 'LOOP_BOARD_UPDATE', board, date });
     res.json({ ok: true });
   } catch (e) {

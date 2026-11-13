@@ -1648,29 +1648,28 @@ app.get('/api/pilot/cp-active', verifyPilotOrOffice, async (req, res) => {
   }
 });
 
-// ─── CP Mode: start timer for one pilot or all in a group (any pilot can call) ─
+// ─── CP Mode: mark pilots as flying (timer already running from Send Away) ──────
 app.patch('/api/pilot/cp-all-flying', verifyPilotOrOffice, async (req, res) => {
   try {
     const { solo, group_id: bodyGroupId, pilot_id: bodyPilotId } = req.body || {};
     const now = new Date();
-    const expires = new Date(now.getTime() + 60 * 60 * 1000);
     const nowIso = now.toISOString();
-    const expiresIso = expires.toISOString();
 
     // If called for a specific single pilot (bodyPilotId), just start that one
     if (bodyPilotId) {
       const target = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ? AND cp_mode = 1', [bodyPilotId]);
       if (!target) return res.status(404).json({ error: 'No active CP timer for that pilot' });
       if (target.flying_started_at) return res.status(409).json({ error: 'Already flying' });
-      await run('UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE pilot_id = ?', [nowIso, expiresIso, bodyPilotId]);
-      broadcast({ type: 'CP_ALL_FLYING', pilot_ids: [bodyPilotId], group_id: target.group_id || null, flying_started_at: nowIso, expires_at: expiresIso });
-      return res.json({ ok: true, flying_started_at: nowIso, expires_at: expiresIso });
+      await run('UPDATE active_timers SET flying_started_at = ? WHERE pilot_id = ?', [nowIso, bodyPilotId]);
+      broadcast({ type: 'CP_ALL_FLYING', pilot_ids: [bodyPilotId], group_id: target.group_id || null, flying_started_at: nowIso, expires_at: target.expires_at });
+      return res.json({ ok: true, flying_started_at: nowIso, expires_at: target.expires_at });
     }
 
     // If a group_id was provided, start all in that group
     if (bodyGroupId) {
-      await run('UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE group_id = ? AND cp_mode = 1 AND (flying_started_at IS NULL)', [nowIso, expiresIso, bodyGroupId]);
-      const updated = await queryAll('SELECT pilot_id FROM active_timers WHERE group_id = ?', [bodyGroupId]);
+      await run('UPDATE active_timers SET flying_started_at = ? WHERE group_id = ? AND cp_mode = 1 AND (flying_started_at IS NULL)', [nowIso, bodyGroupId]);
+      const updated = await queryAll('SELECT pilot_id, expires_at FROM active_timers WHERE group_id = ?', [bodyGroupId]);
+      const expiresIso = updated[0]?.expires_at || null;
       broadcast({ type: 'CP_ALL_FLYING', pilot_ids: updated.map(r => r.pilot_id), group_id: bodyGroupId, flying_started_at: nowIso, expires_at: expiresIso });
       return res.json({ ok: true, flying_started_at: nowIso, expires_at: expiresIso });
     }
@@ -1683,15 +1682,16 @@ app.patch('/api/pilot/cp-all-flying', verifyPilotOrOffice, async (req, res) => {
     if (solo || !groupId) {
       if (!timer || !Number(timer.cp_mode)) return res.status(400).json({ error: 'Not a CP mode flight' });
       if (timer.flying_started_at) return res.status(409).json({ error: 'Already flying' });
-      await run('UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE pilot_id = ?', [nowIso, expiresIso, req.pilot.id]);
-      broadcast({ type: 'CP_ALL_FLYING', pilot_ids: [req.pilot.id], group_id: groupId || null, flying_started_at: nowIso, expires_at: expiresIso });
+      await run('UPDATE active_timers SET flying_started_at = ? WHERE pilot_id = ?', [nowIso, req.pilot.id]);
+      broadcast({ type: 'CP_ALL_FLYING', pilot_ids: [req.pilot.id], group_id: groupId || null, flying_started_at: nowIso, expires_at: timer.expires_at });
     } else {
-      await run('UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE group_id = ? AND cp_mode = 1 AND (flying_started_at IS NULL)', [nowIso, expiresIso, groupId]);
-      const updated = await queryAll('SELECT pilot_id FROM active_timers WHERE group_id = ?', [groupId]);
+      await run('UPDATE active_timers SET flying_started_at = ? WHERE group_id = ? AND cp_mode = 1 AND (flying_started_at IS NULL)', [nowIso, groupId]);
+      const updated = await queryAll('SELECT pilot_id, expires_at FROM active_timers WHERE group_id = ?', [groupId]);
+      const expiresIso = updated[0]?.expires_at || null;
       broadcast({ type: 'CP_ALL_FLYING', pilot_ids: updated.map(r => r.pilot_id), group_id: groupId, flying_started_at: nowIso, expires_at: expiresIso });
     }
 
-    res.json({ ok: true, flying_started_at: nowIso, expires_at: expiresIso });
+    res.json({ ok: true, flying_started_at: nowIso, expires_at: timer?.expires_at || null });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Internal server error' });
@@ -1707,14 +1707,11 @@ app.patch('/api/pilot/cp-flying-member', verifyPilotOrOffice, async (req, res) =
     if (!targetTimer) return res.status(404).json({ error: 'No active CP timer for that pilot' });
     if (targetTimer.flying_started_at) return res.status(409).json({ error: 'Already flying' });
 
-    const now = new Date();
-    const expires = new Date(now.getTime() + 60 * 60 * 1000);
-    const nowIso = now.toISOString();
-    const expiresIso = expires.toISOString();
+    const nowIso = new Date().toISOString();
 
-    await run('UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE pilot_id = ?', [nowIso, expiresIso, pilot_id]);
-    broadcast({ type: 'CP_ALL_FLYING', pilot_ids: [pilot_id], group_id: targetTimer.group_id || null, flying_started_at: nowIso, expires_at: expiresIso });
-    res.json({ ok: true, flying_started_at: nowIso, expires_at: expiresIso });
+    await run('UPDATE active_timers SET flying_started_at = ? WHERE pilot_id = ?', [nowIso, pilot_id]);
+    broadcast({ type: 'CP_ALL_FLYING', pilot_ids: [pilot_id], group_id: targetTimer.group_id || null, flying_started_at: nowIso, expires_at: targetTimer.expires_at });
+    res.json({ ok: true, flying_started_at: nowIso, expires_at: targetTimer.expires_at });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Internal server error' });
@@ -1956,7 +1953,7 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
 
     const now = new Date();
     const isCp = cp_mode ? 1 : 0;
-    const expires = isCp ? null : new Date(now.getTime() + 60 * 60 * 1000);
+    const expires = new Date(now.getTime() + 60 * 60 * 1000);
     const cleanClientName = sanitize(client_name, 100);
     const cleanDriverName = isCp && driver_name ? sanitize(driver_name, 100) : null;
     const cleanVanName = isCp && van_name ? sanitize(van_name, 50) : null;
@@ -1979,7 +1976,7 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
     await sendPushToPilot(pilot_id, {
       title: '🪂 GForce — YOU\'RE AWAY!',
       body: isCp
-        ? (cleanClientName ? `Client: ${cleanClientName}. CP Mode — tap All Flying when ready.` : 'CP Mode — tap All Flying when you\'re at the top.')
+        ? (cleanClientName ? `Client: ${cleanClientName}. CP Flight — 60 min timer started.` : 'CP Flight — 60 min timer started.')
         : (cleanClientName ? `Client: ${cleanClientName}. Timer started — 60 minutes.` : 'Office has started your timer. Have a great flight!'),
       tag: 'pilot-sent-away'
     });
@@ -1999,7 +1996,7 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
     const now = new Date();
     const isCp = cp_mode ? 1 : 0;
     const duration = is_peak_trip ? 120 : 60;
-    const expires = isCp ? null : new Date(now.getTime() + duration * 60 * 1000);
+    const expires = new Date(now.getTime() + duration * 60 * 1000);
     const groupId = uuidv4();
     const cleanDriverName = isCp && driver_name ? sanitize(driver_name, 100) : null;
     const cleanVanName = isCp && van_name ? sanitize(van_name, 50) : null;
@@ -2032,8 +2029,8 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
       let body;
       if (isCp) {
         body = others.length
-          ? `CP Mode with ${others.join(', ')} — tap All Flying when ready.`
-          : 'CP Mode — tap All Flying when you\'re at the top.';
+          ? `CP Flight with ${others.join(', ')} — ${duration} min timer started.`
+          : `CP Flight — ${duration} min timer started.`;
       } else {
         body = others.length
           ? `Flying with ${others.join(', ')} — ${duration} min timer started.`

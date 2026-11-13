@@ -3656,7 +3656,7 @@ function renderDashboard() {
               ${myStatus.departure_time ? `<span>Dep: <strong style="color:var(--text);">${esc(myStatus.departure_time)}</strong></span>` : ''}
             </div>` : ''}
           ${allPilots.length > 1 ? `<div style="margin-bottom:4px;">${pilotRows}</div>` : ''}
-          ${selfFlying ? `<div class="dashboard-timer" id="dashboard-timer">--:--</div>` : ''}
+          <div class="dashboard-timer" id="dashboard-timer">--:--</div>
           <div style="display:flex;gap:8px;margin-top:8px;">
             ${!allFlying ? `<button id="cp-btn-all-flying" onclick="pilotCpAllFlying()" style="flex:1;padding:11px;background:var(--accent);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">All Flying</button>` : ''}
             <button onclick="pilotCpAllLanded()" class="btn-land-pilot" style="flex:1;padding:11px;background:${allFlying ? 'var(--accent)' : 'var(--surface)'};border:1px solid ${allFlying ? 'var(--accent)' : 'var(--border)'};border-radius:10px;color:${allFlying ? '#fff' : 'var(--text)'};font-size:14px;font-weight:700;cursor:pointer;">All Landed</button>
@@ -3669,7 +3669,7 @@ function renderDashboard() {
         ${renderFlyingList(true)}
         <div id="pilot-all-today-flights">${renderAllTodayFlights()}</div>
       `;
-      if (selfFlying) startDashboardCountdown(myStatus.timer_expires_at);
+      if (myStatus.timer_expires_at) startDashboardCountdown(myStatus.timer_expires_at);
 
     } else {
     // ── Regular Flying ──────────────────────────────────────────────────────

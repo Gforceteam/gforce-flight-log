@@ -6124,7 +6124,7 @@ function renderAwayTab() {
             </div>
           </div>
           ${p.cp_mode && (p.driver_name || p.van_name || p.departure_time) ? `
-            <div style="font-size:12px;color:var(--muted);margin-bottom:6px;display:flex;flex-wrap:wrap;gap:10px;">
+            <div style="font-size:14px;color:var(--muted);margin-bottom:6px;display:flex;flex-wrap:wrap;gap:10px;">
               ${p.driver_name ? `<span>Driver: <strong style="color:var(--text);">${esc(p.driver_name)}</strong></span>` : ''}
               ${p.van_name ? `<span>Van: <strong style="color:var(--text);">${esc(p.van_name)}</strong></span>` : ''}
               ${p.departure_time ? `<span>Dep: <strong style="color:var(--text);">${esc(p.departure_time)}</strong></span>` : ''}
@@ -6171,7 +6171,7 @@ function renderAwayTab() {
             </div>
           </div>
           ${(isCpGroup && (entry.pilots[0].driver_name || entry.pilots[0].van_name || entry.pilots[0].departure_time)) ? `
-            <div style="font-size:12px;color:var(--muted);margin-bottom:6px;display:flex;flex-wrap:wrap;gap:10px;">
+            <div style="font-size:14px;color:var(--muted);margin-bottom:6px;display:flex;flex-wrap:wrap;gap:10px;">
               ${entry.pilots[0].driver_name ? `<span>Driver: <strong style="color:var(--text);">${esc(entry.pilots[0].driver_name)}</strong></span>` : ''}
               ${entry.pilots[0].van_name ? `<span>Van: <strong style="color:var(--text);">${esc(entry.pilots[0].van_name)}</strong></span>` : ''}
               ${entry.pilots[0].departure_time ? `<span>Dep: <strong style="color:var(--text);">${esc(entry.pilots[0].departure_time)}</strong></span>` : ''}

@@ -5967,6 +5967,7 @@ function toggleCpMode() {
     _cpDriverId = ''; _cpVan = ''; _cpDepartureTime = '';
     ['cp-driver-sel','cp-van-sel','cp-departure-input'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   }
+  updateMOUToggleUI();
 }
 
 function makeSendAwayRow(isFirst) {
@@ -6004,7 +6005,7 @@ function autoFillFlightNum(selEl) {
 }
 
 async function submitSendAway() {
-  if (!mouIsOn()) { toast('MOU must be active before sending pilots away', 'err'); return; }
+  if (!mouIsOn() && !_cpModeOn) { toast('MOU must be active before sending pilots away', 'err'); return; }
   const rows = [...document.querySelectorAll('#send-away-rows .send-away-row')];
   const pilots = [];
   rows.forEach(row => {
@@ -8188,7 +8189,7 @@ function updateMOUToggleUI() {
   }
   const sendBtn = document.getElementById('send-away-btn');
   if (sendBtn) {
-    const on = mouIsOn();
+    const on = mouIsOn() || _cpModeOn;
     sendBtn.disabled = !on;
     sendBtn.style.background = on ? 'var(--accent)' : '#9ca3af';
     sendBtn.style.cursor = on ? 'pointer' : 'not-allowed';

@@ -3560,7 +3560,7 @@ function renderCpFlightsPanel() {
       </div>`).join('');
 
     return `<div style="margin-bottom:12px;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:14px;border-left:3px solid ${anyFlying ? '#16a34a' : 'var(--warning)'};">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:2px;">CP Mode Flight</div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:2px;">CP Flight</div>
       ${(g.driver_name || g.van_name || g.departure_time) ? `
         <div style="font-size:14px;color:var(--muted);margin-bottom:6px;display:flex;flex-wrap:wrap;gap:8px;">
           ${g.driver_name ? `<span>Driver: <strong style="color:var(--text);">${esc(g.driver_name)}</strong></span>` : ''}
@@ -3647,7 +3647,7 @@ function renderDashboard() {
 
       el.innerHTML = `
         <div class="ff-status-card ${selfFlying ? 'ff-status-flying' : ''}" style="${!selfFlying ? 'border-color:rgba(245,166,35,0.3);background:rgba(245,166,35,0.07);' : ''}">
-          <div class="ff-status-pill ${selfFlying ? 'flying' : ''}" style="${!selfFlying ? 'background:rgba(245,166,35,0.15);color:var(--warning);' : ''}">CP Mode${selfFlying ? ' — Flying' : ' — En Route'}</div>
+          <div class="ff-status-pill ${selfFlying ? 'flying' : ''}" style="${!selfFlying ? 'background:rgba(245,166,35,0.15);color:var(--warning);' : ''}">CP Flight${selfFlying ? ' — Flying' : ' — En Route'}</div>
           ${selfFlying ? `<div style="font-size:15px;font-weight:700;color:var(--text);margin-top:-10px;margin-bottom:4px;">Flight #${flightNumLabel}</div>` : `<div style="font-size:13px;color:var(--muted);text-align:center;margin-top:-8px;margin-bottom:4px;">Tap Flying when each pilot is ready</div>`}
           ${(myStatus.driver_name || myStatus.van_name || myStatus.departure_time) ? `
             <div style="font-size:14px;color:var(--muted);text-align:center;margin-bottom:6px;display:flex;flex-wrap:wrap;justify-content:center;gap:8px;">
@@ -6026,14 +6026,14 @@ async function submitSendAway() {
     if (pilots.length === 1) {
       res = await officeFetch('/api/office/leave', { method: 'POST', body: JSON.stringify({ pilot_id: pilots[0].id, client_name: pilots[0].num, cp_mode: _cpModeOn, driver_name: driverName, van_name: vanName, departure_time: departureTime }) });
       data = await res.json();
-      if (res.ok) toast(`${pilots[0].name} sent away${_cpModeOn ? ' (CP Mode)' : ''}`);
+      if (res.ok) toast(`${pilots[0].name} sent away${_cpModeOn ? ' (CP Flight)' : ''}`);
       else toast(data.error || 'Error', 'err');
     } else {
       const pilotNums = {};
       pilots.forEach(p => { pilotNums[p.id] = p.num || ''; });
       res = await officeFetch('/api/office/group-leave', { method: 'POST', body: JSON.stringify({ pilot_ids: pilots.map(p => p.id), pilot_nums: pilotNums, cp_mode: _cpModeOn, driver_name: driverName, van_name: vanName, departure_time: departureTime }) });
       data = await res.json();
-      if (res.ok) toast(`Away: ${pilots.map(p => p.name).join(', ')}${_cpModeOn ? ' (CP Mode)' : ''}`);
+      if (res.ok) toast(`Away: ${pilots.map(p => p.name).join(', ')}${_cpModeOn ? ' (CP Flight)' : ''}`);
       else toast(data.error || 'Error', 'err');
     }
     if (res.ok) { await loadOfficeData(); renderGroupsTab(); }
@@ -6113,7 +6113,7 @@ function renderAwayTab() {
       html += `
         <div class="tdf-card tdf-card-group" id="pilot-card-${p.id}" style="padding:12px 14px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px;">
-            <span class="tdf-group-label">${p.cp_mode ? 'CP Mode' : 'Single Pax'}</span>
+            <span class="tdf-group-label">${p.cp_mode ? 'CP Flight' : 'Single Pax'}</span>
             <div style="display:flex;align-items:center;gap:6px;">
               ${!p.cp_mode ? `<button onclick="showConvertToGroupModal('${p.id}','${p.name.replace(/'/g,"\\'")}' )" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:16px;font-weight:700;padding:2px 10px;cursor:pointer;line-height:1.4;touch-action:manipulation;" title="Add pilot — make group">+</button>` : ''}
             </div>
@@ -6159,7 +6159,7 @@ function renderAwayTab() {
       html += `
         <div class="tdf-card tdf-card-group" style="padding:12px 14px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px;">
-            <span class="tdf-group-label">${isCpGroup ? 'CP Mode' : `${entry.pilots.length}-Pax Group`}</span>
+            <span class="tdf-group-label">${isCpGroup ? 'CP Flight' : `${entry.pilots.length}-Pax Group`}</span>
             <div style="display:flex;align-items:center;gap:6px;">
               ${entry.groupName ? `<span style="font-size:12px;color:var(--accent);font-weight:600;">${gname}</span>` : ''}
               ${groupBtns}
@@ -9724,7 +9724,7 @@ function connectWS() {
     try { data = JSON.parse(event.data); } catch (_) { return; } // ignore non-JSON frames (pings etc.)
     switch (data.type) {
       case 'LEFT_OFFICE':
-        if (notifEnabled(NOTIF_KEYS.left)) toast(`${data.pilot_name} left office${data.cp_mode ? ' (CP Mode)' : ''}`);
+        if (notifEnabled(NOTIF_KEYS.left)) toast(`${data.pilot_name} left office${data.cp_mode ? ' (CP Flight)' : ''}`);
         loadOfficeData();
         if (pilotId && data.cp_mode) loadMyData(); // refresh cp-active for all pilots
         if (pilotId && data.pilot_id === pilotId) {
@@ -9738,7 +9738,7 @@ function connectWS() {
         }
         break;
       case 'GROUP_LEFT_OFFICE':
-        toast(`Group away: ${data.pilot_names.join(', ')}${data.cp_mode ? ' (CP Mode)' : ''}`);
+        toast(`Group away: ${data.pilot_names.join(', ')}${data.cp_mode ? ' (CP Flight)' : ''}`);
         loadOfficeData();
         if (pilotId && data.cp_mode) loadMyData(); // refresh cp-active for all pilots
         if (pilotId && data.pilot_ids.includes(pilotId)) {

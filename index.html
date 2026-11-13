@@ -3562,7 +3562,7 @@ function renderCpFlightsPanel() {
     return `<div style="margin-bottom:12px;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:14px;border-left:3px solid ${anyFlying ? '#16a34a' : 'var(--warning)'};">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:2px;">CP Mode Flight</div>
       ${(g.driver_name || g.van_name || g.departure_time) ? `
-        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;display:flex;flex-wrap:wrap;gap:8px;">
+        <div style="font-size:14px;color:var(--muted);margin-bottom:6px;display:flex;flex-wrap:wrap;gap:8px;">
           ${g.driver_name ? `<span>Driver: <strong style="color:var(--text);">${esc(g.driver_name)}</strong></span>` : ''}
           ${g.van_name ? `<span>Van: <strong style="color:var(--text);">${esc(g.van_name)}</strong></span>` : ''}
           ${g.departure_time ? `<span>Dep: <strong style="color:var(--text);">${esc(g.departure_time)}</strong></span>` : ''}
@@ -3650,7 +3650,7 @@ function renderDashboard() {
           <div class="ff-status-pill ${selfFlying ? 'flying' : ''}" style="${!selfFlying ? 'background:rgba(245,166,35,0.15);color:var(--warning);' : ''}">CP Mode${selfFlying ? ' — Flying' : ' — En Route'}</div>
           ${selfFlying ? `<div style="font-size:15px;font-weight:700;color:var(--text);margin-top:-10px;margin-bottom:4px;">Flight #${flightNumLabel}</div>` : `<div style="font-size:13px;color:var(--muted);text-align:center;margin-top:-8px;margin-bottom:4px;">Tap Flying when each pilot is ready</div>`}
           ${(myStatus.driver_name || myStatus.van_name || myStatus.departure_time) ? `
-            <div style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:6px;display:flex;flex-wrap:wrap;justify-content:center;gap:8px;">
+            <div style="font-size:14px;color:var(--muted);text-align:center;margin-bottom:6px;display:flex;flex-wrap:wrap;justify-content:center;gap:8px;">
               ${myStatus.driver_name ? `<span>Driver: <strong style="color:var(--text);">${esc(myStatus.driver_name)}</strong></span>` : ''}
               ${myStatus.van_name ? `<span>Van: <strong style="color:var(--text);">${esc(myStatus.van_name)}</strong></span>` : ''}
               ${myStatus.departure_time ? `<span>Dep: <strong style="color:var(--text);">${esc(myStatus.departure_time)}</strong></span>` : ''}

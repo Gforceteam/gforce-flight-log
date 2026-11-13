@@ -5686,6 +5686,10 @@ function renderGroupsTab() {
         <div class="section-title" style="margin-top:0;margin-bottom:0;">Send Away</div>
         <div style="display:flex;align-items:center;gap:8px;">
           <span id="lob-display" style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--muted);font-family:'Montserrat',sans-serif;white-space:nowrap;">${calcLOBTime()}</span>
+          <span style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--muted);font-family:'Montserrat',sans-serif;">CP</span>
+          <div id="cp-mode-toggle" onclick="toggleCpMode()" style="position:relative;width:40px;height:22px;border-radius:9999px;background:var(--border);cursor:pointer;transition:background 0.2s;flex-shrink:0;">
+            <span id="cp-mode-knob" style="position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform 0.2s;display:block;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></span>
+          </div>
           <span style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--muted);font-family:'Montserrat',sans-serif;">MOU</span>
           <button id="mou-toggle-btn" onclick="toggleMOU()" style="position:relative;width:44px;height:24px;border-radius:9999px;border:none;cursor:pointer;padding:0;transition:background 0.2s;flex-shrink:0;" title="MOU Status">
             <span id="mou-toggle-knob" style="position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform 0.2s;display:block;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></span>
@@ -5698,15 +5702,6 @@ function renderGroupsTab() {
           ${makeSendAwayRow(true)}
           ${makeSendAwayRow(false)}
           ${makeSendAwayRow(false)}
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;">
-            <div id="cp-mode-toggle" onclick="toggleCpMode()" style="position:relative;width:40px;height:22px;border-radius:9999px;background:var(--border);cursor:pointer;transition:background 0.2s;flex-shrink:0;">
-              <span id="cp-mode-knob" style="position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform 0.2s;display:block;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></span>
-            </div>
-            <span style="font-size:13px;font-weight:700;color:var(--text);">CP Mode</span>
-            <span id="cp-mode-label" style="font-size:11px;color:var(--muted);">Timer starts when pilot taps All Flying</span>
-          </label>
         </div>
         <div id="cp-driver-row" style="display:none;align-items:center;gap:10px;margin-bottom:8px;">
           <span style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;width:110px;">Driver</span>

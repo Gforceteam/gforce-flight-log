@@ -2949,7 +2949,7 @@ function startStatusPoll() {
       const newStatus = await statusRes.json();
       const prevStatus = myStatus.status;
       const prevGroupPilots = (myStatus.group_pilots || []).map(p => p.id || p).join(',');
-      myStatus = { status: newStatus.status, client_name: newStatus.client_name, timer_expires_at: newStatus.timer_expires_at, group_name: newStatus.group_name || null, group_pilots: newStatus.group_pilots || [], group_id: newStatus.group_id || null, is_peak_trip: newStatus.is_peak_trip || false, cp_mode: newStatus.cp_mode || false, flying_started_at: newStatus.flying_started_at || null, driver_name: newStatus.driver_name || null };
+      myStatus = { status: newStatus.status, client_name: newStatus.client_name, timer_expires_at: newStatus.timer_expires_at, group_name: newStatus.group_name || null, group_pilots: newStatus.group_pilots || [], group_id: newStatus.group_id || null, is_peak_trip: newStatus.is_peak_trip || false, cp_mode: newStatus.cp_mode || false, flying_started_at: newStatus.flying_started_at || null, driver_name: newStatus.driver_name || null, van_name: newStatus.van_name || null, departure_time: newStatus.departure_time || null };
       pilotPresence = Number(newStatus.presence);
       if (!Number.isFinite(pilotPresence)) pilotPresence = newStatus.available === true ? 1 : 0;
       const prevHa = pilotHasAvatar;
@@ -3561,7 +3561,12 @@ function renderCpFlightsPanel() {
 
     return `<div style="margin-bottom:12px;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:14px;border-left:3px solid ${anyFlying ? '#16a34a' : 'var(--warning)'};">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:2px;">CP Mode Flight</div>
-      ${g.driver_name ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Driver: <strong style="color:var(--text);">${esc(g.driver_name)}</strong></div>` : ''}
+      ${(g.driver_name || g.van_name || g.departure_time) ? `
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;display:flex;flex-wrap:wrap;gap:8px;">
+          ${g.driver_name ? `<span>Driver: <strong style="color:var(--text);">${esc(g.driver_name)}</strong></span>` : ''}
+          ${g.van_name ? `<span>Van: <strong style="color:var(--text);">${esc(g.van_name)}</strong></span>` : ''}
+          ${g.departure_time ? `<span>Dep: <strong style="color:var(--text);">${esc(g.departure_time)}</strong></span>` : ''}
+        </div>` : ''}
       ${pilotRows}
       <div style="display:flex;gap:8px;margin-top:10px;">
         ${!allFlying ? `<button onclick="cpStartFlyingGroup('${groupId}',this)" style="flex:1;padding:10px;background:var(--accent);border:none;border-radius:9px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">All Flying</button>` : ''}
@@ -3644,7 +3649,12 @@ function renderDashboard() {
         <div class="ff-status-card ${selfFlying ? 'ff-status-flying' : ''}" style="${!selfFlying ? 'border-color:rgba(245,166,35,0.3);background:rgba(245,166,35,0.07);' : ''}">
           <div class="ff-status-pill ${selfFlying ? 'flying' : ''}" style="${!selfFlying ? 'background:rgba(245,166,35,0.15);color:var(--warning);' : ''}">CP Mode${selfFlying ? ' — Flying' : ' — En Route'}</div>
           ${selfFlying ? `<div style="font-size:15px;font-weight:700;color:var(--text);margin-top:-10px;margin-bottom:4px;">Flight #${flightNumLabel}</div>` : `<div style="font-size:13px;color:var(--muted);text-align:center;margin-top:-8px;margin-bottom:4px;">Tap Flying when each pilot is ready</div>`}
-          ${myStatus.driver_name ? `<div style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:4px;">Driver: <strong style="color:var(--text);">${esc(myStatus.driver_name)}</strong></div>` : ''}
+          ${(myStatus.driver_name || myStatus.van_name || myStatus.departure_time) ? `
+            <div style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:6px;display:flex;flex-wrap:wrap;justify-content:center;gap:8px;">
+              ${myStatus.driver_name ? `<span>Driver: <strong style="color:var(--text);">${esc(myStatus.driver_name)}</strong></span>` : ''}
+              ${myStatus.van_name ? `<span>Van: <strong style="color:var(--text);">${esc(myStatus.van_name)}</strong></span>` : ''}
+              ${myStatus.departure_time ? `<span>Dep: <strong style="color:var(--text);">${esc(myStatus.departure_time)}</strong></span>` : ''}
+            </div>` : ''}
           ${allPilots.length > 1 ? `<div style="margin-bottom:4px;">${pilotRows}</div>` : ''}
           ${selfFlying ? `<div class="dashboard-timer" id="dashboard-timer">--:--</div>` : ''}
           <div style="display:flex;gap:8px;margin-top:8px;">
@@ -5698,12 +5708,24 @@ function renderGroupsTab() {
             <span id="cp-mode-label" style="font-size:11px;color:var(--muted);">Timer starts when pilot taps All Flying</span>
           </label>
         </div>
-        <div id="cp-driver-row" style="display:none;align-items:center;gap:10px;margin-bottom:12px;">
-          <span style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;">Driver</span>
+        <div id="cp-driver-row" style="display:none;align-items:center;gap:10px;margin-bottom:8px;">
+          <span style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;width:110px;">Driver</span>
           <select id="cp-driver-sel" onchange="_cpDriverId=this.value" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;cursor:pointer;">
             <option value="">None</option>
             ${officePilots.filter(p => !HIDDEN_PILOTS.includes(p.name)).sort(pilotSort).map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}
           </select>
+        </div>
+        <div id="cp-van-row" style="display:none;align-items:center;gap:10px;margin-bottom:8px;">
+          <span style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;width:110px;">Van</span>
+          <select id="cp-van-sel" onchange="_cpVan=this.value" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;cursor:pointer;">
+            <option value="">None</option>
+            <option value="Gforce 1">Gforce 1</option>
+            <option value="Gforce 2">Gforce 2</option>
+          </select>
+        </div>
+        <div id="cp-departure-row" style="display:none;align-items:center;gap:10px;margin-bottom:12px;">
+          <span style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;width:110px;">Departure Time</span>
+          <input id="cp-departure-input" type="time" onchange="_cpDepartureTime=this.value" style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:14px;" placeholder="HH:MM">
         </div>
         <div style="display:flex;gap:10px;">
           <button onclick="addSendAwayRow()" style="padding:11px 20px;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--text);font-size:22px;font-weight:400;cursor:pointer;line-height:1;">+</button>
@@ -5718,9 +5740,10 @@ function renderGroupsTab() {
     const k = document.getElementById('cp-mode-knob');
     if (t) t.style.background = 'var(--accent)';
     if (k) k.style.transform = 'translateX(18px)';
-    const dr = document.getElementById('cp-driver-row');
-    if (dr) dr.style.display = 'flex';
+    ['cp-driver-row','cp-van-row','cp-departure-row'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'flex'; });
     if (_cpDriverId) { const ds = document.getElementById('cp-driver-sel'); if (ds) ds.value = _cpDriverId; }
+    if (_cpVan) { const vs = document.getElementById('cp-van-sel'); if (vs) vs.value = _cpVan; }
+    if (_cpDepartureTime) { const dt = document.getElementById('cp-departure-input'); if (dt) dt.value = _cpDepartureTime; }
   }
 }
 
@@ -5933,15 +5956,20 @@ async function deleteOfficeFlight(flightId) {
 
 let _cpModeOn = false;
 let _cpDriverId = '';
+let _cpVan = '';
+let _cpDepartureTime = '';
 function toggleCpMode() {
   _cpModeOn = !_cpModeOn;
   const toggle = document.getElementById('cp-mode-toggle');
   const knob = document.getElementById('cp-mode-knob');
   if (toggle) toggle.style.background = _cpModeOn ? 'var(--accent)' : 'var(--border)';
   if (knob) knob.style.transform = _cpModeOn ? 'translateX(18px)' : 'translateX(0)';
-  const driverRow = document.getElementById('cp-driver-row');
-  if (driverRow) driverRow.style.display = _cpModeOn ? 'flex' : 'none';
-  if (!_cpModeOn) { _cpDriverId = ''; const sel = document.getElementById('cp-driver-sel'); if (sel) sel.value = ''; }
+  const display = _cpModeOn ? 'flex' : 'none';
+  ['cp-driver-row','cp-van-row','cp-departure-row'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = display; });
+  if (!_cpModeOn) {
+    _cpDriverId = ''; _cpVan = ''; _cpDepartureTime = '';
+    ['cp-driver-sel','cp-van-sel','cp-departure-input'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  }
 }
 
 function makeSendAwayRow(isFirst) {
@@ -5998,17 +6026,19 @@ async function submitSendAway() {
     let res, data;
     const driverPilot = _cpModeOn && _cpDriverId ? officePilots.find(p => String(p.id) === String(_cpDriverId)) : null;
     const driverName = driverPilot ? driverPilot.name : null;
+    const vanName = _cpModeOn && _cpVan ? _cpVan : null;
+    const departureTime = _cpModeOn && _cpDepartureTime ? _cpDepartureTime : null;
     if (pilots.length === 1) {
-      res = await officeFetch('/api/office/leave', { method: 'POST', body: JSON.stringify({ pilot_id: pilots[0].id, client_name: pilots[0].num, cp_mode: _cpModeOn, driver_name: driverName }) });
+      res = await officeFetch('/api/office/leave', { method: 'POST', body: JSON.stringify({ pilot_id: pilots[0].id, client_name: pilots[0].num, cp_mode: _cpModeOn, driver_name: driverName, van_name: vanName, departure_time: departureTime }) });
       data = await res.json();
-      if (res.ok) toast(`${pilots[0].name} sent away${_cpModeOn ? ' (CP Mode)' : ''}${driverName ? ` — Driver: ${driverName}` : ''}`);
+      if (res.ok) toast(`${pilots[0].name} sent away${_cpModeOn ? ' (CP Mode)' : ''}`);
       else toast(data.error || 'Error', 'err');
     } else {
       const pilotNums = {};
       pilots.forEach(p => { pilotNums[p.id] = p.num || ''; });
-      res = await officeFetch('/api/office/group-leave', { method: 'POST', body: JSON.stringify({ pilot_ids: pilots.map(p => p.id), pilot_nums: pilotNums, cp_mode: _cpModeOn, driver_name: driverName }) });
+      res = await officeFetch('/api/office/group-leave', { method: 'POST', body: JSON.stringify({ pilot_ids: pilots.map(p => p.id), pilot_nums: pilotNums, cp_mode: _cpModeOn, driver_name: driverName, van_name: vanName, departure_time: departureTime }) });
       data = await res.json();
-      if (res.ok) toast(`Away: ${pilots.map(p => p.name).join(', ')}${_cpModeOn ? ' (CP Mode)' : ''}${driverName ? ` — Driver: ${driverName}` : ''}`);
+      if (res.ok) toast(`Away: ${pilots.map(p => p.name).join(', ')}${_cpModeOn ? ' (CP Mode)' : ''}`);
       else toast(data.error || 'Error', 'err');
     }
     if (res.ok) { await loadOfficeData(); renderGroupsTab(); }
@@ -6093,7 +6123,12 @@ function renderAwayTab() {
               ${!p.cp_mode ? `<button onclick="showConvertToGroupModal('${p.id}','${p.name.replace(/'/g,"\\'")}' )" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:16px;font-weight:700;padding:2px 10px;cursor:pointer;line-height:1.4;touch-action:manipulation;" title="Add pilot — make group">+</button>` : ''}
             </div>
           </div>
-          ${p.cp_mode && p.driver_name ? `<div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Driver: <strong style="color:var(--text);">${esc(p.driver_name)}</strong></div>` : ''}
+          ${p.cp_mode && (p.driver_name || p.van_name || p.departure_time) ? `
+            <div style="font-size:12px;color:var(--muted);margin-bottom:6px;display:flex;flex-wrap:wrap;gap:10px;">
+              ${p.driver_name ? `<span>Driver: <strong style="color:var(--text);">${esc(p.driver_name)}</strong></span>` : ''}
+              ${p.van_name ? `<span>Van: <strong style="color:var(--text);">${esc(p.van_name)}</strong></span>` : ''}
+              ${p.departure_time ? `<span>Dep: <strong style="color:var(--text);">${esc(p.departure_time)}</strong></span>` : ''}
+            </div>` : ''}
           <div style="border-top:1px solid var(--border);padding-top:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
             <span class="tdf-pilot">${esc(p.name)}<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">(#${flightNumFor(p)})</span></span>
             <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
@@ -6135,7 +6170,12 @@ function renderAwayTab() {
               ${groupBtns}
             </div>
           </div>
-          ${groupDriverName ? `<div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Driver: <strong style="color:var(--text);">${esc(groupDriverName)}</strong></div>` : ''}
+          ${(isCpGroup && (entry.pilots[0].driver_name || entry.pilots[0].van_name || entry.pilots[0].departure_time)) ? `
+            <div style="font-size:12px;color:var(--muted);margin-bottom:6px;display:flex;flex-wrap:wrap;gap:10px;">
+              ${entry.pilots[0].driver_name ? `<span>Driver: <strong style="color:var(--text);">${esc(entry.pilots[0].driver_name)}</strong></span>` : ''}
+              ${entry.pilots[0].van_name ? `<span>Van: <strong style="color:var(--text);">${esc(entry.pilots[0].van_name)}</strong></span>` : ''}
+              ${entry.pilots[0].departure_time ? `<span>Dep: <strong style="color:var(--text);">${esc(entry.pilots[0].departure_time)}</strong></span>` : ''}
+            </div>` : ''}
           ${pilotRows}
         </div>`;
     }

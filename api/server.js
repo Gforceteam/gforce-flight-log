@@ -215,6 +215,7 @@ async function createTables() {
   // CP Mode: timer starts on pilot's "All Flying" tap, not at Send Away
   try { await db.execute('ALTER TABLE active_timers ADD COLUMN cp_mode INTEGER DEFAULT 0'); } catch (_) {}
   try { await db.execute('ALTER TABLE active_timers ADD COLUMN flying_started_at TEXT DEFAULT NULL'); } catch (_) {}
+  try { await db.execute('ALTER TABLE active_timers ADD COLUMN driver_name TEXT DEFAULT NULL'); } catch (_) {}
   // Flag flights cancelled as "Did Not Fly" — excluded from counts but visible in history
   try { await db.execute('ALTER TABLE flights ADD COLUMN did_not_fly INTEGER DEFAULT 0'); } catch (_) {}
   // Per-event adjustment log so pilots can see what the office changed
@@ -768,6 +769,7 @@ app.get('/api/pilots', verifyPilotOrOffice, async (req, res) => {
         group_id: timer ? timer.group_id : null,
         cp_mode: timer ? (Number(timer.cp_mode) === 1) : false,
         flying_started_at: timer ? (timer.flying_started_at || null) : null,
+        driver_name: timer ? (timer.driver_name || null) : null,
         last_landed_at: lastL ? lastL.last_landed : null,
         last_seen: p.last_seen || null
       };
@@ -815,6 +817,7 @@ app.get('/api/my-status', verifyToken, async (req, res) => {
       timer_expires_at: timer ? timer.expires_at : null,
       cp_mode: timer ? (Number(timer.cp_mode) === 1) : false,
       flying_started_at: timer ? (timer.flying_started_at || null) : null,
+      driver_name: timer ? (timer.driver_name || null) : null,
       current_wing: pilot ? pilot.current_wing : null,
       presence,
       available: presence === 1,
@@ -1620,14 +1623,14 @@ app.post('/api/pilot/land', verifyToken, async (req, res) => {
 app.get('/api/pilot/cp-active', verifyPilotOrOffice, async (req, res) => {
   try {
     const timers = await queryAll(
-      'SELECT at.pilot_id, p.name AS pilot_name, at.group_id, at.started_at, at.expires_at, at.flying_started_at FROM active_timers at JOIN pilots p ON at.pilot_id = p.id WHERE at.cp_mode = 1 ORDER BY at.started_at ASC',
+      'SELECT at.pilot_id, p.name AS pilot_name, at.group_id, at.started_at, at.expires_at, at.flying_started_at, at.driver_name FROM active_timers at JOIN pilots p ON at.pilot_id = p.id WHERE at.cp_mode = 1 ORDER BY at.started_at ASC',
       []
     );
     // Group by group_id (or solo)
     const groupMap = new Map();
     for (const t of timers) {
       const key = t.group_id || `_solo_${t.pilot_id}`;
-      if (!groupMap.has(key)) groupMap.set(key, { group_id: t.group_id || null, pilots: [] });
+      if (!groupMap.has(key)) groupMap.set(key, { group_id: t.group_id || null, driver_name: t.driver_name || null, pilots: [] });
       groupMap.get(key).pilots.push({ pilot_id: t.pilot_id, pilot_name: t.pilot_name, flying_started_at: t.flying_started_at || null, expires_at: t.expires_at || null, started_at: t.started_at });
     }
     res.json([...groupMap.values()]);
@@ -1930,7 +1933,7 @@ app.get('/api/flight-following', verifyToken, async (req, res) => {
 // ─── Office Routes ────────────────────────────────────────────────────────────
 app.post('/api/office/leave', verifyOffice, async (req, res) => {
   try {
-    const { pilot_id, client_name, cp_mode } = req.body;
+    const { pilot_id, client_name, cp_mode, driver_name } = req.body;
     if (!pilot_id) return res.status(400).json({ error: 'pilot_id required' });
     const pilot = await queryOne('SELECT * FROM pilots WHERE id = ?', [pilot_id]);
     if (!pilot) return res.status(404).json({ error: 'Pilot not found' });
@@ -1942,9 +1945,10 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
     // CP mode: no expiry until pilot taps All Flying
     const expires = isCp ? null : new Date(now.getTime() + 60 * 60 * 1000);
     const cleanClientName = sanitize(client_name, 100);
+    const cleanDriverName = isCp && driver_name ? sanitize(driver_name, 100) : null;
 
-    await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, cp_mode) VALUES (?, ?, ?, ?, ?)',
-      [pilot_id, cleanClientName || null, now.toISOString(), expires ? expires.toISOString() : null, isCp]);
+    await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, cp_mode, driver_name) VALUES (?, ?, ?, ?, ?, ?)',
+      [pilot_id, cleanClientName || null, now.toISOString(), expires ? expires.toISOString() : null, isCp, cleanDriverName]);
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'left_office', new Date().toISOString()]);
 
     broadcast({
@@ -1974,7 +1978,7 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
 
 app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
   try {
-    const { group_name, pilot_ids, pilot_nums, is_peak_trip, cp_mode } = req.body;
+    const { group_name, pilot_ids, pilot_nums, is_peak_trip, cp_mode, driver_name } = req.body;
     if (!Array.isArray(pilot_ids) || !pilot_ids.length) return res.status(400).json({ error: 'pilot_ids required' });
 
     const now = new Date();
@@ -1983,6 +1987,7 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
     // CP mode: no expiry until pilot taps All Flying
     const expires = isCp ? null : new Date(now.getTime() + duration * 60 * 1000);
     const groupId = uuidv4();
+    const cleanDriverName = isCp && driver_name ? sanitize(driver_name, 100) : null;
 
     // Guard: reject if any pilot is already away
     const alreadyAway = [];
@@ -2000,8 +2005,8 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
       if (!pilot) continue;
       const clientName = pilot_nums ? (sanitize(pilot_nums[pid], 20) || null) : (group_name || null);
       cleanedPilotNums[pid] = clientName;
-      await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, group_id, cp_mode) VALUES (?, ?, ?, ?, ?, ?)',
-        [pid, clientName, now.toISOString(), expires ? expires.toISOString() : null, groupId, isCp]);
+      await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, group_id, cp_mode, driver_name) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [pid, clientName, now.toISOString(), expires ? expires.toISOString() : null, groupId, isCp, cleanDriverName]);
       await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pid, 'group_left_office', new Date().toISOString()]);
       pilotNames.push(pilot.name);
       pilotMap.push({ id: pid, name: pilot.name });

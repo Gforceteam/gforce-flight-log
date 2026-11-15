@@ -2080,8 +2080,8 @@ app.post('/api/office/add-to-group', verifyOffice, async (req, res) => {
     const now = new Date();
     const newExpires = new Date(now.getTime() + 60 * 60 * 1000);
     const pilotClientName = client_name != null ? sanitize(String(client_name), 100) : groupTimer.client_name;
-    await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, group_id, office_adjustments) VALUES (?, ?, ?, ?, ?, ?)',
-      [pilot_id, pilotClientName, now.toISOString(), newExpires.toISOString(), group_id, 0]);
+    await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, group_id, office_adjustments, cp_mode, driver_name, van_name, departure_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [pilot_id, pilotClientName, now.toISOString(), newExpires.toISOString(), group_id, 0, groupTimer.cp_mode || 0, groupTimer.driver_name || null, groupTimer.van_name || null, groupTimer.departure_time || null]);
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'added_to_group', now.toISOString()]);
     broadcast({ type: 'PILOT_ADDED_TO_GROUP', pilot_id, pilot_name: pilot.name, group_id, group_name: groupTimer.client_name, expires_at: newExpires.toISOString() });
     await sendPushToPilot(pilot_id, {
@@ -2120,8 +2120,8 @@ app.post('/api/office/convert-to-group', verifyOffice, async (req, res) => {
     // Assign group_id to the existing solo timer
     await run('UPDATE active_timers SET group_id = ? WHERE pilot_id = ?', [groupId, solo_pilot_id]);
     // Add the new pilot with a fresh 60-min timer in the same group
-    await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, group_id, office_adjustments) VALUES (?, ?, ?, ?, ?, ?)',
-      [new_pilot_id, pilotClientName, now.toISOString(), newExpires.toISOString(), groupId, 0]);
+    await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, group_id, office_adjustments, cp_mode, driver_name, van_name, departure_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [new_pilot_id, pilotClientName, now.toISOString(), newExpires.toISOString(), groupId, 0, soloTimer.cp_mode || 0, soloTimer.driver_name || null, soloTimer.van_name || null, soloTimer.departure_time || null]);
 
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), solo_pilot_id, 'converted_to_group', now.toISOString()]);
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), new_pilot_id, 'added_to_group', now.toISOString()]);
@@ -2306,7 +2306,7 @@ app.post('/api/office/extend', verifyOffice, async (req, res) => {
     if (!timer) return res.status(404).json({ error: 'No active timer for this pilot' });
 
     const newExpiry = new Date(new Date(timer.expires_at).getTime() + 30 * 60 * 1000);
-    await run('UPDATE active_timers SET expires_at = ? WHERE pilot_id = ?', [newExpiry.toISOString(), pilot_id]);
+    await run('UPDATE active_timers SET expires_at = ?, notif_10min = 0, notif_5min = 0, notif_expired = 0 WHERE pilot_id = ?', [newExpiry.toISOString(), pilot_id]);
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'timer_extended_30min', new Date().toISOString()]);
 
     const pilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [pilot_id]);
@@ -2963,7 +2963,7 @@ app.patch('/api/office/coronet-trips/:id/status', verifyPilotOrOffice, async (re
     if (!existing) return res.status(404).json({ error: 'trip not found' });
     const van_left_at       = status === 'van_left'      ? now : (existing.van_left_at      || null);
     const flying_started_at = status === 'all_flying'    ? now : (existing.flying_started_at || null);
-    const landed_at         = status === 'all_landed'    ? now : null;
+    const landed_at         = status === 'all_landed'    ? now : (existing.landed_at      || null);
     const van_returned_at   = status === 'van_returned'  ? now : (existing.van_returned_at   || null);
     await run(
       'UPDATE coronet_trips SET status = ?, van_left_at = ?, flying_started_at = ?, landed_at = ?, van_returned_at = ? WHERE id = ?',
@@ -3064,7 +3064,7 @@ app.get('/api/office/owntracks-setup', verifyOffice, async (req, res) => {
     res.json(pilots.map(p => ({
       id: p.id,
       name: p.name,
-      url: `https://gforce-api.fly.dev/api/owntracks?key=${p.owntracks_key}`
+      url: `https://gforce-flight-log.fly.dev/api/owntracks?key=${p.owntracks_key}`
     })));
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -3149,7 +3149,7 @@ app.post('/api/office/loop-board/reset', verifyOffice, async (req, res) => {
   try {
     const { date: reqDate } = req.body || {};
     const date = reqDate || nzToday();
-    await run('UPDATE loop_board_v2 SET pilot_id = NULL, pilot_name = NULL, tallies = NULL, done = 0 WHERE date = ?', [date]);
+    await run('UPDATE loop_board_v2 SET pilot_id = NULL, pilot_name = NULL, tallies = NULL, done = 0, cp_drives = 0 WHERE date = ?', [date]);
     const board = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done, COALESCE(cp_drives,0) as cp_drives FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [date]);
     broadcast({ type: 'LOOP_BOARD_UPDATE', board, date });
     res.json({ ok: true });

@@ -1648,28 +1648,28 @@ app.get('/api/pilot/cp-active', verifyPilotOrOffice, async (req, res) => {
   }
 });
 
-// ─── CP Mode: mark pilots as flying (timer already running from Send Away) ──────
+// ─── CP Mode: mark pilots as flying — timer starts here ──────────────────────
 app.patch('/api/pilot/cp-all-flying', verifyPilotOrOffice, async (req, res) => {
   try {
     const { solo, group_id: bodyGroupId, pilot_id: bodyPilotId } = req.body || {};
     const now = new Date();
     const nowIso = now.toISOString();
+    const expiresIso = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
 
     // If called for a specific single pilot (bodyPilotId), just start that one
     if (bodyPilotId) {
       const target = await queryOne('SELECT * FROM active_timers WHERE pilot_id = ? AND cp_mode = 1', [bodyPilotId]);
       if (!target) return res.status(404).json({ error: 'No active CP timer for that pilot' });
       if (target.flying_started_at) return res.status(409).json({ error: 'Already flying' });
-      await run('UPDATE active_timers SET flying_started_at = ? WHERE pilot_id = ?', [nowIso, bodyPilotId]);
-      broadcast({ type: 'CP_ALL_FLYING', pilot_ids: [bodyPilotId], group_id: target.group_id || null, flying_started_at: nowIso, expires_at: target.expires_at });
-      return res.json({ ok: true, flying_started_at: nowIso, expires_at: target.expires_at });
+      await run('UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE pilot_id = ?', [nowIso, expiresIso, bodyPilotId]);
+      broadcast({ type: 'CP_ALL_FLYING', pilot_ids: [bodyPilotId], group_id: target.group_id || null, flying_started_at: nowIso, expires_at: expiresIso });
+      return res.json({ ok: true, flying_started_at: nowIso, expires_at: expiresIso });
     }
 
     // If a group_id was provided, start all in that group
     if (bodyGroupId) {
-      await run('UPDATE active_timers SET flying_started_at = ? WHERE group_id = ? AND cp_mode = 1 AND (flying_started_at IS NULL)', [nowIso, bodyGroupId]);
-      const updated = await queryAll('SELECT pilot_id, expires_at FROM active_timers WHERE group_id = ?', [bodyGroupId]);
-      const expiresIso = updated[0]?.expires_at || null;
+      await run('UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE group_id = ? AND cp_mode = 1 AND (flying_started_at IS NULL)', [nowIso, expiresIso, bodyGroupId]);
+      const updated = await queryAll('SELECT pilot_id FROM active_timers WHERE group_id = ?', [bodyGroupId]);
       broadcast({ type: 'CP_ALL_FLYING', pilot_ids: updated.map(r => r.pilot_id), group_id: bodyGroupId, flying_started_at: nowIso, expires_at: expiresIso });
       return res.json({ ok: true, flying_started_at: nowIso, expires_at: expiresIso });
     }
@@ -1682,16 +1682,15 @@ app.patch('/api/pilot/cp-all-flying', verifyPilotOrOffice, async (req, res) => {
     if (solo || !groupId) {
       if (!timer || !Number(timer.cp_mode)) return res.status(400).json({ error: 'Not a CP mode flight' });
       if (timer.flying_started_at) return res.status(409).json({ error: 'Already flying' });
-      await run('UPDATE active_timers SET flying_started_at = ? WHERE pilot_id = ?', [nowIso, req.pilot.id]);
-      broadcast({ type: 'CP_ALL_FLYING', pilot_ids: [req.pilot.id], group_id: groupId || null, flying_started_at: nowIso, expires_at: timer.expires_at });
+      await run('UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE pilot_id = ?', [nowIso, expiresIso, req.pilot.id]);
+      broadcast({ type: 'CP_ALL_FLYING', pilot_ids: [req.pilot.id], group_id: groupId || null, flying_started_at: nowIso, expires_at: expiresIso });
     } else {
-      await run('UPDATE active_timers SET flying_started_at = ? WHERE group_id = ? AND cp_mode = 1 AND (flying_started_at IS NULL)', [nowIso, groupId]);
-      const updated = await queryAll('SELECT pilot_id, expires_at FROM active_timers WHERE group_id = ?', [groupId]);
-      const expiresIso = updated[0]?.expires_at || null;
+      await run('UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE group_id = ? AND cp_mode = 1 AND (flying_started_at IS NULL)', [nowIso, expiresIso, groupId]);
+      const updated = await queryAll('SELECT pilot_id FROM active_timers WHERE group_id = ?', [groupId]);
       broadcast({ type: 'CP_ALL_FLYING', pilot_ids: updated.map(r => r.pilot_id), group_id: groupId, flying_started_at: nowIso, expires_at: expiresIso });
     }
 
-    res.json({ ok: true, flying_started_at: nowIso, expires_at: timer?.expires_at || null });
+    res.json({ ok: true, flying_started_at: nowIso, expires_at: expiresIso });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Internal server error' });
@@ -1707,11 +1706,13 @@ app.patch('/api/pilot/cp-flying-member', verifyPilotOrOffice, async (req, res) =
     if (!targetTimer) return res.status(404).json({ error: 'No active CP timer for that pilot' });
     if (targetTimer.flying_started_at) return res.status(409).json({ error: 'Already flying' });
 
-    const nowIso = new Date().toISOString();
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const expiresIso = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
 
-    await run('UPDATE active_timers SET flying_started_at = ? WHERE pilot_id = ?', [nowIso, pilot_id]);
-    broadcast({ type: 'CP_ALL_FLYING', pilot_ids: [pilot_id], group_id: targetTimer.group_id || null, flying_started_at: nowIso, expires_at: targetTimer.expires_at });
-    res.json({ ok: true, flying_started_at: nowIso, expires_at: targetTimer.expires_at });
+    await run('UPDATE active_timers SET flying_started_at = ?, expires_at = ? WHERE pilot_id = ?', [nowIso, expiresIso, pilot_id]);
+    broadcast({ type: 'CP_ALL_FLYING', pilot_ids: [pilot_id], group_id: targetTimer.group_id || null, flying_started_at: nowIso, expires_at: expiresIso });
+    res.json({ ok: true, flying_started_at: nowIso, expires_at: expiresIso });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Internal server error' });
@@ -1953,7 +1954,8 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
 
     const now = new Date();
     const isCp = cp_mode ? 1 : 0;
-    const expires = new Date(now.getTime() + 60 * 60 * 1000);
+    // CP timer starts at "All Flying", not at Send Away
+    const expires = isCp ? null : new Date(now.getTime() + 60 * 60 * 1000);
     const cleanClientName = sanitize(client_name, 100);
     const cleanDriverName = isCp && driver_name ? sanitize(driver_name, 100) : null;
     const cleanVanName = isCp && van_name ? sanitize(van_name, 50) : null;
@@ -1999,7 +2001,8 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
     const now = new Date();
     const isCp = cp_mode ? 1 : 0;
     const duration = is_peak_trip ? 120 : 60;
-    const expires = new Date(now.getTime() + duration * 60 * 1000);
+    // CP timer starts at "All Flying", not at Send Away
+    const expires = isCp ? null : new Date(now.getTime() + duration * 60 * 1000);
     const groupId = uuidv4();
     const cleanDriverName = isCp && driver_name ? sanitize(driver_name, 100) : null;
     const cleanVanName = isCp && van_name ? sanitize(van_name, 50) : null;
@@ -2062,7 +2065,7 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
       departure_time: cleanDepartureTime || null
     });
 
-    res.json({ message: `Group "${group_name}" sent away — ${pilotNames.join(', ')}`, group_id: groupId, expires_at: expires.toISOString() });
+    res.json({ message: `Group "${group_name}" sent away — ${pilotNames.join(', ')}`, group_id: groupId, expires_at: expires ? expires.toISOString() : null });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Internal server error' });
@@ -2083,13 +2086,14 @@ app.post('/api/office/add-to-group', verifyOffice, async (req, res) => {
     const existingTimer = await queryOne('SELECT pilot_id FROM active_timers WHERE pilot_id = ?', [pilot_id]);
     if (existingTimer) return res.status(409).json({ error: `${pilot.name} is already away` });
     // Add pilot with their own fresh timer starting from now, using their individual flight #
+    // For CP groups, inherit expires_at from group (null until All Flying is tapped)
     const now = new Date();
-    const newExpires = new Date(now.getTime() + 60 * 60 * 1000);
+    const newExpires = groupTimer.cp_mode ? (groupTimer.expires_at ? new Date(groupTimer.expires_at) : null) : new Date(now.getTime() + 60 * 60 * 1000);
     const pilotClientName = client_name != null ? sanitize(String(client_name), 100) : groupTimer.client_name;
     await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, group_id, office_adjustments, cp_mode, driver_name, van_name, departure_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [pilot_id, pilotClientName, now.toISOString(), newExpires.toISOString(), group_id, 0, groupTimer.cp_mode || 0, groupTimer.driver_name || null, groupTimer.van_name || null, groupTimer.departure_time || null]);
+      [pilot_id, pilotClientName, now.toISOString(), newExpires ? newExpires.toISOString() : null, group_id, 0, groupTimer.cp_mode || 0, groupTimer.driver_name || null, groupTimer.van_name || null, groupTimer.departure_time || null]);
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'added_to_group', now.toISOString()]);
-    broadcast({ type: 'PILOT_ADDED_TO_GROUP', pilot_id, pilot_name: pilot.name, group_id, group_name: groupTimer.client_name, expires_at: newExpires.toISOString() });
+    broadcast({ type: 'PILOT_ADDED_TO_GROUP', pilot_id, pilot_name: pilot.name, group_id, group_name: groupTimer.client_name, expires_at: newExpires ? newExpires.toISOString() : null });
     await sendPushToPilot(pilot_id, {
       title: '🪂 GForce — YOU\'RE AWAY!',
       body: groupTimer.client_name ? `Added to group: ${groupTimer.client_name}. Timer started — 60 minutes.` : 'Office has added you to a group. Timer started — 60 minutes.',
@@ -2119,7 +2123,8 @@ app.post('/api/office/convert-to-group', verifyOffice, async (req, res) => {
 
     const groupId = uuidv4();
     const now = new Date();
-    const newExpires = new Date(now.getTime() + 60 * 60 * 1000);
+    // For CP flights, timer hasn't started yet — inherit null expires_at until All Flying
+    const newExpires = soloTimer.cp_mode ? (soloTimer.expires_at ? new Date(soloTimer.expires_at) : null) : new Date(now.getTime() + 60 * 60 * 1000);
     const groupClientName = soloTimer.client_name || null;
     const pilotClientName = client_name != null ? sanitize(String(client_name), 100) : groupClientName;
 
@@ -2127,13 +2132,13 @@ app.post('/api/office/convert-to-group', verifyOffice, async (req, res) => {
     await run('UPDATE active_timers SET group_id = ? WHERE pilot_id = ?', [groupId, solo_pilot_id]);
     // Add the new pilot with a fresh 60-min timer in the same group
     await run('INSERT OR REPLACE INTO active_timers (pilot_id, client_name, started_at, expires_at, group_id, office_adjustments, cp_mode, driver_name, van_name, departure_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [new_pilot_id, pilotClientName, now.toISOString(), newExpires.toISOString(), groupId, 0, soloTimer.cp_mode || 0, soloTimer.driver_name || null, soloTimer.van_name || null, soloTimer.departure_time || null]);
+      [new_pilot_id, pilotClientName, now.toISOString(), newExpires ? newExpires.toISOString() : null, groupId, 0, soloTimer.cp_mode || 0, soloTimer.driver_name || null, soloTimer.van_name || null, soloTimer.departure_time || null]);
 
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), solo_pilot_id, 'converted_to_group', now.toISOString()]);
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), new_pilot_id, 'added_to_group', now.toISOString()]);
 
     const soloPilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [solo_pilot_id]);
-    broadcast({ type: 'PILOT_ADDED_TO_GROUP', pilot_id: new_pilot_id, pilot_name: newPilot.name, group_id: groupId, group_name: groupClientName, expires_at: newExpires.toISOString() });
+    broadcast({ type: 'PILOT_ADDED_TO_GROUP', pilot_id: new_pilot_id, pilot_name: newPilot.name, group_id: groupId, group_name: groupClientName, expires_at: newExpires ? newExpires.toISOString() : null });
     // Also notify the original solo pilot that they now have a group partner
     broadcast({ type: 'PILOT_ADDED_TO_GROUP', pilot_id: solo_pilot_id, pilot_name: soloPilot?.name, group_id: groupId, group_name: groupClientName, expires_at: soloTimer.expires_at });
     await sendPushToPilot(new_pilot_id, {

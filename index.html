@@ -3610,7 +3610,7 @@ function renderDashboard() {
   const el = document.getElementById('dashboard-content');
   if (!el) return;
 
-  const key = JSON.stringify({ s: myStatus.status, la: !!_pilotLandedAt, mf: myFlights.length, gp: (myStatus.group_pilots||[]).map(p=>p.id||p).join(','), fp: flyingPilots.map(p=>p.id).join(','), cp: myStatus.cp_mode, cfs: !!myStatus.flying_started_at });
+  const key = JSON.stringify({ s: myStatus.status, la: !!_pilotLandedAt, mf: myFlights.length, gp: (myStatus.group_pilots||[]).map(p=>p.id||p).join(','), fp: flyingPilots.map(p=>p.id).join(','), cp: myStatus.cp_mode, cfs: !!myStatus.flying_started_at, dn: myStatus.driver_name||'', vn: myStatus.van_name||'', dt: myStatus.departure_time||'' });
   if (key === _lastDashboardKey) return;
   _lastDashboardKey = key;
 
@@ -5666,16 +5666,18 @@ function officePresenceVal(p) {
 // ─── Groups Tab (Send Away) ───────────────────────────────────────────────────
 let _sendAwayPilotOpts = '';
 
-function renderGroupsTab() {
+function renderGroupsTab(force = false) {
   const el = document.getElementById('groups-panel');
   if (!el) return;
-  // Skip re-render if user has modified the send-away form
-  const rows = document.getElementById('send-away-rows');
-  if (rows) {
-    const focusInForm = el.contains(document.activeElement);
-    const extraRows = rows.querySelectorAll('.send-away-row').length > 3;
-    const anySelected = [...rows.querySelectorAll('.send-away-sel')].some(s => s.value);
-    if (focusInForm || extraRows || anySelected) return;
+  // Skip re-render if user has modified the send-away form (unless force=true after submission)
+  if (!force) {
+    const rows = document.getElementById('send-away-rows');
+    if (rows) {
+      const focusInForm = el.contains(document.activeElement);
+      const extraRows = rows.querySelectorAll('.send-away-row').length > 3;
+      const anySelected = [...rows.querySelectorAll('.send-away-sel')].some(s => s.value);
+      if (focusInForm || extraRows || anySelected) return;
+    }
   }
   const loopPilotIds = new Set(loopBoard.filter(s => s.pilot_id && !s.done).map(s => String(s.pilot_id)));
   const notAirborne = officePilots
@@ -6039,7 +6041,7 @@ async function submitSendAway() {
       if (res.ok) toast(`Away: ${pilots.map(p => p.name).join(', ')}${_cpModeOn ? ' (CP Flight)' : ''}`);
       else toast(data.error || 'Error', 'err');
     }
-    if (res.ok) { await loadOfficeData(); renderGroupsTab(); }
+    if (res.ok) { await loadOfficeData(); renderGroupsTab(true); }
   } catch (e) { toast('Error: ' + e.message, 'err'); }
 }
 

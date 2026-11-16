@@ -1970,7 +1970,10 @@ app.post('/api/office/leave', verifyOffice, async (req, res) => {
       client_name: cleanClientName || null,
       started_at: now.toISOString(),
       expires_at: expires ? expires.toISOString() : null,
-      cp_mode: isCp === 1
+      cp_mode: isCp === 1,
+      driver_name: cleanDriverName || null,
+      van_name: cleanVanName || null,
+      departure_time: cleanDepartureTime || null
     });
 
     await sendPushToPilot(pilot_id, {
@@ -2053,7 +2056,10 @@ app.post('/api/office/group-leave', verifyOffice, async (req, res) => {
       started_at: now.toISOString(),
       expires_at: expires ? expires.toISOString() : null,
       cp_mode: isCp === 1,
-      is_peak_trip: !!is_peak_trip
+      is_peak_trip: !!is_peak_trip,
+      driver_name: cleanDriverName || null,
+      van_name: cleanVanName || null,
+      departure_time: cleanDepartureTime || null
     });
 
     res.json({ message: `Group "${group_name}" sent away — ${pilotNames.join(', ')}`, group_id: groupId, expires_at: expires.toISOString() });
@@ -2126,14 +2132,15 @@ app.post('/api/office/convert-to-group', verifyOffice, async (req, res) => {
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), solo_pilot_id, 'converted_to_group', now.toISOString()]);
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), new_pilot_id, 'added_to_group', now.toISOString()]);
 
+    const soloPilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [solo_pilot_id]);
     broadcast({ type: 'PILOT_ADDED_TO_GROUP', pilot_id: new_pilot_id, pilot_name: newPilot.name, group_id: groupId, group_name: groupClientName, expires_at: newExpires.toISOString() });
+    // Also notify the original solo pilot that they now have a group partner
+    broadcast({ type: 'PILOT_ADDED_TO_GROUP', pilot_id: solo_pilot_id, pilot_name: soloPilot?.name, group_id: groupId, group_name: groupClientName, expires_at: soloTimer.expires_at });
     await sendPushToPilot(new_pilot_id, {
       title: '🪂 GForce — YOU\'RE AWAY!',
       body: groupClientName ? `Added to group: ${groupClientName}. Timer started — 60 minutes.` : 'Office has added you to a group. Timer started — 60 minutes.',
       tag: 'pilot-sent-away'
     });
-
-    const soloPilot = await queryOne('SELECT name FROM pilots WHERE id = ?', [solo_pilot_id]);
     res.json({ message: `Group created: ${soloPilot?.name} + ${newPilot.name}`, group_id: groupId });
   } catch (e) {
     console.error(e);

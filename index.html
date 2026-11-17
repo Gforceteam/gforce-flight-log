@@ -4905,7 +4905,7 @@ async function renderPilotLoopPayments() {
       <div class="lbp-heading">Payments & Drives</div>
       <table class="lbp-table"><thead><tr>
         <th class="lbp-th lbp-th-pilot">Pilot</th>
-        <th class="lbp-th">$80 Photo</th>
+        <th class="lbp-th">$90 Photo</th>
         <th class="lbp-th">$60 Photo</th>
         <th class="lbp-th">CP Drives</th>
       </tr></thead><tbody>${rows}</tbody></table>
@@ -5092,7 +5092,7 @@ function _renderPilotPayContent(el, data) {
       </tr>`;
     });
     const csvRows = [
-      ['Pilot','Flights','$80 Photo','$60 Photo','CP Drives'],
+      ['Pilot','Flights','$90 Photo','$60 Photo','CP Drives'],
       ...rows.map(r => [r.pilot_name, r.flights||0, r.photo80||0, r.photo60||0, r.cp_drives||0]),
       ['Total', totalFlights, totalPhoto80, totalPhoto60, totalDrives]
     ];
@@ -5108,7 +5108,7 @@ function _renderPilotPayContent(el, data) {
         <thead><tr>
           <th class="pp-th pp-th-pilot">Pilot</th>
           <th class="pp-th">Flights</th>
-          <th class="pp-th">$80 Photo</th>
+          <th class="pp-th">$90 Photo</th>
           <th class="pp-th">$60 Photo</th>
           <th class="pp-th">CP Drives</th>
         </tr></thead>
@@ -5170,7 +5170,7 @@ async function renderOfficeFfPayments(dates) {
     };
 
     const sections = [
-      { field: 'photo80', label: '$80 Photo Payments' },
+      { field: 'photo80', label: '$90 Photo Payments' },
       { field: 'photo60', label: '$60 Photo Payments' },
       { field: 'cp_drives', label: 'CP Drives' },
     ];
@@ -7771,7 +7771,7 @@ function renderLoopBoardPayments() {
       <table class="lbp-table">
         <thead><tr>
           <th class="lbp-th lbp-th-pilot">Pilot</th>
-          <th class="lbp-th">$80 Photo</th>
+          <th class="lbp-th">$90 Photo</th>
           <th class="lbp-th">$60 Photo</th>
           <th class="lbp-th">CP Drives</th>
         </tr></thead><tbody>`;
@@ -7812,7 +7812,7 @@ function renderLoopBoardPayments() {
       <table class="lbp-table">
         <thead><tr>
           <th class="lbp-th lbp-th-pilot">Pilot</th>
-          <th class="lbp-th">$80 Photo</th>
+          <th class="lbp-th">$90 Photo</th>
           <th class="lbp-th">$60 Photo</th>
           <th class="lbp-th">CP Drives</th>
         </tr></thead>

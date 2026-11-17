@@ -4851,7 +4851,6 @@ function renderPilotLoopBoard() {
           ${name ? esc(name) : '<span style="color:var(--muted);">—</span>'}
         </div>
         <div style="flex-shrink:0;display:flex;justify-content:flex-start;${markOp}">${tallyMarksSVG(tallies, markCol)}</div>
-        ${cp ? `<div style="flex-shrink:0;font-size:13px;font-weight:700;color:var(--accent);margin-left:4px;">CP×${cp}</div>` : ''}
       </div>`;
   };
 
@@ -9923,6 +9922,7 @@ function connectWS() {
             _setLoopRows(loopBoardDate, loopBoardRows + data.rowCountDelta);
           }
           if (officeActiveTab === 'loop' && _pendingLoopApiCalls === 0) _loopSafeRender();
+          if (data.loop_payments_updated && officeActiveTab === 'loop') loadLoopBoardPayments();
         }
         break;
       }

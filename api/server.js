@@ -1744,10 +1744,11 @@ app.post('/api/pilot/cp-land-pilot', verifyPilotOrOffice, async (req, res) => {
     );
     await run('DELETE FROM active_timers WHERE pilot_id = ?', [pilot_id]);
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'cp_landed', now]);
-    await run('UPDATE loop_board_v2 SET cp_drives = COALESCE(cp_drives,0) + 1 WHERE date = ? AND pilot_id = ?', [today, pilot_id]);
+    const slotRow = await queryOne('SELECT slot FROM loop_board_v2 WHERE date = ? AND pilot_id = ?', [today, pilot_id]);
+    if (slotRow) await run('INSERT INTO loop_board_payments (date, slot, cp_drives) VALUES (?, ?, 1) ON CONFLICT(date, slot) DO UPDATE SET cp_drives = COALESCE(cp_drives, 0) + 1', [today, slotRow.slot]);
     const lbBoard = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done, COALESCE(cp_drives,0) as cp_drives FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [today]);
     broadcast({ type: 'LANDED_EARLY', pilot_id, pilot_name: pilot.name, landed_at: now, flight_id: flightId });
-    broadcast({ type: 'LOOP_BOARD_UPDATE', board: lbBoard, date: today });
+    broadcast({ type: 'LOOP_BOARD_UPDATE', board: lbBoard, date: today, loop_payments_updated: true });
     res.json({ flight_id: flightId });
   } catch (e) {
     console.error(e);
@@ -1778,12 +1779,13 @@ app.post('/api/pilot/cp-land-group', verifyPilotOrOffice, async (req, res) => {
       );
       await run('DELETE FROM active_timers WHERE pilot_id = ?', [t.pilot_id]);
       await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), t.pilot_id, 'cp_landed', now]);
-      await run('UPDATE loop_board_v2 SET cp_drives = COALESCE(cp_drives,0) + 1 WHERE date = ? AND pilot_id = ?', [today, t.pilot_id]);
+      const slotRow = await queryOne('SELECT slot FROM loop_board_v2 WHERE date = ? AND pilot_id = ?', [today, t.pilot_id]);
+      if (slotRow) await run('INSERT INTO loop_board_payments (date, slot, cp_drives) VALUES (?, ?, 1) ON CONFLICT(date, slot) DO UPDATE SET cp_drives = COALESCE(cp_drives, 0) + 1', [today, slotRow.slot]);
       broadcast({ type: 'LANDED_EARLY', pilot_id: t.pilot_id, pilot_name: t.pilot_name, landed_at: now, flight_id: flightId });
       flightIds.push(flightId);
     }
     const lbBoard = await queryAll('SELECT slot, pilot_id, pilot_name, tallies, COALESCE(done,0) as done, COALESCE(cp_drives,0) as cp_drives FROM loop_board_v2 WHERE date = ? ORDER BY slot ASC', [today]);
-    broadcast({ type: 'LOOP_BOARD_UPDATE', board: lbBoard, date: today });
+    broadcast({ type: 'LOOP_BOARD_UPDATE', board: lbBoard, date: today, loop_payments_updated: true });
     res.json({ flight_ids: flightIds });
   } catch (e) {
     console.error(e);

@@ -3594,9 +3594,22 @@ async function pilotLand() {
     myStatus.status = 'in_office';
     myStatus.timer_expires_at = null;
     clearInterval(window._dashboardTimer);
-    await loadMyData();
+
+    // Optimistically add flight so Today's Flights appears instantly
+    const nowIso = new Date().toISOString();
+    allTodayFlights = [...allTodayFlights, {
+      id: data.flight_id, pilot_id: pilotId, pilot_name: pilotName,
+      date: todayStr(), client_name: myStatus.client_name || '',
+      sent_away_at: myStatus.timer_started_at || null,
+      landed_at: nowIso, notes: 'PENDING_PILOT_FILL', did_not_fly: 0
+    }];
+    myFlights = [...myFlights, { id: data.flight_id }];
+    _lastDashboardKey = null;
     renderDashboard();
     updateStatusBadge();
+
+    // Background refresh to get accurate server data
+    loadMyData();
   } catch (e) {
     toast('Landing failed: ' + e.message);
     if (btn) { btn.disabled = false; btn.textContent = 'Land'; }

@@ -5821,6 +5821,8 @@ function renderTodayFlights() {
   for (const grp of groups) {
     const isGroup = grp.length > 1;
     const sentTime = fmtTime(grp[0].sent_away_at);
+    const copyRows = grp.filter(f => !f.did_not_fly).map(f => `${f.pilot_name}\t${f.flight_num || ''}`).join('\n');
+    const copyBtn = `<button onclick="copyFlightCard(this,'${esc(copyRows.replace(/'/g,"\\u0027"))}')" style="padding:3px 10px;font-size:11px;font-weight:700;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--muted);cursor:pointer;flex-shrink:0;">Copy</button>`;
     if (isGroup) {
       // Render group as a single card with all pilots inside
       const pilotRows = grp.map(f => {
@@ -5840,7 +5842,10 @@ function renderTodayFlights() {
       html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
           <span class="tdf-group-label">${grp.length}-Pax Group</span>
-          <span style="font-size:12px;color:var(--muted);">Away ${esc(sentTime)}</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:12px;color:var(--muted);">Away ${esc(sentTime)}</span>
+            ${copyBtn}
+          </div>
         </div>
         ${pilotRows}
       </div>`;
@@ -5853,7 +5858,10 @@ function renderTodayFlights() {
       html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;${f.did_not_fly ? 'opacity:0.7;' : ''}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
           <span class="tdf-group-label">Single Pax</span>
-          <span style="font-size:12px;color:var(--muted);">Away ${esc(sentTime)}</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:12px;color:var(--muted);">Away ${esc(sentTime)}</span>
+            ${copyBtn}
+          </div>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);gap:8px;">
           <span class="tdf-pilot" style="flex:1;min-width:0;${f.did_not_fly ? 'text-decoration:line-through;' : ''}">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>

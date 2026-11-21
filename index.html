@@ -3776,6 +3776,9 @@ function renderAllTodayFlights() {
     const sentTime = fmtTime(grp[0].sent_away_at);
     const isMyFlight = grp.some(f => String(f.pilot_id) === String(pilotId));
     const cardBg = isMyFlight ? 'background:rgba(16,185,129,0.09);border-color:rgba(16,185,129,0.3);' : '';
+    // Build copy payload: name + flight number for each non-DNF pilot
+    const copyRows = grp.filter(f => !f.did_not_fly).map(f => `${f.pilot_name}\t${f.flight_num || ''}`).join('\n');
+    const copyBtn = `<button onclick="copyFlightCard(this,'${esc(copyRows.replace(/'/g,"\\u0027"))}')" style="padding:3px 10px;font-size:11px;font-weight:700;background:var(--surface);border:1px solid var(--border);border-radius:9999px;color:var(--muted);cursor:pointer;flex-shrink:0;">Copy</button>`;
     if (isGroup) {
       const pilotRows = grp.map(f => {
         const landedTime = fmtTime(f.landed_at);
@@ -3791,7 +3794,10 @@ function renderAllTodayFlights() {
       html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;${cardBg}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
           <span class="tdf-group-label">${grp.length}-Pax Group</span>
-          <span style="font-size:12px;color:var(--muted);">Away ${esc(sentTime)}</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:12px;color:var(--muted);">Away ${esc(sentTime)}</span>
+            ${copyBtn}
+          </div>
         </div>
         ${pilotRows}
       </div>`;
@@ -3804,7 +3810,10 @@ function renderAllTodayFlights() {
       html += `<div class="tdf-card tdf-card-group" style="padding:12px 14px;${cardBg}${f.did_not_fly ? 'opacity:0.7;' : ''}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
           <span class="tdf-group-label">Single Pax</span>
-          <span style="font-size:12px;color:var(--muted);">Away ${esc(sentTime)}</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:12px;color:var(--muted);">Away ${esc(sentTime)}</span>
+            ${copyBtn}
+          </div>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);gap:8px;">
           <span class="tdf-pilot" style="flex:1;min-width:0;${f.did_not_fly ? 'text-decoration:line-through;' : ''}">${esc(f.pilot_name)}${f.flight_num ? `<span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:6px;">#${f.flight_num}</span>` : ''}</span>
@@ -3856,6 +3865,16 @@ function closeFlightInfo() {
   const sheet = document.getElementById('flight-info-sheet');
   sheet.classList.remove('open');
   setTimeout(() => overlay.classList.remove('open'), 260);
+}
+
+function copyFlightCard(btn, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    btn.style.color = 'var(--accent)';
+    btn.style.borderColor = 'var(--accent)';
+    setTimeout(() => { btn.textContent = orig; btn.style.color = ''; btn.style.borderColor = ''; }, 1500);
+  }).catch(() => toast('Could not copy', 'err'));
 }
 
 async function refreshPilotTodayFlights() {

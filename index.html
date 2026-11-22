@@ -3581,38 +3581,45 @@ function renderCpFlightsPanel() {
 async function pilotLand() {
   const btn = document.querySelector('.btn-land-pilot');
   if (btn) { btn.disabled = true; btn.textContent = 'Landing…'; }
+
+  // Optimistic update BEFORE the network call so Today's Flights appears instantly
+  const clientName = myStatus.client_name || '';
+  const startedAt = myStatus.timer_started_at || null;
+  const nowIso = new Date().toISOString();
+  _pilotLandedAt = Date.now();
+  myStatus.status = 'in_office';
+  myStatus.timer_expires_at = null;
+  clearInterval(window._dashboardTimer);
+  allTodayFlights = [...allTodayFlights, {
+    id: '__land_stub__', pilot_id: pilotId, pilot_name: pilotName,
+    date: todayStr(), client_name: clientName,
+    sent_away_at: startedAt, landed_at: nowIso, notes: 'PENDING_PILOT_FILL', did_not_fly: 0
+  }];
+  _lastDashboardKey = null;
+  renderDashboard();
+  updateStatusBadge();
+
   try {
     const res = await apiFetch('/api/pilot/land', { method: 'POST' });
     if (!res || !res.ok) {
       const err = await res?.json().catch(() => ({}));
       toast(err.error || 'Could not confirm landing');
       if (btn) { btn.disabled = false; btn.textContent = 'Land'; }
+      loadMyData();
       return;
     }
     const data = await res.json();
-    _pilotLandedAt = Date.now();
-    myStatus.status = 'in_office';
-    myStatus.timer_expires_at = null;
-    clearInterval(window._dashboardTimer);
-
-    // Optimistically add flight so Today's Flights appears instantly
-    const nowIso = new Date().toISOString();
-    allTodayFlights = [...allTodayFlights, {
-      id: data.flight_id, pilot_id: pilotId, pilot_name: pilotName,
-      date: todayStr(), client_name: myStatus.client_name || '',
-      sent_away_at: myStatus.timer_started_at || null,
-      landed_at: nowIso, notes: 'PENDING_PILOT_FILL', did_not_fly: 0
-    }];
+    // Replace stub with real flight_id
+    allTodayFlights = allTodayFlights.map(f => f.id === '__land_stub__' ? { ...f, id: data.flight_id } : f);
     myFlights = [...myFlights, { id: data.flight_id }];
     _lastDashboardKey = null;
     renderDashboard();
     updateStatusBadge();
-
-    // Background refresh to get accurate server data
     loadMyData();
   } catch (e) {
     toast('Landing failed: ' + e.message);
     if (btn) { btn.disabled = false; btn.textContent = 'Land'; }
+    loadMyData();
   }
 }
 

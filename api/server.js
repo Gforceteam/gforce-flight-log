@@ -199,6 +199,8 @@ async function createTables() {
   try { await db.execute('ALTER TABLE flights ADD COLUMN office_ack_emoji TEXT'); } catch (_) {}
   // Add office acknowledgment timestamp column
   try { await db.execute('ALTER TABLE flights ADD COLUMN office_ack_at TEXT'); } catch (_) {}
+  try { await db.execute('ALTER TABLE flights ADD COLUMN cp_mode INTEGER DEFAULT 0'); } catch (_) {}
+  try { await db.execute('ALTER TABLE flights ADD COLUMN flying_started_at TEXT DEFAULT NULL'); } catch (_) {}
   await db.execute(`CREATE TABLE IF NOT EXISTS office_logs (
     id TEXT PRIMARY KEY, pilot_id TEXT, event TEXT, created_at TEXT)`);
   await db.execute(`CREATE TABLE IF NOT EXISTS active_timers (
@@ -1559,11 +1561,13 @@ app.post('/api/pilot/land-group-member', verifyToken, async (req, res) => {
     const todayCount = await queryOne('SELECT COUNT(*) as c FROM flights WHERE pilot_id = ? AND date = ? AND (did_not_fly IS NULL OR did_not_fly = 0)', [pilot_id, today]);
     const flightNum = (Number(todayCount?.c) || 0) + 1;
     const pilotRec = await queryOne('SELECT current_wing FROM pilots WHERE id = ?', [pilot_id]);
+    const isCpGM = Number(targetTimer.cp_mode) === 1;
     await run(
-      `INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, sent_away_at, wing_reg)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, sent_away_at, wing_reg, cp_mode, flying_started_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [flightId, pilot_id, targetTimer.client_name || '', today, flightNum,
-       0, '', '', 0, 0, 'PENDING_PILOT_FILL', now, targetTimer.started_at || null, pilotRec?.current_wing || null]
+       0, '', '', 0, 0, 'PENDING_PILOT_FILL', now, targetTimer.started_at || null, pilotRec?.current_wing || null,
+       isCpGM ? 1 : 0, isCpGM ? (targetTimer.flying_started_at || null) : null]
     );
     await run('DELETE FROM active_timers WHERE pilot_id = ?', [pilot_id]);
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)',
@@ -1607,11 +1611,13 @@ app.post('/api/pilot/land', verifyToken, async (req, res) => {
 
     const pilotRec = await queryOne('SELECT current_wing FROM pilots WHERE id = ?', [req.pilot.id]);
 
+    const isCpLand = Number(timer.cp_mode) === 1;
     await run(
-      `INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, sent_away_at, wing_reg)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, sent_away_at, wing_reg, cp_mode, flying_started_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [flightId, req.pilot.id, timer.client_name || '', today, flightNum,
-       0, '', '', 0, 0, 'PENDING_PILOT_FILL', now, timer.started_at || null, pilotRec?.current_wing || null]
+       0, '', '', 0, 0, 'PENDING_PILOT_FILL', now, timer.started_at || null, pilotRec?.current_wing || null,
+       isCpLand ? 1 : 0, isCpLand ? (timer.flying_started_at || null) : null]
     );
 
     await run('DELETE FROM active_timers WHERE pilot_id = ?', [req.pilot.id]);
@@ -1737,10 +1743,11 @@ app.post('/api/pilot/cp-land-pilot', verifyPilotOrOffice, async (req, res) => {
     const pilotRec = await queryOne('SELECT current_wing FROM pilots WHERE id = ?', [pilot_id]);
 
     await run(
-      `INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, sent_away_at, wing_reg)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, sent_away_at, wing_reg, cp_mode, flying_started_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [flightId, pilot_id, targetTimer.client_name || '', today, flightNum,
-       0, '', '', 0, 0, 'PENDING_PILOT_FILL', now, targetTimer.started_at || null, pilotRec?.current_wing || null]
+       0, '', '', 0, 0, 'PENDING_PILOT_FILL', now, targetTimer.started_at || null, pilotRec?.current_wing || null,
+       1, targetTimer.flying_started_at || null]
     );
     await run('DELETE FROM active_timers WHERE pilot_id = ?', [pilot_id]);
     await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), pilot_id, 'cp_landed', now]);
@@ -1773,9 +1780,10 @@ app.post('/api/pilot/cp-land-group', verifyPilotOrOffice, async (req, res) => {
       const flightNum = (Number(todayCount?.c) || 0) + 1;
       const pilotRec = await queryOne('SELECT current_wing FROM pilots WHERE id = ?', [t.pilot_id]);
       await run(
-        `INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, sent_away_at, wing_reg)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [flightId, t.pilot_id, t.client_name || '', today, flightNum, 0, '', '', 0, 0, 'PENDING_PILOT_FILL', now, t.started_at || null, pilotRec?.current_wing || null]
+        `INSERT INTO flights (id, pilot_id, client_name, date, flight_num, weight, takeoff, landing, time, photos, notes, landed_at, sent_away_at, wing_reg, cp_mode, flying_started_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [flightId, t.pilot_id, t.client_name || '', today, flightNum, 0, '', '', 0, 0, 'PENDING_PILOT_FILL', now, t.started_at || null, pilotRec?.current_wing || null,
+         1, t.flying_started_at || null]
       );
       await run('DELETE FROM active_timers WHERE pilot_id = ?', [t.pilot_id]);
       await run('INSERT INTO office_logs (id, pilot_id, event, created_at) VALUES (?, ?, ?, ?)', [uuidv4(), t.pilot_id, 'cp_landed', now]);
@@ -1887,7 +1895,8 @@ app.get('/api/today-flights', verifyToken, async (req, res) => {
     const today = nzToday();
     const flights = await queryAll(`
       SELECT f.id, f.pilot_id, f.flight_num, f.date, f.landed_at, f.sent_away_at, f.client_name,
-             f.did_not_fly, p.name AS pilot_name
+             f.did_not_fly, p.name AS pilot_name,
+             COALESCE(f.cp_mode, 0) AS cp_mode, f.flying_started_at
       FROM flights f
       JOIN pilots p ON f.pilot_id = p.id
       WHERE f.date = ?

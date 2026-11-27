@@ -3280,6 +3280,9 @@ async function loadMyData() {
     cpActiveFlights = cpRes && cpRes.ok ? await cpRes.json() : [];
     updatePilotAirborneChip();
     renderDashboard();
+    // Bypass dedup: allTodayFlights changed but the dedup key may not have
+    const _tdfEl = document.getElementById('pilot-all-today-flights');
+    if (_tdfEl) _tdfEl.innerHTML = renderAllTodayFlights();
     renderCpFlightsPanel();
     renderCoronetLiveBanner('pilot-coronet-live');
     renderFlights();

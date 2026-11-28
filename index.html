@@ -2274,9 +2274,9 @@ function audioDestination() {
   ensureAudioCtx();
   return _masterGain || (_audioCtx ? _audioCtx.destination : null);
 }
-// Unlock audio on first user interaction (required for iOS)
-document.addEventListener('touchstart', () => { ensureAudioCtx(); }, { once: true, passive: true });
-document.addEventListener('click', () => { ensureAudioCtx(); }, { once: true });
+// Keep AudioContext alive on every interaction — iOS suspends it after inactivity
+document.addEventListener('touchstart', () => { ensureAudioCtx(); }, { passive: true });
+document.addEventListener('click', () => { ensureAudioCtx(); });
 
 let isManager = false;
 function _decodeJwtPayload(token) {
